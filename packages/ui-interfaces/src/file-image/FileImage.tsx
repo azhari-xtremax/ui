@@ -17,7 +17,7 @@ import { IconZoomIn, IconDownload, IconPencil, IconPhoto, IconX, IconInfoCircle,
 import { notifications } from '@mantine/notifications';
 import { Upload, type UploadProps, type FileUpload } from '../upload';
 import { daasAPI, type DaaSFile } from '@buildpad/hooks';
-import { useFiles } from '@buildpad/hooks';
+import { useFiles, useFolders } from '@buildpad/hooks';
 
 /**
  * Convert DaaSFile to FileUpload type (adds fallback for nullable fields)
@@ -54,6 +54,37 @@ export interface FileImageProps extends Omit<UploadProps, 'onInput' | 'multiple'
   field?: string; // for parity, not used
   enableCreate?: boolean; // enable upload new images
   enableSelect?: boolean; // enable selecting from library
+}
+
+/**
+ * Build an asset path for `VImageBase64`.
+ *
+ * Two things to know:
+ * 1. `VImageBase64` fetches through `daasAPI`, whose baseUrl is already `/api`,
+ *    so this path must NOT carry the `/api` prefix — unlike `getAssetUrl()` from
+ *    `@buildpad/types`, which is for direct browser requests.
+ * 2. It requests explicit `width`/`height`/`fit` transform params rather than a
+ *    `key=<preset>`. DaaS silently ignores unknown preset keys and streams the
+ *    full-size original, so `key` neither resizes nor saves bandwidth — and a
+ *    large original trips this component's 5 MB base64 guard, surfacing a bogus
+ *    "Image too large to preview" error for an image that renders at 220px.
+ */
+function assetPath(
+  id: string,
+  options: {
+    width?: number;
+    height?: number;
+    fit?: 'cover' | 'contain';
+    cacheBuster?: string;
+  } = {}
+): string {
+  const params = new URLSearchParams();
+  if (options.width) params.set('width', String(options.width));
+  if (options.height) params.set('height', String(options.height));
+  if (options.fit) params.set('fit', options.fit);
+  if (options.cacheBuster) params.set('cache-buster', options.cacheBuster);
+  const query = params.toString();
+  return `/assets/${id}${query ? `?${query}` : ''}`;
 }
 
 /**
@@ -177,6 +208,14 @@ export const FileImage: React.FC<FileImageProps> = ({
 
   // Use the files hook for real API operations
   const { uploadFiles, fetchFiles, importFromUrl } = useFiles();
+  const { fetchFolders } = useFolders();
+
+  // Handler for browsing library folders (real API)
+  const handleFetchLibraryFolders = useCallback(
+    (params: { parent: string | null; search?: string }) =>
+      fetchFolders({ parent: params.parent, search: params.search }),
+    [fetchFolders]
+  );
 
   // Normalize value to id and object
   const imageId = useMemo(() => (typeof value === 'string' ? value : value?.id || null), [value]);
@@ -251,14 +290,15 @@ export const FileImage: React.FC<FileImageProps> = ({
     if (!image) {
       return null;
     }
-    // Use path without /api prefix since axios baseURL already includes it
+    // SVGs are vector — resizing server-side is pointless, fetch as-is.
     if (isSvg) {
-      return `/assets/${image.id}`;
+      return assetPath(image.id);
     }
     if (isImage) {
-      const key = `system-large-${fit}`; // mirrors DaaS presets
       const cacheBuster = (image as any).modified_on || image.uploaded_on || '';
-      return `/assets/${image.id}?key=${key}&cache-buster=${encodeURIComponent(cacheBuster)}`;
+      // The preview box is 220px tall; 1200px wide covers hi-DPI without
+      // pulling the full original through the base64 conversion.
+      return assetPath(image.id, { width: 1200, fit, cacheBuster });
     }
     return null;
   }, [image, fit, isImage, isSvg]);
@@ -692,6 +732,7 @@ export const FileImage: React.FC<FileImageProps> = ({
               accept="image/*"
               onInput={handleUploadInput}
               onFetchLibraryFiles={onFetchLibraryFiles || handleFetchLibraryFiles}
+              onFetchLibraryFolders={handleFetchLibraryFolders}
               onUploadFiles={onUploadFiles || handleUploadFiles}
               onImportFromUrl={onImportFromUrl || handleImportFromUrl}
               preset={preset}
@@ -716,7 +757,7 @@ export const FileImage: React.FC<FileImageProps> = ({
         {image && (
           <Box data-testid="file-image-lightbox-content" style={{ textAlign: 'center' }}>
             <VImageBase64 
-              src={`/assets/${image.id}`} 
+              src={assetPath(image.id, { width: 2000 })} 
               alt={image.title || image.filename_download} 
               className="file-image-lightbox-img"
               data-testid="file-image-lightbox-image"
@@ -748,7 +789,7 @@ export const FileImage: React.FC<FileImageProps> = ({
               <Group>
                 <Box style={{ width: 60, height: 60, borderRadius: 'var(--mantine-radius-sm)', overflow: 'hidden', backgroundColor: 'var(--mantine-color-gray-1)' }}>
                   <VImageBase64 
-                    src={`/assets/${image.id}?key=system-small-cover`}
+                    src={assetPath(image.id, { width: 120, height: 120, fit: 'cover' })}
                     alt={image.title || image.filename_download}
                     className="file-image-edit-thumbnail"
                     data-testid="file-image-edit-thumbnail"
@@ -807,7 +848,7 @@ export const FileImage: React.FC<FileImageProps> = ({
           {image && (
             <Box data-testid="file-image-editor-preview" style={{ display: 'flex', justifyContent: 'center', backgroundColor: 'var(--mantine-color-gray-1)', borderRadius: 'var(--mantine-radius-sm)', padding: 'var(--mantine-spacing-md)' }}>
               <VImageBase64 
-                src={`/assets/${image.id}`} 
+                src={assetPath(image.id, { width: 1200 })} 
                 alt={image.title || image.filename_download} 
                 className="file-image-editor-img"
                 data-testid="file-image-editor-image"

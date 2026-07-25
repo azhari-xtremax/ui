@@ -98,7 +98,28 @@ export const FileManager: React.FC<FileManagerProps> = ({
   const [folderPendingDelete, setFolderPendingDelete] = useState<Folder | null>(null);
   const [filePendingDelete, setFilePendingDelete] = useState<FileUpload | null>(null);
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  /**
+   * DaaS cannot report a *filtered* total: `meta.total_count` is always the
+   * unfiltered collection count, `meta.filter_count` only ever reflects the rows
+   * in the current page, and `aggregate[count]` is ignored. So `total` is only
+   * meaningful when nothing narrows the query — and note that with folders
+   * enabled even the root listing is narrowed (`folder._null`).
+   *
+   * Trusting it produced phantom pages: searching a 32-file library for ".md"
+   * returns 18 rows, yet `total_count` 32 over a 24-row page rendered a second
+   * page that was always empty.
+   *
+   * So the page count is derived from what we can actually observe: a full page
+   * implies at least one more, a short page means this is the last one. The
+   * pager can therefore understate how many pages exist until you walk forward,
+   * but it never offers a page that isn't there.
+   */
+  const totalIsTrustworthy = !debouncedSearch && !currentFolder && !enableFolders;
+  const totalPages = totalIsTrustworthy
+    ? Math.max(1, Math.ceil(total / pageSize))
+    : files.length === pageSize
+      ? page + 1
+      : page;
 
   const load = useCallback(async () => {
     setListLoading(true);
@@ -122,6 +143,14 @@ export const FileManager: React.FC<FileManagerProps> = ({
       const [folderRes, fileRes] = await Promise.all([folderPromise, fetchFiles(fileParams)]);
 
       setFolders(folderRes);
+
+      // Overshot the end (deletion, or a stale page after a filter change)?
+      // Step back instead of showing an empty page.
+      if (fileRes.files.length === 0 && page > 1) {
+        setPage((current) => Math.max(1, current - 1));
+        return;
+      }
+
       setFiles(fileRes.files);
       setTotal(fileRes.total);
     } catch (err) {
@@ -386,9 +415,22 @@ export const FileManager: React.FC<FileManagerProps> = ({
         />
       )}
 
-      {totalPages > 1 && (
-        <Group justify="center">
-          <Pagination value={page} onChange={setPage} total={totalPages} />
+      {files.length > 0 && (
+        <Group justify="space-between" wrap="wrap" gap="sm">
+          {/* The total is omitted while filtering — see the totalPages note. */}
+          <Text size="xs" c="dimmed" data-testid="file-manager-count">
+            {totalIsTrustworthy
+              ? `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)} of ${total}`
+              : `Showing ${(page - 1) * pageSize + 1}–${(page - 1) * pageSize + files.length}`}
+          </Text>
+          {totalPages > 1 && (
+            <Pagination
+              value={page}
+              onChange={setPage}
+              total={totalPages}
+              data-testid="file-manager-pagination"
+            />
+          )}
         </Group>
       )}
 
