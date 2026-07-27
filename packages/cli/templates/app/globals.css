@@ -264,6 +264,7 @@ body {
 
 [data-mantine-color-scheme="dark"] .bp-nav-link-active {
   background: linear-gradient(135deg, var(--ds-primary-400) 0%, var(--ds-primary-600) 100%) !important;
+  color: #ffffff !important;
   box-shadow: 0 4px 12px rgba(251, 146, 60, 0.12) !important;
 }
 

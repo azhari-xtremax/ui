@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microbuild-ui/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-07-27T08:09:40.165Z",
+  "generatedAt": "2026-07-27T08:17:35.826Z",
   "version": "1.9.1",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -929,17 +929,17 @@
         {
           "source": "cli/templates/app/design-tokens.css",
           "target": "app/design-tokens.css",
-          "sourceSha256": "00d71c30016ed5e44ed0d33eb807dba18a6cbdd714cabc8bb1dd24fc055174de"
+          "sourceSha256": "21e8cf5a86a753c6c61a15334d3154d6cb8dd916778cc2598c32eb829f3ad62e"
         },
         {
           "source": "cli/templates/app/globals.css",
           "target": "app/globals.css",
-          "sourceSha256": "088086433ac5b4fbafde438a96f77f3470086b33868a896f7dc81aad1f65f128"
+          "sourceSha256": "db8286e4c7c9e28e94816917a25a60ece99a9282eb0596d3aad71e9fd10b3fcc"
         },
         {
           "source": "cli/templates/lib/theme.ts",
           "target": "lib/theme.ts",
-          "sourceSha256": "4d05feec98eafb31bb0b7cd8b7374ba3583c92e15422f860fc9fe79c58c2e5cb"
+          "sourceSha256": "1df899420fa0a16c4a0fe23656b7c79f41ee4846692fe8be78ff067bd698d10a"
         },
         {
           "source": "cli/templates/components/ColorSchemeToggle.tsx",
