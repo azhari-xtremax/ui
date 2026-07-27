@@ -13,16 +13,16 @@ import { createTheme } from "@mantine/core";
 export const theme = createTheme({
   colors: {
     primary: [
-      "var(--ds-primary-50, #eef1f6)",
-      "var(--ds-primary-100, #d8dee9)",
-      "var(--ds-primary-200, #b4c0d6)",
-      "var(--ds-primary-300, #8a9cbe)",
-      "var(--ds-primary-400, #5d74a0)",
-      "var(--ds-primary-500, #3a5480)",
-      "var(--ds-primary, #1b2a4a)",
-      "var(--ds-primary-700, #16213c)",
-      "var(--ds-primary-800, #11192e)",
-      "var(--ds-primary-900, #0c1220)"
+      "var(--ds-primary-50, #fff7ed)",
+      "var(--ds-primary-100, #ffedd5)",
+      "var(--ds-primary-200, #fed7aa)",
+      "var(--ds-primary-300, #fdba74)",
+      "var(--ds-primary-400, #fb923c)",
+      "var(--ds-primary-500, #f97316)",
+      "var(--ds-primary, #ea580c)",
+      "var(--ds-primary-700, #c2410c)",
+      "var(--ds-primary-800, #9a3412)",
+      "var(--ds-primary-900, #7c2d12)"
     ],
     // "secondary" matches the --ds-secondary-* token naming used throughout
     // design-tokens.css and app code; "accent" is kept as an alias since a

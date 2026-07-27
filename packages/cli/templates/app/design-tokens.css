@@ -10,19 +10,19 @@
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Primary (Navy) ────────────────────────────────────── */
-  --ds-primary-50: #eef1f6;
-  --ds-primary-100: #d8dee9;
-  --ds-primary-200: #b4c0d6;
-  --ds-primary-300: #8a9cbe;
-  --ds-primary-400: #5d74a0;
-  --ds-primary-500: #3a5480;
-  --ds-primary: #1b2a4a;
-  --ds-primary-600: #1b2a4a;
-  --ds-primary-700: #16213c;
-  --ds-primary-800: #11192e;
-  --ds-primary-900: #0c1220;
-  --ds-primary-950: #070b15;
+  /* ── Primary (Orange) ──────────────────────────────────── */
+  --ds-primary-50: #fff7ed;
+  --ds-primary-100: #ffedd5;
+  --ds-primary-200: #fed7aa;
+  --ds-primary-300: #fdba74;
+  --ds-primary-400: #fb923c;
+  --ds-primary-500: #f97316;
+  --ds-primary: #ea580c;
+  --ds-primary-600: #ea580c;
+  --ds-primary-700: #c2410c;
+  --ds-primary-800: #9a3412;
+  --ds-primary-900: #7c2d12;
+  --ds-primary-950: #431407;
 
   /* ── Secondary / Accent (Amber) ────────────────────────── */
   --ds-secondary-50: #fff8eb;
@@ -172,7 +172,7 @@
   --ds-body-bg: linear-gradient(180deg, #f6f7fa 0%, #ffffff 40%);
   --ds-body-color: var(--ds-gray-900);
   --ds-body-color-rgb: 15, 23, 42;
-  --ds-primary-rgb: 27, 42, 74;
+  --ds-primary-rgb: 234, 88, 12;
 
   /* ── Brand gradients (fixed, non-inverting) ───────────────
      The numbered primary/secondary scale stops flip in dark mode so text
@@ -236,18 +236,18 @@
    500 stays) and the unsuffixed main moves to the hue's 400
    stop, so tokens written for light mode stay legible. */
 [data-mantine-color-scheme="dark"] {
-  --ds-primary: #5d74a0;
-  --ds-primary-50: #070b15;
-  --ds-primary-100: #0c1220;
-  --ds-primary-200: #11192e;
-  --ds-primary-300: #16213c;
-  --ds-primary-400: #1b2a4a;
-  --ds-primary-500: #3a5480;
-  --ds-primary-600: #5d74a0;
-  --ds-primary-700: #8a9cbe;
-  --ds-primary-800: #b4c0d6;
-  --ds-primary-900: #d8dee9;
-  --ds-primary-950: #eef1f6;
+  --ds-primary: #fb923c;
+  --ds-primary-50: #431407;
+  --ds-primary-100: #7c2d12;
+  --ds-primary-200: #9a3412;
+  --ds-primary-300: #c2410c;
+  --ds-primary-400: #ea580c;
+  --ds-primary-500: #f97316;
+  --ds-primary-600: #fb923c;
+  --ds-primary-700: #fdba74;
+  --ds-primary-800: #fed7aa;
+  --ds-primary-900: #ffedd5;
+  --ds-primary-950: #fff7ed;
 
   --ds-secondary: #f5a623;
   --ds-secondary-50: #4d2b04;
@@ -333,7 +333,7 @@
   --ds-body-bg: radial-gradient(circle at 80% -10%, rgba(58, 84, 128, 0.4) 0%, transparent 45%), #0a1120;
   --ds-body-color: #e2e8f0;
   --ds-body-color-rgb: 226, 232, 240;
-  --ds-primary-rgb: 93, 116, 160;
+  --ds-primary-rgb: 251, 146, 60;
 
   /* Rail: translucent glass instead of solid navy. */
   --ds-rail-bg: rgba(255, 255, 255, 0.04);
