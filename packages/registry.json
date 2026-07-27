@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microbuild-ui/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-07-27T07:13:23.627Z",
+  "generatedAt": "2026-07-27T08:09:40.165Z",
   "version": "1.9.1",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -929,12 +929,12 @@
         {
           "source": "cli/templates/app/design-tokens.css",
           "target": "app/design-tokens.css",
-          "sourceSha256": "a95ae33920749f4fc10a562e7924e2a420724d5e07f8011d5d2eb9a27a0da5b6"
+          "sourceSha256": "00d71c30016ed5e44ed0d33eb807dba18a6cbdd714cabc8bb1dd24fc055174de"
         },
         {
           "source": "cli/templates/app/globals.css",
           "target": "app/globals.css",
-          "sourceSha256": "14c61533910ce916229e9074e19c00e4c3a1583b138546cedcdf0ded3c746599"
+          "sourceSha256": "088086433ac5b4fbafde438a96f77f3470086b33868a896f7dc81aad1f65f128"
         },
         {
           "source": "cli/templates/lib/theme.ts",
@@ -954,7 +954,7 @@
         {
           "source": "cli/templates/components/layout/AuthenticatedShell.tsx",
           "target": "components/layout/AuthenticatedShell.tsx",
-          "sourceSha256": "e6d1828ad2a6dd95740698811866be81b29e27cad8123e486ebc452660621ab4"
+          "sourceSha256": "24cbeafe514b9ac89b0c8f82d1fce5b212bf579a3aa0b3111792f820f8c72d74"
         }
       ],
       "sourcePackage": "@buildpad/cli",
