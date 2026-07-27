@@ -259,13 +259,13 @@ body {
 .bp-nav-link-active {
   background: linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-700) 100%) !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.15) !important;
+  box-shadow: var(--ds-shadow-md) !important;
 }
 
 [data-mantine-color-scheme="dark"] .bp-nav-link-active {
   background: linear-gradient(135deg, var(--ds-primary-400) 0%, var(--ds-primary-600) 100%) !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 12px rgba(251, 146, 60, 0.12) !important;
+  box-shadow: var(--ds-shadow-md) !important;
 }
 
 .bp-nav-link-active .tabler-icon {
@@ -353,7 +353,7 @@ body {
   background-color: var(--ds-gray-200) !important;
   color: var(--ds-gray-500) !important;
   padding: 2px 5px !important;
-  border-radius: 4px !important;
+  border-radius: var(--ds-radius-sm) !important;
   font-size: 10px !important;
   font-family: var(--ds-font-mono) !important;
 }

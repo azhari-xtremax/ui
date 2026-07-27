@@ -118,7 +118,7 @@ export const theme = createTheme({
   fontFamilyMonospace:
     "var(--ds-font-mono, 'JetBrains Mono', SFMono-Regular, Consolas, monospace)",
   headings: {
-    fontWeight: "600",
+    fontWeight: "var(--ds-font-weight-semibold, 600)",
     fontFamily: "var(--ds-font-display, var(--ds-font-family))",
     sizes: {
       h1: { lineHeight: "1.2" },
@@ -159,12 +159,12 @@ export const theme = createTheme({
   components: {
     Button: {
       defaultProps: {
-        radius: 999,
+        radius: "xl",
       },
       styles: {
         root: {
-          fontWeight: "600",
-          borderRadius: "var(--ds-radius-pill, 999px)",
+          fontWeight: "var(--ds-font-weight-semibold, 600)",
+          borderRadius: "var(--ds-radius-xl, 1rem)",
           fontSize: "var(--mantine-font-size-md)",
           transition: "background-color var(--ds-transition-fast, 150ms ease), border-color var(--ds-transition-fast, 150ms ease)"
         }
@@ -182,13 +182,12 @@ export const theme = createTheme({
     },
     Card: {
       defaultProps: {
-        radius: 18,
-        shadow: undefined,
+        radius: "md",
       },
       styles: {
         root: {
           borderColor: "var(--ds-card-border, #e8ebf1)",
-          borderRadius: "var(--ds-radius-card, 18px)",
+          borderRadius: "var(--ds-radius-md, 0.5rem)",
           background: "var(--ds-card-bg, #ffffff)",
         }
       }
@@ -208,7 +207,7 @@ export const theme = createTheme({
           marginBottom: 0
         },
         title: {
-          fontWeight: 600,
+          fontWeight: "var(--ds-font-weight-semibold, 600)",
           fontSize: "var(--ds-font-size-base)"
         },
         body: {
@@ -235,9 +234,9 @@ export const theme = createTheme({
     Badge: {
       styles: {
         root: {
-          borderRadius: "999px",
+          borderRadius: "var(--ds-radius-xl, 1rem)",
           fontSize: "var(--ds-font-size-xs)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           textTransform: "none" as const
         }
       }
@@ -246,7 +245,7 @@ export const theme = createTheme({
       styles: {
         label: {
           fontSize: "var(--mantine-font-size-sm)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           color: "var(--ds-gray-700, #334155)",
           marginBottom: "4px"
         },
@@ -259,7 +258,7 @@ export const theme = createTheme({
       styles: {
         label: {
           fontSize: "var(--mantine-font-size-sm)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           color: "var(--ds-gray-700, #334155)",
           marginBottom: "4px"
         }
@@ -269,7 +268,7 @@ export const theme = createTheme({
       styles: {
         label: {
           fontSize: "var(--mantine-font-size-sm)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           color: "var(--ds-gray-700, #334155)",
           marginBottom: "4px"
         }
@@ -282,7 +281,7 @@ export const theme = createTheme({
           fontSize: "var(--mantine-font-size-md)"
         },
         th: {
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           fontSize: "var(--ds-font-size-xs)",
           color: "var(--ds-gray-500, #64748b)"
         }
@@ -291,7 +290,7 @@ export const theme = createTheme({
     Tabs: {
       styles: {
         tab: {
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           fontSize: "var(--mantine-font-size-md)",
           borderRadius: "var(--ds-radius, 0.375rem)",
           transition: "background var(--ds-transition-fast, 150ms ease), color var(--ds-transition-fast, 150ms ease)"
