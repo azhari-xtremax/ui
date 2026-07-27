@@ -9,6 +9,21 @@
  */
 import { createTheme } from "@mantine/core";
 
+// Shared primitives — reused here and in storybook-enterprise-manager.ts so
+// the Storybook canvas and its surrounding chrome never drift apart.
+export const FONT_BODY =
+  '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+export const FONT_HEADING = `"Space Grotesk", ${FONT_BODY}`;
+export const FONT_MONO =
+  '"JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace';
+
+export const COLOR_BORDER = "#e8ebf1"; // card/table border — mirrors --ds-card-border
+export const COLOR_INPUT_BORDER = "#cbd5e1"; // gray-3
+export const COLOR_DIVIDER = "#e2e8f0"; // gray-2
+export const COLOR_MUTED = "#64748b"; // gray-5 — muted text
+export const COLOR_LABEL = "#334155"; // gray-7 — field labels
+export const COLOR_DIMMED = "#94a3b8"; // gray-4
+
 export const enterpriseTheme = createTheme({
   colors: {
     primary: [
@@ -110,14 +125,11 @@ export const enterpriseTheme = createTheme({
   },
   primaryColor: "primary",
   primaryShade: { light: 6, dark: 4 },
-  fontFamily:
-    '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-  fontFamilyMonospace:
-    '"JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace',
+  fontFamily: FONT_BODY,
+  fontFamilyMonospace: FONT_MONO,
   headings: {
     fontWeight: "600",
-    fontFamily:
-      '"Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+    fontFamily: FONT_HEADING,
     sizes: {
       h1: { lineHeight: "1.2" },
       h2: { lineHeight: "1.25" },
@@ -169,7 +181,7 @@ export const enterpriseTheme = createTheme({
     Input: {
       styles: {
         input: {
-          borderColor: "#cbd5e1",
+          borderColor: COLOR_INPUT_BORDER,
           fontSize: "0.875rem",
           borderRadius: "0.375rem",
           transition: "border-color 0.15s, box-shadow 0.15s",
@@ -180,7 +192,7 @@ export const enterpriseTheme = createTheme({
       defaultProps: { radius: 18, shadow: undefined },
       styles: {
         root: {
-          borderColor: "#e8ebf1",
+          borderColor: COLOR_BORDER,
           borderRadius: "18px",
           background: "#ffffff",
         },
@@ -194,7 +206,7 @@ export const enterpriseTheme = createTheme({
     Modal: {
       styles: {
         header: {
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: `1px solid ${COLOR_DIVIDER}`,
           padding: "1rem 1.5rem",
           marginBottom: 0,
         },
@@ -205,7 +217,7 @@ export const enterpriseTheme = createTheme({
           boxShadow:
             "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
         },
-        close: { color: "#94a3b8" },
+        close: { color: COLOR_DIMMED },
       },
     },
     Popover: {
@@ -214,7 +226,7 @@ export const enterpriseTheme = createTheme({
           borderRadius: "0.5rem",
           boxShadow:
             "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-          border: "1px solid #e2e8f0",
+          border: `1px solid ${COLOR_DIVIDER}`,
         },
       },
     },
@@ -233,7 +245,7 @@ export const enterpriseTheme = createTheme({
         label: {
           fontSize: "0.8125rem",
           fontWeight: "500",
-          color: "#334155",
+          color: COLOR_LABEL,
           marginBottom: "4px",
         },
       },
@@ -243,7 +255,7 @@ export const enterpriseTheme = createTheme({
         label: {
           fontSize: "0.8125rem",
           fontWeight: "500",
-          color: "#334155",
+          color: COLOR_LABEL,
           marginBottom: "4px",
         },
       },
@@ -253,7 +265,7 @@ export const enterpriseTheme = createTheme({
         label: {
           fontSize: "0.8125rem",
           fontWeight: "500",
-          color: "#334155",
+          color: COLOR_LABEL,
           marginBottom: "4px",
         },
       },
@@ -267,7 +279,7 @@ export const enterpriseTheme = createTheme({
         th: {
           fontWeight: "500",
           fontSize: "0.75rem",
-          color: "#64748b",
+          color: COLOR_MUTED,
         },
       },
     },

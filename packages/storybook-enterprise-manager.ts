@@ -6,6 +6,7 @@
  *   addons.setConfig({ theme: enterpriseManagerTheme('Package Name') });
  */
 import { create } from "storybook/theming/create";
+import { COLOR_BORDER, COLOR_MUTED, FONT_BODY, FONT_MONO } from "./storybook-enterprise-theme";
 
 type StoryTheme = ReturnType<typeof create>;
 
@@ -19,33 +20,31 @@ export function enterpriseManagerTheme(brandTitle: string): StoryTheme {
     appBg: "#f6f7fa",
     appContentBg: "#ffffff",
     appPreviewBg: "#ffffff",
-    appBorderColor: "#e8ebf1",
+    appBorderColor: COLOR_BORDER,
     appBorderRadius: 8,
 
     // Typography — Inter body, Space Grotesk for headings
-    fontBase:
-      '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-    fontCode:
-      '"JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace',
+    fontBase: FONT_BODY,
+    fontCode: FONT_MONO,
 
     // Text colors — navy ink
     textColor: "#0f1b33",
     textInverseColor: "#ffffff",
-    textMutedColor: "#64748b",
+    textMutedColor: COLOR_MUTED,
 
     // Brand colors — amber accent
     colorPrimary: "#e8890c",
     colorSecondary: "#e8890c",
 
     // Toolbar
-    barTextColor: "#64748b",
+    barTextColor: COLOR_MUTED,
     barSelectedColor: "#e8890c",
     barHoverColor: "#b45309",
     barBg: "#ffffff",
 
     // Form inputs in sidebar
     inputBg: "#ffffff",
-    inputBorder: "#e8ebf1",
+    inputBorder: COLOR_BORDER,
     inputTextColor: "#0f1b33",
     inputBorderRadius: 6,
   });
