@@ -11,7 +11,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   background-color: var(--v-table-background-color, transparent);
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-bottom: 1px solid var(--mantine-color-gray-1);
 }
 
 .table-row .cell:last-child {

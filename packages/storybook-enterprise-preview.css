@@ -30,6 +30,10 @@
      to the card border convention (--ds-card-border). */
   --mantine-color-default-border: #e8ebf1;
 
+  /* Dedicated table/collection-list border token — mirrors --ds-card-border
+     so VTable/CollectionList match Card's border exactly. */
+  --ds-table-border: #e8ebf1;
+
   /* Mantine resolves `variant="light"` text to `--mantine-color-{name}-light-color`,
      which by default points at a light stop of each custom palette. Tailwind's
      600 stops on the matching 50/100 tint backgrounds sit around 3.5:1 — below

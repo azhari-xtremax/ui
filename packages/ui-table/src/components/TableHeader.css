@@ -28,7 +28,7 @@
   font-weight: 600;
   color: var(--mantine-color-text);
   background-color: var(--mantine-color-gray-0);
-  border-bottom: 2px solid var(--mantine-color-default-border);
+  border-bottom: 1px solid var(--mantine-color-gray-1);
   -webkit-user-select: none;
   user-select: none;
   position: relative;

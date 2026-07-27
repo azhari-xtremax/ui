@@ -212,6 +212,7 @@
   --ds-chip-border: #e3e6ec;
   --ds-card-bg: #ffffff;
   --ds-card-border: #e8ebf1;
+  --ds-table-border: var(--ds-card-border);
   --ds-card-shadow: 0 2px 10px rgba(15, 27, 51, 0.04);
   --ds-divider: #eef1f5;
 
@@ -349,6 +350,7 @@
   --ds-chip-border: rgba(255, 255, 255, 0.1);
   --ds-card-bg: rgba(255, 255, 255, 0.04);
   --ds-card-border: rgba(255, 255, 255, 0.09);
+  --ds-table-border: var(--ds-card-border);
   --ds-card-shadow: none;
   --ds-divider: rgba(255, 255, 255, 0.08);
 
