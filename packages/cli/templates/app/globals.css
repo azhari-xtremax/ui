@@ -14,6 +14,94 @@
   --mantine-color-default-border: var(--ds-border-color);
 }
 
+/* ── Dark-mode variant contrast ───────────────────────────────
+   Mantine builds its dark-scheme variant colours by index arithmetic on
+   the palette, assuming the conventional layout where index 0 is the
+   lightest stop and 9 the darkest:
+
+     --{c}-light-color : index 1  (expects a near-white tint)
+     --{c}-text        : index 4
+     --{c}-outline     : index 2
+
+   Our --ds-* scales mirror themselves in dark mode (50↔950, 100↔900, …),
+   so index 0 is the DARKEST stop and those three land on near-black.
+   Badge/Alert/Button variant="light" — Badge's default — rendered dark
+   text on a dark tint at roughly 1.0:1.
+
+   Repointing them at index 7, the mirrored counterpart of Mantine's
+   intent, restores >= 6:1 on every palette against both the page
+   background and a Card surface. Mantine's own alias vars
+   (--mantine-primary-color-light-color et al.) resolve through these,
+   so they are fixed by the same override.
+
+   Keep this in sync with the mirroring in design-tokens.css: if the
+   scales ever stop mirroring, delete this block rather than adjusting
+   it — Mantine's defaults would then be correct on their own.
+
+   The selector and !important are both load-bearing. Mantine injects
+   these same variables from a runtime <style> under
+   `:root[data-mantine-color-scheme="dark"]` (specificity 0,2,0), which
+   is appended after this stylesheet. A bare attribute selector (0,1,0)
+   would lose on specificity and a matching one would lose on source
+   order, so the override has to out-rank it explicitly. */
+:root[data-mantine-color-scheme="dark"] {
+  --mantine-color-primary-light-color: var(--mantine-color-primary-7) !important;
+  --mantine-color-primary-text: var(--mantine-color-primary-7) !important;
+  --mantine-color-primary-outline: var(--mantine-color-primary-7) !important;
+
+  --mantine-color-secondary-light-color: var(--mantine-color-secondary-7) !important;
+  --mantine-color-secondary-text: var(--mantine-color-secondary-7) !important;
+  --mantine-color-secondary-outline: var(--mantine-color-secondary-7) !important;
+
+  --mantine-color-accent-light-color: var(--mantine-color-accent-7) !important;
+  --mantine-color-accent-text: var(--mantine-color-accent-7) !important;
+  --mantine-color-accent-outline: var(--mantine-color-accent-7) !important;
+
+  --mantine-color-success-light-color: var(--mantine-color-success-7) !important;
+  --mantine-color-success-text: var(--mantine-color-success-7) !important;
+  --mantine-color-success-outline: var(--mantine-color-success-7) !important;
+
+  --mantine-color-info-light-color: var(--mantine-color-info-7) !important;
+  --mantine-color-info-text: var(--mantine-color-info-7) !important;
+  --mantine-color-info-outline: var(--mantine-color-info-7) !important;
+
+  --mantine-color-warning-light-color: var(--mantine-color-warning-7) !important;
+  --mantine-color-warning-text: var(--mantine-color-warning-7) !important;
+  --mantine-color-warning-outline: var(--mantine-color-warning-7) !important;
+
+  --mantine-color-danger-light-color: var(--mantine-color-danger-7) !important;
+  --mantine-color-danger-text: var(--mantine-color-danger-7) !important;
+  --mantine-color-danger-outline: var(--mantine-color-danger-7) !important;
+
+  --mantine-color-gray-light-color: var(--mantine-color-gray-7) !important;
+  --mantine-color-gray-text: var(--mantine-color-gray-7) !important;
+  --mantine-color-gray-outline: var(--mantine-color-gray-7) !important;
+
+  /* Links. Mantine points --mantine-color-anchor at primary-4, which the
+     mirrored scale resolves to the deep navy #1b2a4a — invisible on a dark
+     page. Index 7 is the readable counterpart (~6.9:1). */
+  --mantine-color-anchor: var(--mantine-color-primary-7) !important;
+
+  /* Body / muted text. Mantine falls back to its own built-in `dark`
+     palette here (dark-0 #C9C9C9, dark-2 #828282), which is dimmer than
+     our ink and unrelated to the navy surfaces, so text inside Paper and
+     Card read greyer than the page around them. Point them at the --ds-ink
+     ramp so component text matches the shell. */
+  --mantine-color-text: var(--ds-ink) !important;
+  --mantine-color-dimmed: var(--ds-ink-secondary) !important;
+  --mantine-color-placeholder: var(--ds-ink-faint) !important;
+
+  /* Paper/Card border in dark mode is hard-wired to dark-4 (#424242), a
+     neutral grey against our navy surfaces. */
+  --mantine-color-dark-4: var(--ds-card-border) !important;
+
+  /* Tooltip is deliberately inverted: on dark it wants a LIGHT surface with
+     dark text. Mantine asks for gray-2 + black, but mirroring makes gray-2
+     #1e293b — near-black on black. Swap to the mirrored light stop. */
+  --tooltip-bg: var(--ds-gray-700) !important;
+  --tooltip-color: var(--ds-gray-50) !important;
+}
+
 body {
   background: var(--ds-body-bg);
   background-attachment: fixed;
