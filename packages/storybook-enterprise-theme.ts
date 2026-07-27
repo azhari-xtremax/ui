@@ -1,8 +1,8 @@
 /**
  * Shared Mantine theme for all Storybook previews.
  *
- * Modern neutral palette built on the Tailwind reference scales:
- * slate neutrals, orange accent (main = orange-600), Inter type.
+ * "Soft Futurism" palette — navy + amber brand, Space Grotesk display type,
+ * pill-shaped controls, large-radius cards.
  * Palette arrays map Mantine indices 0–9 to Tailwind stops 50–900.
  * Each package's .storybook/preview.tsx should import and use this theme
  * so every component renders with the same professional look in the canvas.
@@ -12,28 +12,40 @@ import { createTheme } from "@mantine/core";
 export const enterpriseTheme = createTheme({
   colors: {
     primary: [
-      "#fff7ed",
-      "#ffedd5",
-      "#fed7aa",
-      "#fdba74",
-      "#fb923c",
-      "#f97316",
-      "#ea580c",  // main — orange-600
-      "#c2410c",  // hover/strong — orange-700
-      "#9a3412",
-      "#7c2d12",
+      "#eef1f6",
+      "#d8dee9",
+      "#b4c0d6",
+      "#8a9cbe",
+      "#5d74a0",
+      "#3a5480",
+      "#1b2a4a",  // main — navy-600
+      "#16213c",  // hover/strong — navy-700
+      "#11192e",
+      "#0c1220",
+    ],
+    secondary: [
+      "#fff8eb",
+      "#ffebc2",
+      "#ffd98a",
+      "#ffc152",
+      "#f5a623",
+      "#ec940f",
+      "#e8890c",  // main — amber-600
+      "#c26e07",
+      "#995607",
+      "#7a4407",
     ],
     accent: [
-      "#eff6ff",
-      "#dbeafe",
-      "#bfdbfe",
-      "#93c5fd",
-      "#60a5fa",
-      "#3b82f6",
-      "#2563eb",  // main — blue-600
-      "#1d4ed8",
-      "#1e40af",
-      "#1e3a8a",
+      "#fff8eb",
+      "#ffebc2",
+      "#ffd98a",
+      "#ffc152",
+      "#f5a623",
+      "#ec940f",
+      "#e8890c",  // main — amber-600
+      "#c26e07",
+      "#995607",
+      "#7a4407",
     ],
     success: [
       "#f0fdf4",
@@ -105,11 +117,12 @@ export const enterpriseTheme = createTheme({
   headings: {
     fontWeight: "600",
     fontFamily:
-      '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+      '"Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
     sizes: {
-      h1: { lineHeight: "1.1" },
-      h2: { lineHeight: "1.15" },
-      h3: { lineHeight: "1.25" },
+      h1: { lineHeight: "1.2" },
+      h2: { lineHeight: "1.25" },
+      h3: { lineHeight: "1.3" },
+      h4: { lineHeight: "1.35" },
     },
   },
   fontSizes: {
@@ -143,10 +156,11 @@ export const enterpriseTheme = createTheme({
   defaultRadius: "sm",
   components: {
     Button: {
-      defaultProps: { radius: "sm" },
+      defaultProps: { radius: 999 },
       styles: {
         root: {
-          fontWeight: "500",
+          fontWeight: "600",
+          borderRadius: "999px",
           fontSize: "0.875rem",
           transition: "background-color 0.15s, border-color 0.15s",
         },
@@ -163,9 +177,13 @@ export const enterpriseTheme = createTheme({
       },
     },
     Card: {
-      defaultProps: { radius: "md", shadow: "xs" },
+      defaultProps: { radius: 18, shadow: undefined },
       styles: {
-        root: { borderColor: "#e2e8f0" },
+        root: {
+          borderColor: "#e8ebf1",
+          borderRadius: "18px",
+          background: "#ffffff",
+        },
       },
     },
     Paper: {

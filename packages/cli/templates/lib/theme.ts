@@ -13,28 +13,43 @@ import { createTheme } from "@mantine/core";
 export const theme = createTheme({
   colors: {
     primary: [
-      "var(--ds-primary-50, #fff7ed)",
-      "var(--ds-primary-100, #ffedd5)",
-      "var(--ds-primary-200, #fed7aa)",
-      "var(--ds-primary-300, #fdba74)",
-      "var(--ds-primary-400, #fb923c)",
-      "var(--ds-primary-500, #f97316)",
-      "var(--ds-primary, #ea580c)",
-      "var(--ds-primary-700, #c2410c)",
-      "var(--ds-primary-800, #9a3412)",
-      "var(--ds-primary-900, #7c2d12)"
+      "var(--ds-primary-50, #eef1f6)",
+      "var(--ds-primary-100, #d8dee9)",
+      "var(--ds-primary-200, #b4c0d6)",
+      "var(--ds-primary-300, #8a9cbe)",
+      "var(--ds-primary-400, #5d74a0)",
+      "var(--ds-primary-500, #3a5480)",
+      "var(--ds-primary, #1b2a4a)",
+      "var(--ds-primary-700, #16213c)",
+      "var(--ds-primary-800, #11192e)",
+      "var(--ds-primary-900, #0c1220)"
+    ],
+    // "secondary" matches the --ds-secondary-* token naming used throughout
+    // design-tokens.css and app code; "accent" is kept as an alias since a
+    // few scaffolded (currently unused) components still reference it.
+    secondary: [
+      "var(--ds-secondary-50, #fff8eb)",
+      "var(--ds-secondary-100, #ffebc2)",
+      "var(--ds-secondary-200, #ffd98a)",
+      "var(--ds-secondary-300, #ffc152)",
+      "var(--ds-secondary-400, #f5a623)",
+      "var(--ds-secondary-500, #ec940f)",
+      "var(--ds-secondary, #e8890c)",
+      "var(--ds-secondary-700, #c26e07)",
+      "var(--ds-secondary-800, #995607)",
+      "var(--ds-secondary-900, #7a4407)"
     ],
     accent: [
-      "var(--ds-secondary-50, #eff6ff)",
-      "var(--ds-secondary-100, #dbeafe)",
-      "var(--ds-secondary-200, #bfdbfe)",
-      "var(--ds-secondary-300, #93c5fd)",
-      "var(--ds-secondary-400, #60a5fa)",
-      "var(--ds-secondary-500, #3b82f6)",
-      "var(--ds-secondary, #2563eb)",
-      "var(--ds-secondary-700, #1d4ed8)",
-      "var(--ds-secondary-800, #1e40af)",
-      "var(--ds-secondary-900, #1e3a8a)"
+      "var(--ds-secondary-50, #fff8eb)",
+      "var(--ds-secondary-100, #ffebc2)",
+      "var(--ds-secondary-200, #ffd98a)",
+      "var(--ds-secondary-300, #ffc152)",
+      "var(--ds-secondary-400, #f5a623)",
+      "var(--ds-secondary-500, #ec940f)",
+      "var(--ds-secondary, #e8890c)",
+      "var(--ds-secondary-700, #c26e07)",
+      "var(--ds-secondary-800, #995607)",
+      "var(--ds-secondary-900, #7a4407)"
     ],
     success: [
       "var(--ds-success-50, #f0fdf4)",
@@ -104,7 +119,7 @@ export const theme = createTheme({
     "var(--ds-font-mono, 'JetBrains Mono', SFMono-Regular, Consolas, monospace)",
   headings: {
     fontWeight: "600",
-    fontFamily: "var(--ds-font-family)",
+    fontFamily: "var(--ds-font-display, var(--ds-font-family))",
     sizes: {
       h1: { lineHeight: "1.2" },
       h2: { lineHeight: "1.25" },
@@ -144,11 +159,12 @@ export const theme = createTheme({
   components: {
     Button: {
       defaultProps: {
-        radius: "sm",
+        radius: 999,
       },
       styles: {
         root: {
-          fontWeight: "500",
+          fontWeight: "600",
+          borderRadius: "var(--ds-radius-pill, 999px)",
           fontSize: "var(--mantine-font-size-md)",
           transition: "background-color var(--ds-transition-fast, 150ms ease), border-color var(--ds-transition-fast, 150ms ease)"
         }
@@ -166,12 +182,14 @@ export const theme = createTheme({
     },
     Card: {
       defaultProps: {
-        radius: "md",
-        shadow: "xs",
+        radius: 18,
+        shadow: undefined,
       },
       styles: {
         root: {
-          borderColor: "var(--ds-border-color, #e2e8f0)",
+          borderColor: "var(--ds-card-border, #e8ebf1)",
+          borderRadius: "var(--ds-radius-card, 18px)",
+          background: "var(--ds-card-bg, #ffffff)",
         }
       }
     },

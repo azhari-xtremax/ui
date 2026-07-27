@@ -1,16 +1,19 @@
 /**
- * Authenticated App Shell
+ * Authenticated App Shell — "Soft Futurism" layout.
  *
- * A modern, token-styled application shell: glass-blur header with a
- * breadcrumb + optional search/notification affordances, a sidebar with
- * brand, primary navigation, and a bottom user-profile menu.
+ * An 88px floating icon rail (replacing the classic 260px sidebar) plus a
+ * transparent header row rendered inside the content area: breadcrumb left,
+ * search chip + scheme toggle + notifications right. Nav entries render as
+ * icon buttons with their label in a tooltip; `section` groups are separated
+ * by a thin rail divider rather than a text heading.
  *
  * This is the recommended wrapper for your own app pages (dashboards,
  * custom screens). For schema-driven collection browsing under /content/*,
  * use ContentLayout + ContentNavigation instead — do NOT nest this shell
  * around those routes or you'll get duplicate chrome.
  *
- * Styling lives in app/globals.css under the `.bp-*` namespace.
+ * Styling lives in app/globals.css under the `.bp-*` namespace and is built
+ * entirely from the `--ds-*` design tokens.
  *
  * @buildpad/origin: components/layout/AuthenticatedShell
  * @buildpad/version: 1.0.0
@@ -27,7 +30,6 @@ import {
   Divider,
   Group,
   Menu,
-  Stack,
   Text,
   Tooltip,
   UnstyledButton,
@@ -35,7 +37,6 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import {
   IconBell,
-  IconChevronDown,
   IconLogout,
   IconSearch,
   IconSettings,
@@ -46,6 +47,7 @@ import { NAV_ITEMS } from "./navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Fragment,
   useEffect,
   useMemo,
   useState,
@@ -66,9 +68,10 @@ export interface NavItem {
   href: string;
   icon: ComponentType<IconProps>;
   /**
-   * Sidebar group this entry belongs to (e.g. "Administration"). Entries
-   * without a section render under "Main Menu"; groups appear in the order
-   * their first entry appears in the nav list.
+   * Rail group this entry belongs to (e.g. "Administration"). Entries
+   * without a section fall into "Main Menu"; groups appear in the order
+   * their first entry appears in the nav list and are separated by a
+   * divider in the rail (the icon rail has no room for text headings).
    */
   section?: string;
 }
@@ -209,169 +212,83 @@ export function AuthenticatedShell({
 
   return (
     <AppShell
-      header={{ height: 60 }}
       navbar={{
-        width: 260,
+        width: 88,
         breakpoint: "sm",
         collapsed: { mobile: !mobileOpened },
       }}
-      padding="lg"
+      padding="md"
     >
-      <AppShell.Header className="bp-header">
-        <Group h="100%" px="md" justify="space-between" align="center">
-          <Group gap="sm">
-            <Burger
-              opened={mobileOpened}
-              onClick={toggleMobile}
-              hiddenFrom="sm"
-              size="sm"
-            />
-            <Group gap="xs" style={{ display: "flex", alignItems: "center" }}>
-              <Text size="sm" c="dimmed" fw={500}>
-                {brand.name}
-              </Text>
-              <Text size="sm" c="dimmed" fw={500}>
-                /
-              </Text>
-              <Text size="sm" fw={600}>
-                {pageTitle}
-              </Text>
-            </Group>
-          </Group>
-
-          <Group gap="md">
-            {/* Presentational only — wire these up to your own search /
-                notification features when ready. */}
-            {showSearch && (
-              <UnstyledButton className="bp-search-button">
-                <Group gap="xs" wrap="nowrap">
-                  <IconSearch size={14} stroke={1.8} />
-                  <Text size="xs">Search…</Text>
-                </Group>
-                <span className="bp-search-kbd">⌘K</span>
-              </UnstyledButton>
-            )}
-
-            {showNotifications && (
-              <Tooltip label="Notifications">
-                <div className="bp-notification-bell">
-                  <ActionIcon
-                    variant="subtle"
-                    size="lg"
-                    aria-label="Notifications"
-                    color="gray"
-                  >
-                    <IconBell size={20} stroke={1.8} />
-                  </ActionIcon>
-                  <div className="bp-notification-dot" />
-                </div>
-              </Tooltip>
-            )}
-
-            <ColorSchemeToggle />
-          </Group>
-        </Group>
-      </AppShell.Header>
-
-      <AppShell.Navbar p="sm" className="bp-navbar">
-        {/* Navigation & branding stack */}
-        <Stack gap={4} style={{ flex: 1, width: "100%" }}>
-          <div className="bp-brand-container">
-            <div className="bp-brand-icon">{brand.initial}</div>
-            <Stack gap={0}>
-              <Text fw={700} size="sm" style={{ lineHeight: 1.2 }}>
-                {brand.name}
-              </Text>
-              <Text size="xs" c="dimmed" style={{ lineHeight: 1 }}>
-                Workspace
-              </Text>
-            </Stack>
+      <AppShell.Navbar className="bp-rail-navbar" withBorder={false}>
+        <nav
+          className="bp-rail"
+          style={{ position: "sticky", top: 16, height: "calc(100vh - 32px)" }}
+          aria-label="Primary"
+        >
+          {/* Brand mark */}
+          <div className="bp-rail-brand" aria-hidden="true">
+            {brand.initial}
           </div>
 
+          {/* Primary nav icons, grouped by section */}
           {navGroups.map((group, groupIndex) => (
-            <div key={group.section}>
-              <Text
-                size="xs"
-                fw={700}
-                c="dimmed"
-                px="xs"
-                mb={4}
-                mt={groupIndex > 0 ? "md" : 0}
-                style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}
-              >
-                {group.section}
-              </Text>
-
-              <Stack gap={4}>
-                {group.items.map((item) => {
-                  const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
-                  const Icon = item.icon;
-                  return (
+            <Fragment key={group.section}>
+              {groupIndex > 0 && (
+                <div className="bp-rail-divider" role="separator" />
+              )}
+              {group.items.map((item) => {
+                const isActive =
+                  pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`);
+                const Icon = item.icon;
+                return (
+                  <Tooltip
+                    key={item.href}
+                    label={item.label}
+                    position="right"
+                    withArrow
+                  >
                     <Link
-                      key={item.href}
                       href={item.href}
-                      className={`bp-nav-link ${
-                        isActive ? "bp-nav-link-active" : ""
+                      className={`bp-rail-link ${
+                        isActive ? "bp-rail-link-active" : ""
                       }`}
                       onClick={closeMobile}
+                      aria-label={item.label}
+                      aria-current={isActive ? "page" : undefined}
+                      title={item.label}
                     >
-                      <Icon size={18} stroke={1.8} />
-                      <span>{item.label}</span>
+                      <Icon size={19} stroke={1.8} />
                     </Link>
-                  );
-                })}
-              </Stack>
-            </div>
+                  </Tooltip>
+                );
+              })}
+            </Fragment>
           ))}
-        </Stack>
 
-        {/* User profile section at the bottom */}
-        <Stack
-          gap={0}
-          pt="sm"
-          style={{
-            borderTop: "1px solid var(--ds-border-color)",
-            width: "100%",
-          }}
-        >
+          <div className="bp-rail-spacer" />
+
+          {/* User avatar + menu, pinned to the bottom */}
           <Menu position="right-end" offset={12} withArrow shadow="md" width={220}>
             <Menu.Target>
-              <UnstyledButton className="bp-user-profile-button">
-                <Group gap="xs" wrap="nowrap">
-                  <Avatar
-                    radius="xl"
-                    size="sm"
-                    src={user?.avatar ?? undefined}
-                    style={{ border: "2px solid var(--ds-primary-200)" }}
-                  >
-                    {getInitials(user)}
-                  </Avatar>
-                  <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
-                    <Text
-                      size="sm"
-                      fw={600}
-                      lineClamp={1}
-                      style={{ lineHeight: 1.2 }}
-                    >
-                      {displayName}
-                    </Text>
-                    <Text
-                      c="dimmed"
-                      size="xs"
-                      lineClamp={1}
-                      style={{ lineHeight: 1 }}
-                    >
-                      {user?.email ?? "Signed in"}
-                    </Text>
-                  </Stack>
-                  <IconChevronDown size={14} color="var(--ds-gray-400)" />
-                </Group>
+              <UnstyledButton aria-label="Account menu">
+                <Avatar
+                  radius="xl"
+                  size={34}
+                  src={user?.avatar ?? undefined}
+                  style={{
+                    background: "var(--ds-brand-mark)",
+                    color: "#ffffff",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {getInitials(user)}
+                </Avatar>
               </UnstyledButton>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Label>Profile Settings</Menu.Label>
+              <Menu.Label>{displayName}</Menu.Label>
               <Menu.Item leftSection={<IconUser size={14} />} disabled>
                 Account details
               </Menu.Item>
@@ -390,10 +307,65 @@ export function AuthenticatedShell({
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
-        </Stack>
+        </nav>
       </AppShell.Navbar>
 
-      <AppShell.Main>{children}</AppShell.Main>
+      <AppShell.Main className="bp-main">
+        {/* Transparent header row (not a bar) */}
+        <Group justify="space-between" align="center" mb="lg" wrap="nowrap">
+          <Group gap="sm" wrap="nowrap">
+            <Burger
+              opened={mobileOpened}
+              onClick={toggleMobile}
+              hiddenFrom="sm"
+              size="sm"
+            />
+            <div>
+              <Text component="div" className="bp-topbar-crumb">
+                {pageTitle}
+              </Text>
+              <Text component="div" className="bp-topbar-sub">
+                {brand.name} · Workspace
+              </Text>
+            </div>
+          </Group>
+
+          <Group gap="sm" wrap="nowrap">
+            {/* Presentational only — wire these up to your own search /
+                notification features when ready. */}
+            {showSearch && (
+              <UnstyledButton className="bp-search-chip" aria-label="Search">
+                <Group gap="xs" wrap="nowrap">
+                  <IconSearch size={14} stroke={1.8} />
+                  <Text size="xs">Search anything…</Text>
+                </Group>
+                <span className="bp-search-kbd">⌘K</span>
+              </UnstyledButton>
+            )}
+
+            <span className="bp-round-btn">
+              <ColorSchemeToggle />
+            </span>
+
+            {showNotifications && (
+              <Tooltip label="Notifications">
+                <div className="bp-notification-bell">
+                  <ActionIcon
+                    className="bp-round-btn"
+                    variant="default"
+                    aria-label="Notifications"
+                  >
+                    <IconBell size={18} stroke={1.8} />
+                  </ActionIcon>
+                  <div className="bp-notification-dot" />
+                </div>
+              </Tooltip>
+            )}
+          </Group>
+        </Group>
+
+        {children}
+      </AppShell.Main>
     </AppShell>
   );
 }
