@@ -43,7 +43,7 @@ const STATUS_OPTIONS: Array<{ value: UserStatus; label: string }> = [
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 const USER_HEADERS: HeaderRaw[] = [
-  { text: 'User', value: 'first_name', sortable: true },
+  { text: 'User', value: 'first_name', sortable: true, width: 260 },
   { text: 'Email', value: 'email', sortable: true },
   { text: 'Role', value: 'roles', sortable: false },
   { text: 'Status', value: 'status', sortable: true },

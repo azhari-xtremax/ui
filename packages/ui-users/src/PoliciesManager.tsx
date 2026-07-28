@@ -28,7 +28,7 @@ const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 const POLICY_HEADERS: HeaderRaw[] = [
   { text: '', value: 'icon', sortable: false, width: 48 },
-  { text: 'Name', value: 'name', sortable: true },
+  { text: 'Name', value: 'name', sortable: true, width: 260 },
   { text: 'Users', value: 'userCount', sortable: false },
   { text: 'Roles', value: 'roleCount', sortable: false },
   { text: 'Description', value: 'description', sortable: false },
