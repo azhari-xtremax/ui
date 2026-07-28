@@ -1,6 +1,7 @@
 'use client';
 
 import './UsersManager.css';
+import './ManagerTable.css';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -442,58 +443,16 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
 
   return (
     <Stack gap="md" className="bp-users-manager" data-testid="users-manager">
-      {(!hideHeader || addButton) && (
-        <Group justify={hideHeader ? 'flex-end' : 'space-between'} align="flex-start">
-          {!hideHeader && (
-            <Box>
-              <Title order={2} mb={4}>
-                Users
-              </Title>
-              <Text size="sm" c="dimmed">
-                Manage user accounts, roles, and access permissions
-              </Text>
-            </Box>
-          )}
-          {addButton}
-        </Group>
+      {!hideHeader && (
+        <Box>
+          <Title order={2} mb={4}>
+            Users
+          </Title>
+          <Text size="sm" c="dimmed">
+            Manage user accounts, roles, and access permissions
+          </Text>
+        </Box>
       )}
-
-      <Paper p="sm" radius="md" withBorder>
-        <Group>
-          <SearchInput
-            placeholder="Search users..."
-            value={search}
-            onChange={setSearch}
-            style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
-            data-testid="users-manager-search"
-          />
-          <Select
-            placeholder="Role"
-            data={roles.map((role) => ({ value: role.id, label: role.name }))}
-            value={selectedRole}
-            onChange={setSelectedRole}
-            clearable
-            size="sm"
-            style={{ minWidth: 160 }}
-            data-testid="users-manager-role-filter"
-          />
-          <Select
-            placeholder="Status"
-            data={STATUS_OPTIONS}
-            value={selectedStatus}
-            onChange={(value) => setSelectedStatus(value as UserStatus | null)}
-            clearable
-            size="sm"
-            style={{ minWidth: 160 }}
-            data-testid="users-manager-status-filter"
-          />
-          {totalCount > 0 && (
-            <Badge variant="light" color="gray" size="lg" radius="sm" style={{ marginLeft: 'auto' }}>
-              {totalCount} {totalCount === 1 ? 'user' : 'users'}
-            </Badge>
-          )}
-        </Group>
-      </Paper>
 
       {selectionCount > 0 && (
         <Paper p="sm" radius="md" withBorder data-testid="users-manager-bulk-toolbar">
@@ -559,45 +518,85 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
         </Paper>
       )}
 
-      <VTable
-        headers={USER_HEADERS}
-        items={users as unknown as Item[]}
-        itemKey="id"
-        sort={sort}
-        showSelect={selectable ? 'multiple' : 'none'}
-        value={selection}
-        selectionUseKeys
-        fixedHeader
-        loading={loading}
-        noItemsText={
-          loadError
-            ? `Failed to load users — ${loadError}`
-            : hasFilters
-              ? 'No users found — try adjusting your filters'
-              : 'No users found — get started by adding your first user'
-        }
-        clickable={updateAllowed}
-        renderCell={renderCell}
-        renderRowAppend={renderRowAppend}
-        renderFooter={() => (
-          <ListFooter
-            shown={users.length}
-            totalCount={totalCount}
-            itemsLabel="users"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            limit={limit}
-            sizeOptions={sizeOptions}
-            onLimitChange={setLimit}
-            data-testid="users-manager-page-size"
+      <div className="bp-manager-card">
+        <Group className="bp-manager-toolbar" wrap="wrap">
+          <SearchInput
+            placeholder="Search users..."
+            value={search}
+            onChange={setSearch}
+            style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
+            data-testid="users-manager-search"
           />
-        )}
-        onUpdate={(value) => setSelection(value as string[])}
-        onSortChange={setSort}
-        onRowClick={updateAllowed ? ({ item }) => onUserClick?.(item as unknown as User) : undefined}
-        data-testid="users-manager-table"
-      />
+          <Select
+            placeholder="Role"
+            data={roles.map((role) => ({ value: role.id, label: role.name }))}
+            value={selectedRole}
+            onChange={setSelectedRole}
+            clearable
+            size="sm"
+            style={{ minWidth: 160 }}
+            data-testid="users-manager-role-filter"
+          />
+          <Select
+            placeholder="Status"
+            data={STATUS_OPTIONS}
+            value={selectedStatus}
+            onChange={(value) => setSelectedStatus(value as UserStatus | null)}
+            clearable
+            size="sm"
+            style={{ minWidth: 160 }}
+            data-testid="users-manager-status-filter"
+          />
+          <Group gap="sm" style={{ marginLeft: 'auto' }}>
+            {totalCount > 0 && (
+              <Badge variant="light" color="gray" size="lg" radius="sm">
+                {totalCount} {totalCount === 1 ? 'user' : 'users'}
+              </Badge>
+            )}
+            {addButton}
+          </Group>
+        </Group>
+
+        <VTable
+          headers={USER_HEADERS}
+          items={users as unknown as Item[]}
+          itemKey="id"
+          sort={sort}
+          showSelect={selectable ? 'multiple' : 'none'}
+          value={selection}
+          selectionUseKeys
+          fixedHeader
+          loading={loading}
+          noItemsText={
+            loadError
+              ? `Failed to load users — ${loadError}`
+              : hasFilters
+                ? 'No users found — try adjusting your filters'
+                : 'No users found — get started by adding your first user'
+          }
+          clickable={updateAllowed}
+          renderCell={renderCell}
+          renderRowAppend={renderRowAppend}
+          renderFooter={() => (
+            <ListFooter
+              shown={users.length}
+              totalCount={totalCount}
+              itemsLabel="users"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              limit={limit}
+              sizeOptions={sizeOptions}
+              onLimitChange={setLimit}
+              data-testid="users-manager-page-size"
+            />
+          )}
+          onUpdate={(value) => setSelection(value as string[])}
+          onSortChange={setSort}
+          onRowClick={updateAllowed ? ({ item }) => onUserClick?.(item as unknown as User) : undefined}
+          data-testid="users-manager-table"
+        />
+      </div>
 
       <DeleteConfirmModal
         opened={deleteModal.opened}

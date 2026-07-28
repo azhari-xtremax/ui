@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Group,
-  Paper,
   Stack,
   Text,
   Title,
@@ -23,6 +22,7 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { ListFooter } from './ListFooter';
 import { RowActionsMenu } from './RowActionsMenu';
 import { SearchInput } from './SearchInput';
+import './ManagerTable.css';
 
 function getUserCount(role: Role): number {
   return role.users?.[0]?.count ?? 0;
@@ -204,24 +204,19 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
 
   return (
     <Stack gap="md" data-testid="roles-manager">
-      {(!hideHeader || addButton) && (
-        <Group justify={hideHeader ? 'flex-end' : 'space-between'} align="flex-start">
-          {!hideHeader && (
-            <Box>
-              <Title order={2} mb={4}>
-                Roles
-              </Title>
-              <Text size="sm" c="dimmed">
-                Define roles to group users and assign permissions
-              </Text>
-            </Box>
-          )}
-          {addButton}
-        </Group>
+      {!hideHeader && (
+        <Box>
+          <Title order={2} mb={4}>
+            Roles
+          </Title>
+          <Text size="sm" c="dimmed">
+            Define roles to group users and assign permissions
+          </Text>
+        </Box>
       )}
 
-      <Paper p="sm" radius="md" withBorder>
-        <Group>
+      <div className="bp-manager-card">
+        <Group className="bp-manager-toolbar" wrap="wrap">
           <SearchInput
             placeholder="Search roles..."
             value={search}
@@ -229,48 +224,51 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
             style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
             data-testid="roles-manager-search"
           />
-          {totalCount > 0 && (
-            <Badge variant="light" color="gray" size="lg" radius="sm" style={{ marginLeft: 'auto' }}>
-              {totalCount} {totalCount === 1 ? 'role' : 'roles'}
-            </Badge>
-          )}
+          <Group gap="sm" style={{ marginLeft: 'auto' }}>
+            {totalCount > 0 && (
+              <Badge variant="light" color="gray" size="lg" radius="sm">
+                {totalCount} {totalCount === 1 ? 'role' : 'roles'}
+              </Badge>
+            )}
+            {addButton}
+          </Group>
         </Group>
-      </Paper>
 
-      <VTable
-        headers={ROLE_HEADERS}
-        items={roles as unknown as Item[]}
-        itemKey="id"
-        showSelect="none"
-        fixedHeader
-        loading={loading}
-        noItemsText={
-          loadError
-            ? `Failed to load roles — ${loadError}`
-            : debouncedSearch
-              ? 'No roles found — try a different search term'
-              : 'No roles found — create your first role to get started'
-        }
-        clickable={updateAllowed}
-        renderCell={renderCell}
-        renderRowAppend={renderRowAppend}
-        renderFooter={() => (
-          <ListFooter
-            shown={roles.length}
-            totalCount={totalCount}
-            itemsLabel="roles"
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            limit={limit}
-            sizeOptions={sizeOptions}
-            onLimitChange={setLimit}
-            data-testid="roles-manager-page-size"
-          />
-        )}
-        onRowClick={updateAllowed ? ({ item }) => onRoleClick?.(item as unknown as Role) : undefined}
-        data-testid="roles-manager-table"
-      />
+        <VTable
+          headers={ROLE_HEADERS}
+          items={roles as unknown as Item[]}
+          itemKey="id"
+          showSelect="none"
+          fixedHeader
+          loading={loading}
+          noItemsText={
+            loadError
+              ? `Failed to load roles — ${loadError}`
+              : debouncedSearch
+                ? 'No roles found — try a different search term'
+                : 'No roles found — create your first role to get started'
+          }
+          clickable={updateAllowed}
+          renderCell={renderCell}
+          renderRowAppend={renderRowAppend}
+          renderFooter={() => (
+            <ListFooter
+              shown={roles.length}
+              totalCount={totalCount}
+              itemsLabel="roles"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              limit={limit}
+              sizeOptions={sizeOptions}
+              onLimitChange={setLimit}
+              data-testid="roles-manager-page-size"
+            />
+          )}
+          onRowClick={updateAllowed ? ({ item }) => onRoleClick?.(item as unknown as Role) : undefined}
+          data-testid="roles-manager-table"
+        />
+      </div>
 
       <DeleteConfirmModal
         opened={deleteModal.opened}
