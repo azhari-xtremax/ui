@@ -3171,6 +3171,11 @@
           "sourceSha256": "a48858f5b0481da7c9d48294f8e13964cdfa3a6dbcc946c4e815a224244bf79e"
         },
         {
+          "source": "ui-users/src/ManagerTable.css",
+          "target": "components/ui/users-management/manager-table.css",
+          "sourceSha256": "6b255685bc6841fadbcf99d1717a2f2f866289b92c198a9922183751d6e1e4c6"
+        },
+        {
           "source": "ui-users/src/UserDetail.tsx",
           "target": "components/ui/users-management/user-detail.tsx",
           "sourceSha256": "cac983d1fadc6a45cc6b3b13ce279c272f6916408dff81160fb1837715e3a40a"

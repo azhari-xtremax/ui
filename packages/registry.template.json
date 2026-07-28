@@ -2694,6 +2694,10 @@
           "target": "components/ui/users-management/users-manager.css"
         },
         {
+          "source": "ui-users/src/ManagerTable.css",
+          "target": "components/ui/users-management/manager-table.css"
+        },
+        {
           "source": "ui-users/src/UserDetail.tsx",
           "target": "components/ui/users-management/user-detail.tsx"
         },

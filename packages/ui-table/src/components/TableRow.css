@@ -11,7 +11,7 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   background-color: var(--v-table-background-color, transparent);
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-bottom: var(--ds-table-row-border, 1px solid var(--mantine-color-gray-1));
 }
 
 .table-row .cell:last-child {
@@ -21,6 +21,7 @@
 .table-row .cell.select {
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .table-row .cell.manual {

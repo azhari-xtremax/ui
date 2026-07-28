@@ -7,9 +7,9 @@
   flex: 0 1 auto;
   min-height: 0;
   background: var(--mantine-color-body);
-  border: 1px solid var(--mantine-color-default-border);
+  border: var(--ds-table-border, 1px solid #e8ebf1);
   border-radius: var(--mantine-radius-md);
-  box-shadow: var(--mantine-shadow-xs, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+  box-shadow: var(--mantine-shadow-sm, 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1));
   overflow: hidden;
 }
 
@@ -32,7 +32,7 @@
   justify-content: space-between;
   padding: 8px 12px;
   gap: 12px;
-  border-bottom: 1px solid var(--mantine-color-default-border);
+  border-bottom: var(--ds-table-border, 1px solid #e8ebf1);
   background: var(--mantine-color-body);
   flex-wrap: wrap;
 }
@@ -81,7 +81,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  border-top: 1px solid var(--mantine-color-default-border);
+  border-top: var(--ds-table-border, 1px solid #e8ebf1);
   margin-top: auto;
   position: sticky;
   left: 0;
@@ -100,7 +100,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-top: 1px solid var(--mantine-color-default-border);
+  border-top: var(--ds-table-border, 1px solid #e8ebf1);
   background: var(--mantine-color-body);
   margin-top: auto;
   position: sticky;

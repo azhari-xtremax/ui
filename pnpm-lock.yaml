@@ -993,6 +993,9 @@ importers:
       '@buildpad/ui-interfaces':
         specifier: workspace:*
         version: link:../ui-interfaces
+      '@buildpad/ui-table':
+        specifier: workspace:*
+        version: link:../ui-table
       '@mantine/core':
         specifier: ^8.0.0
         version: 8.3.10(@mantine/hooks@8.3.10(react@19.2.0))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -6611,6 +6614,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0

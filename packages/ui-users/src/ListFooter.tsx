@@ -41,7 +41,7 @@ export const ListFooter: React.FC<ListFooterProps> = ({
   if (totalCount <= 0) return null;
 
   return (
-    <Group justify="space-between" px="md" py="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
+    <Group justify="space-between" px="md" py="sm" style={{ borderTop: 'var(--ds-table-border, 1px solid #e8ebf1)' }}>
       <Group gap="sm">
         <Text size="xs" c="dimmed">
           Showing {shown} of {totalCount} {itemsLabel}

@@ -1,22 +1,20 @@
 'use client';
 
 import './UsersManager.css';
+import './ManagerTable.css';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Badge,
   Box,
   Button,
-  Checkbox,
   Group,
-  LoadingOverlay,
   Menu,
   Modal,
   MultiSelect,
   Paper,
   Select,
   Stack,
-  Table,
   Text,
   Title,
 } from '@mantine/core';
@@ -25,15 +23,14 @@ import { notifications } from '@mantine/notifications';
 import { IconPlus, IconTrash, IconUsersGroup } from '@tabler/icons-react';
 import { usePermissions, useRoles, useSelection, useUsers } from '@buildpad/hooks';
 import type { Role, User, UserStatus } from '@buildpad/types';
+import { VTable } from '@buildpad/ui-table';
+import type { Header, HeaderRaw, Item, Sort } from '@buildpad/ui-table';
 import { UserAvatar } from './UserAvatar';
 import { UserStatusBadge } from './UserStatusBadge';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { ListEmptyState } from './ListEmptyState';
 import { ListFooter } from './ListFooter';
 import { RowActionsMenu } from './RowActionsMenu';
 import { SearchInput } from './SearchInput';
-import { SortableTh } from './SortableTh';
-import { toggleSort } from './accessUtils';
 import { getUserDisplayName } from './userDisplay';
 
 const STATUS_OPTIONS: Array<{ value: UserStatus; label: string }> = [
@@ -45,6 +42,14 @@ const STATUS_OPTIONS: Array<{ value: UserStatus; label: string }> = [
 ];
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+const USER_HEADERS: HeaderRaw[] = [
+  { text: 'User', value: 'first_name', sortable: true, width: 260 },
+  { text: 'Email', value: 'email', sortable: true },
+  { text: 'Role', value: 'roles', sortable: false },
+  { text: 'Status', value: 'status', sortable: true },
+  { text: 'Last Access', value: 'last_access', sortable: true },
+];
 
 /** A role entry as it may appear on `User.roles`: a bare ID, a flattened
  * `{id,name,icon}` object, or a junction row shaped `{id, role_id: {...}}`. */
@@ -197,17 +202,10 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
   const [debouncedSearch] = useDebouncedValue(search, 300);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<UserStatus | null>(null);
-  // Server-side sort (`field` / `-field`); fields are whitelisted real columns.
-  const [sort, setSort] = useState<string | null>(null);
+  // Server-side sort; fields are whitelisted real columns.
+  const [sort, setSort] = useState<Sort | null>(null);
 
-  const {
-    selection,
-    setSelection,
-    toggleSelection,
-    clearSelection,
-    isSelected,
-    selectionCount,
-  } = useSelection<string>();
+  const { selection, setSelection, clearSelection, selectionCount } = useSelection<string>();
 
   const [deleteModal, setDeleteModal] = useState<{ opened: boolean; id: string }>({
     opened: false,
@@ -234,7 +232,7 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
         search: debouncedSearch || undefined,
         role: selectedRole || undefined,
         status: selectedStatus || undefined,
-        sort: sort || undefined,
+        sort: sort?.by ? (sort.desc ? `-${sort.by}` : sort.by) : undefined,
         // Expand the roles junction so the Role column has names to badge
         // (daas reference projection — without it the API returns bare IDs).
         fields: '*,roles.*,roles.role_id.name',
@@ -272,22 +270,6 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
       .then((result) => setRoles(result.roles))
       .catch(() => setRoles([]));
   }, [fetchRoles]);
-
-  const handleSort = useCallback((field: string) => {
-    setSort((current) => toggleSort(current, field));
-  }, []);
-
-  const pageIds = useMemo(() => users.map((user) => user.id), [users]);
-  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => isSelected(id));
-  const somePageSelected = pageIds.some((id) => isSelected(id));
-
-  const togglePageSelection = useCallback(() => {
-    if (allPageSelected) {
-      setSelection(selection.filter((id) => !pageIds.includes(id)));
-    } else {
-      setSelection(Array.from(new Set([...selection, ...pageIds])));
-    }
-  }, [allPageSelected, selection, pageIds, setSelection]);
 
   const requestDelete = useCallback((id: string) => {
     setDeleteModal({ opened: true, id });
@@ -396,60 +378,81 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
       </Button>
     ) : null;
 
+  const renderCell = useCallback(
+    (item: Item, header: Header): React.ReactNode => {
+      const user = item as unknown as User;
+      switch (header.value) {
+        case 'first_name':
+          return (
+            <Group gap="sm">
+              <UserAvatar user={user} size={32} />
+              <Text size="sm" fw={500}>
+                {getUserDisplayName(user)}
+              </Text>
+            </Group>
+          );
+        case 'email':
+          return (
+            <Text size="sm" c="dimmed">
+              {user.email}
+            </Text>
+          );
+        case 'roles': {
+          const roleBadges = (user.roles ?? [])
+            .map((r) => extractRoleBadge(r as RoleEntry))
+            .filter((r): r is { id: string; name: string } => r !== null);
+          return roleBadges.length > 0 ? (
+            <Group gap={4} wrap="wrap">
+              {roleBadges.map((r) => (
+                <Badge key={r.id} variant="light" size="sm">
+                  {r.name}
+                </Badge>
+              ))}
+            </Group>
+          ) : (
+            <></>
+          );
+        }
+        case 'status':
+          return <UserStatusBadge status={user.status} />;
+        case 'last_access':
+          return (
+            <Text size="xs" c="dimmed">
+              {user.last_access ? new Date(user.last_access).toLocaleDateString() : 'Never'}
+            </Text>
+          );
+        default:
+          return null;
+      }
+    },
+    []
+  );
+
+  const renderRowAppend =
+    updateAllowed || deleteAllowed
+      ? (item: Item) => {
+          const user = item as unknown as User;
+          return (
+            <RowActionsMenu
+              onEdit={updateAllowed ? () => onUserClick?.(user) : undefined}
+              onDelete={deleteAllowed ? () => requestDelete(user.id) : undefined}
+            />
+          );
+        }
+      : undefined;
+
   return (
     <Stack gap="md" className="bp-users-manager" data-testid="users-manager">
-      {(!hideHeader || addButton) && (
-        <Group justify={hideHeader ? 'flex-end' : 'space-between'} align="flex-start">
-          {!hideHeader && (
-            <Box>
-              <Title order={2} mb={4}>
-                Users
-              </Title>
-              <Text size="sm" c="dimmed">
-                Manage user accounts, roles, and access permissions
-              </Text>
-            </Box>
-          )}
-          {addButton}
-        </Group>
+      {!hideHeader && (
+        <Box>
+          <Title order={2} mb={4}>
+            Users
+          </Title>
+          <Text size="sm" c="dimmed">
+            Manage user accounts, roles, and access permissions
+          </Text>
+        </Box>
       )}
-
-      <Paper p="sm" radius="md" withBorder>
-        <Group>
-          <SearchInput
-            placeholder="Search users..."
-            value={search}
-            onChange={setSearch}
-            style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
-            data-testid="users-manager-search"
-          />
-          <Select
-            placeholder="Role"
-            data={roles.map((role) => ({ value: role.id, label: role.name }))}
-            value={selectedRole}
-            onChange={setSelectedRole}
-            clearable
-            size="sm"
-            style={{ minWidth: 160 }}
-            data-testid="users-manager-role-filter"
-          />
-          <Select
-            placeholder="Status"
-            data={STATUS_OPTIONS}
-            value={selectedStatus}
-            onChange={(value) => setSelectedStatus(value as UserStatus | null)}
-            clearable
-            size="sm"
-            style={{ minWidth: 160 }}
-            data-testid="users-manager-status-filter"
-          />
-          {totalCount > 0 && (
-            <Badge variant="light" color="gray" size="lg" radius="sm" style={{ marginLeft: 'auto' }}>
-              {totalCount} {totalCount === 1 ? 'user' : 'users'}
-            </Badge>
-          )}
-        </Group>
-      </Paper>
 
       {selectionCount > 0 && (
         <Paper p="sm" radius="md" withBorder data-testid="users-manager-bulk-toolbar">
@@ -515,134 +518,85 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
         </Paper>
       )}
 
-      <Paper radius="md" withBorder style={{ overflow: 'hidden' }}>
-        <Box pos="relative">
-          <LoadingOverlay visible={loading} />
+      <div className="bp-manager-card">
+        <Group className="bp-manager-toolbar" wrap="wrap">
+          <SearchInput
+            placeholder="Search users..."
+            value={search}
+            onChange={setSearch}
+            style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
+            data-testid="users-manager-search"
+          />
+          <Select
+            placeholder="Role"
+            data={roles.map((role) => ({ value: role.id, label: role.name }))}
+            value={selectedRole}
+            onChange={setSelectedRole}
+            clearable
+            size="sm"
+            style={{ minWidth: 160 }}
+            data-testid="users-manager-role-filter"
+          />
+          <Select
+            placeholder="Status"
+            data={STATUS_OPTIONS}
+            value={selectedStatus}
+            onChange={(value) => setSelectedStatus(value as UserStatus | null)}
+            clearable
+            size="sm"
+            style={{ minWidth: 160 }}
+            data-testid="users-manager-status-filter"
+          />
+          <Group gap="sm" style={{ marginLeft: 'auto' }}>
+            {totalCount > 0 && (
+              <Badge variant="light" color="gray" size="lg" radius="sm">
+                {totalCount} {totalCount === 1 ? 'user' : 'users'}
+              </Badge>
+            )}
+            {addButton}
+          </Group>
+        </Group>
 
-          <Table highlightOnHover withTableBorder={false}>
-            <Table.Thead>
-              <Table.Tr>
-                {selectable && (
-                  <Table.Th style={{ width: 40 }}>
-                    <Checkbox
-                      size="xs"
-                      checked={allPageSelected}
-                      indeterminate={!allPageSelected && somePageSelected}
-                      onChange={togglePageSelection}
-                      aria-label="Select all on page"
-                      data-testid="users-manager-select-all"
-                    />
-                  </Table.Th>
-                )}
-                <SortableTh label="User" field="first_name" sort={sort} onSort={handleSort} data-testid="users-manager-sort-first_name" />
-                <SortableTh label="Email" field="email" sort={sort} onSort={handleSort} data-testid="users-manager-sort-email" />
-                <Table.Th>Role</Table.Th>
-                <SortableTh label="Status" field="status" sort={sort} onSort={handleSort} data-testid="users-manager-sort-status" />
-                <SortableTh label="Last Access" field="last_access" sort={sort} onSort={handleSort} data-testid="users-manager-sort-last_access" />
-                {(updateAllowed || deleteAllowed) && <Table.Th style={{ width: 50 }} />}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {users.length === 0 && !loading ? (
-                <Table.Tr>
-                  <Table.Td colSpan={selectable ? 7 : 5}>
-                    {loadError ? (
-                      <ListEmptyState error title="Failed to load users" hint={loadError} />
-                    ) : (
-                      <ListEmptyState
-                        title="No users found"
-                        hint={hasFilters ? 'Try adjusting your filters' : 'Get started by adding your first user'}
-                      />
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                users.map((user) => {
-                  const roleBadges = (user.roles ?? [])
-                    .map((r) => extractRoleBadge(r as RoleEntry))
-                    .filter((r): r is { id: string; name: string } => r !== null);
-
-                  return (
-                    <Table.Tr
-                      key={user.id}
-                      style={{ cursor: updateAllowed ? 'pointer' : 'default' }}
-                      onClick={() => {
-                        if (updateAllowed) onUserClick?.(user);
-                      }}
-                      data-testid={`users-manager-row-${user.id}`}
-                    >
-                      {selectable && (
-                        <Table.Td onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            size="xs"
-                            checked={isSelected(user.id)}
-                            onChange={() => toggleSelection(user.id)}
-                            aria-label={`Select ${getUserDisplayName(user)}`}
-                            data-testid={`users-manager-select-${user.id}`}
-                          />
-                        </Table.Td>
-                      )}
-                      <Table.Td>
-                        <Group gap="sm">
-                          <UserAvatar user={user} size={32} />
-                          <Text size="sm" fw={500}>
-                            {getUserDisplayName(user)}
-                          </Text>
-                        </Group>
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="sm" c="dimmed">
-                          {user.email}
-                        </Text>
-                      </Table.Td>
-                      <Table.Td>
-                        {roleBadges.length > 0 && (
-                          <Group gap={4} wrap="wrap">
-                            {roleBadges.map((r) => (
-                              <Badge key={r.id} variant="light" size="sm">
-                                {r.name}
-                              </Badge>
-                            ))}
-                          </Group>
-                        )}
-                      </Table.Td>
-                      <Table.Td>
-                        <UserStatusBadge status={user.status} />
-                      </Table.Td>
-                      <Table.Td>
-                        <Text size="xs" c="dimmed">
-                          {user.last_access ? new Date(user.last_access).toLocaleDateString() : 'Never'}
-                        </Text>
-                      </Table.Td>
-                      {(updateAllowed || deleteAllowed) && (
-                        <Table.Td>
-                          <RowActionsMenu
-                            onEdit={updateAllowed ? () => onUserClick?.(user) : undefined}
-                            onDelete={deleteAllowed ? () => requestDelete(user.id) : undefined}
-                          />
-                        </Table.Td>
-                      )}
-                    </Table.Tr>
-                  );
-                })
-              )}
-            </Table.Tbody>
-          </Table>
-        </Box>
-
-        <ListFooter
-          shown={users.length}
-          totalCount={totalCount}
-          itemsLabel="users"
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          limit={limit}
-          sizeOptions={sizeOptions}
-          onLimitChange={setLimit}
-          data-testid="users-manager-page-size"
+        <VTable
+          headers={USER_HEADERS}
+          items={users as unknown as Item[]}
+          itemKey="id"
+          sort={sort}
+          showSelect={selectable ? 'multiple' : 'none'}
+          value={selection}
+          selectionUseKeys
+          fixedHeader
+          loading={loading}
+          noItemsText={
+            loadError
+              ? `Failed to load users — ${loadError}`
+              : hasFilters
+                ? 'No users found — try adjusting your filters'
+                : 'No users found — get started by adding your first user'
+          }
+          clickable={updateAllowed}
+          renderCell={renderCell}
+          renderRowAppend={renderRowAppend}
+          renderFooter={() => (
+            <ListFooter
+              shown={users.length}
+              totalCount={totalCount}
+              itemsLabel="users"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              limit={limit}
+              sizeOptions={sizeOptions}
+              onLimitChange={setLimit}
+              data-testid="users-manager-page-size"
+            />
+          )}
+          onUpdate={(value) => setSelection(value as string[])}
+          onSortChange={setSort}
+          onRowClick={updateAllowed ? ({ item }) => onUserClick?.(item as unknown as User) : undefined}
+          data-testid="users-manager-table"
         />
-      </Paper>
+      </div>
 
       <DeleteConfirmModal
         opened={deleteModal.opened}

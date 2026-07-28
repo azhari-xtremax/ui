@@ -56,19 +56,19 @@ describe('PoliciesManager', () => {
     renderManager();
     await waitFor(() => expect(fetchPoliciesMock).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByTestId('policies-manager-sort-name'));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
     await waitFor(() =>
       expect(fetchPoliciesMock).toHaveBeenLastCalledWith(
         expect.objectContaining({ sort: 'name', page: 1 })
       )
     );
 
-    fireEvent.click(screen.getByTestId('policies-manager-sort-name'));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
     await waitFor(() =>
       expect(fetchPoliciesMock).toHaveBeenLastCalledWith(expect.objectContaining({ sort: '-name' }))
     );
 
-    fireEvent.click(screen.getByTestId('policies-manager-sort-name'));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Name' }));
     await waitFor(() =>
       expect(fetchPoliciesMock).toHaveBeenLastCalledWith(
         expect.objectContaining({ sort: undefined })
@@ -97,9 +97,11 @@ describe('PoliciesManager', () => {
 
     renderManager();
 
-    await waitFor(() => expect(screen.getByText('Failed to load policies')).toBeInTheDocument());
-    expect(screen.getByText('service unavailable')).toBeInTheDocument();
-    expect(screen.queryByText('No policies found')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByText('Failed to load policies — service unavailable')
+      ).toBeInTheDocument()
+    );
     expect(show).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Failed to load policies', color: 'red' })
     );

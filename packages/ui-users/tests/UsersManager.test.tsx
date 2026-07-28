@@ -114,8 +114,11 @@ describe('UsersManager', () => {
   it('shows an empty state distinguishing filtered vs unfiltered', async () => {
     fetchUsersMock.mockResolvedValue({ users: [], total: 0, totalPages: 1 });
     renderManager();
-    await waitFor(() => expect(screen.getByText('No users found')).toBeInTheDocument());
-    expect(screen.getByText('Get started by adding your first user')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByText('No users found — get started by adding your first user')
+      ).toBeInTheDocument()
+    );
   });
 
   it('hideHeader hides the heading + subtitle but keeps the Add button', async () => {
@@ -132,19 +135,19 @@ describe('UsersManager', () => {
     renderManager();
     await waitFor(() => expect(fetchUsersMock).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByTestId('users-manager-sort-email'));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Email' }));
     await waitFor(() =>
       expect(fetchUsersMock).toHaveBeenLastCalledWith(
         expect.objectContaining({ sort: 'email', page: 1 })
       )
     );
 
-    fireEvent.click(screen.getByTestId('users-manager-sort-email'));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Email' }));
     await waitFor(() =>
       expect(fetchUsersMock).toHaveBeenLastCalledWith(expect.objectContaining({ sort: '-email' }))
     );
 
-    fireEvent.click(screen.getByTestId('users-manager-sort-email'));
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Email' }));
     await waitFor(() =>
       expect(fetchUsersMock).toHaveBeenLastCalledWith(expect.objectContaining({ sort: undefined }))
     );
@@ -154,20 +157,20 @@ describe('UsersManager', () => {
     usePermissionsMock.mockReturnValue({ canPerform: () => false, isAdmin: false, loading: false });
     renderManager();
     await waitFor(() => expect(screen.getByText('jane.doe@example.com')).toBeInTheDocument());
-    expect(screen.queryByTestId('users-manager-select-all')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('users-manager-select-user-1')).not.toBeInTheDocument();
-    expect(screen.getByTestId('users-manager-sort-email')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Select all')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Select row')).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Email' })).toBeInTheDocument();
   });
 
   it('selecting rows shows the bulk toolbar with a count; select-all and Clear work', async () => {
     renderManager();
     await waitFor(() => expect(screen.getByText('jane.doe@example.com')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByTestId('users-manager-select-user-1'));
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]);
     expect(screen.getByTestId('users-manager-bulk-toolbar')).toBeInTheDocument();
     expect(screen.getByText('1 selected')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('users-manager-select-all'));
+    fireEvent.click(screen.getByLabelText('Select all'));
     expect(screen.getByText(`${mockUsers.length} selected`)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('users-manager-bulk-clear'));
@@ -178,7 +181,7 @@ describe('UsersManager', () => {
     renderManager();
     await waitFor(() => expect(screen.getByText('jane.doe@example.com')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByTestId('users-manager-select-user-1'));
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]);
     expect(screen.getByTestId('users-manager-bulk-toolbar')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('users-manager-status-filter'));
@@ -193,7 +196,7 @@ describe('UsersManager', () => {
     renderManager();
     await waitFor(() => expect(screen.getByText('jane.doe@example.com')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByTestId('users-manager-select-user-1'));
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]);
     fireEvent.click(screen.getByTestId('users-manager-bulk-roles'));
     await screen.findByText(/Add and\/or remove roles/);
 
@@ -218,8 +221,8 @@ describe('UsersManager', () => {
     renderManager();
     await waitFor(() => expect(screen.getByText('jane.doe@example.com')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByTestId('users-manager-select-user-1'));
-    fireEvent.click(screen.getByTestId('users-manager-select-user-2'));
+    fireEvent.click(screen.getAllByLabelText('Select row')[0]);
+    fireEvent.click(screen.getAllByLabelText('Select row')[1]);
     fireEvent.click(screen.getByTestId('users-manager-bulk-status'));
     fireEvent.click(await screen.findByTestId('users-manager-bulk-status-suspended'));
 
@@ -235,8 +238,8 @@ describe('UsersManager', () => {
     renderManager();
     await waitFor(() => expect(screen.getByText('jane.doe@example.com')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByTestId('users-manager-select-user-3'));
-    fireEvent.click(screen.getByTestId('users-manager-select-user-4'));
+    fireEvent.click(screen.getAllByLabelText('Select row')[2]);
+    fireEvent.click(screen.getAllByLabelText('Select row')[3]);
     fireEvent.click(screen.getByTestId('users-manager-bulk-delete'));
 
     expect(await screen.findByText(/delete 2 users/i)).toBeInTheDocument();
@@ -268,9 +271,11 @@ describe('UsersManager', () => {
 
     renderManager();
 
-    await waitFor(() => expect(screen.getByText('Failed to load users')).toBeInTheDocument());
-    expect(screen.getByText('service unavailable')).toBeInTheDocument();
-    expect(screen.queryByText('No users found')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByText('Failed to load users — service unavailable')
+      ).toBeInTheDocument()
+    );
     expect(show).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Failed to load users', color: 'red' })
     );
