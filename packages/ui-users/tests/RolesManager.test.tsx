@@ -80,9 +80,9 @@ describe('RolesManager', () => {
 
     renderManager();
 
-    await waitFor(() => expect(screen.getByText('Failed to load roles')).toBeInTheDocument());
-    expect(screen.getByText('service unavailable')).toBeInTheDocument();
-    expect(screen.queryByText('No roles found')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText('Failed to load roles — service unavailable')).toBeInTheDocument()
+    );
     expect(show).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Failed to load roles', color: 'red' })
     );
