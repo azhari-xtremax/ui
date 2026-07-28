@@ -13,20 +13,28 @@ import {
   Image,
   Drawer,
   Skeleton,
-  Badge
+  Badge,
+  ThemeIcon
 } from '@mantine/core';
 import { 
-  IconFolderOpen, 
   IconDownload,
   IconEdit,
   IconX,
   IconInfoCircle,
-  IconDotsVertical
+  IconDotsVertical,
+  IconFile,
+  IconFileText,
+  IconFileMusic,
+  IconFileZip,
+  IconMovie,
+  IconCode,
+  IconPhoto
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { Upload, type FileUpload } from '../upload';
 import { daasAPI, type DaaSFile } from '@buildpad/hooks';
-import { useFiles } from '@buildpad/hooks';
+import { useFiles, useFolders } from '@buildpad/hooks';
+import { formatFileSize, getAssetUrl, getFileCategory } from '@buildpad/types';
 
 /**
  * Convert DaaSFile to FileUpload type (adds fallback for nullable fields)
@@ -112,20 +120,74 @@ function getFileExtension(type: string): string {
   return mimeToExt[type] || type.split('/')[1]?.toUpperCase()?.slice(0, 4) || 'FILE';
 }
 
-function getAssetUrl(fileId: string, download = false): string {
-  const params = download ? '?download=true' : '';
-  return `/api/assets/${fileId}${params}`;
-}
+/**
+ * Per-category icons, mirroring `FileCard` in `@buildpad/ui-files`. A folder
+ * glyph is deliberately not used as a file fallback — it reads as "directory".
+ */
+const CATEGORY_ICON: Record<string, React.ReactNode> = {
+  image: <IconPhoto size={18} />,
+  document: <IconFileText size={18} />,
+  audio: <IconFileMusic size={18} />,
+  video: <IconMovie size={18} />,
+  archive: <IconFileZip size={18} />,
+  code: <IconCode size={18} />,
+  other: <IconFile size={18} />,
+};
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) {
-    return '0 Bytes';
+/**
+ * The little square preview shown next to a selected file.
+ *
+ * Falls back in order: server-resized image → short extension label → category
+ * icon. The `onError` step matters because a file record can exist with its
+ * binary missing from storage (the assets endpoint 404s), and a broken <img>
+ * is worse than an honest icon.
+ */
+const FileThumb: React.FC<{
+  file: FileUpload;
+  src: string | null;
+  extension: string | null;
+  size?: number;
+  imageTestId?: string;
+  extensionTestId?: string;
+  iconTestId?: string;
+}> = ({ file, src, extension, size = 40, imageTestId, extensionTestId, iconTestId }) => {
+  const [failed, setFailed] = useState(false);
+  const category = getFileCategory(file.type ?? null);
+
+  if (src && !failed) {
+    return (
+      <Image
+        src={src}
+        alt={file.title || file.filename_download}
+        w={size}
+        h={size}
+        fit="cover"
+        onError={() => setFailed(true)}
+        data-testid={imageTestId}
+      />
+    );
   }
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`;
-}
+
+  if (extension) {
+    return (
+      <Text style={fileStyles.extension} data-testid={extensionTestId}>
+        {extension}
+      </Text>
+    );
+  }
+
+  return (
+    <ThemeIcon
+      variant="light"
+      color="gray"
+      size={Math.round(size * 0.8)}
+      radius="md"
+      data-testid={iconTestId}
+    >
+      {CATEGORY_ICON[category] ?? CATEGORY_ICON.other}
+    </ThemeIcon>
+  );
+};
 
 export interface FileProps {
   value?: string | FileUpload | null;
@@ -173,6 +235,7 @@ export const File: React.FC<FileProps> = ({
 
   // Use the files hook for real API operations
   const { uploadFiles, fetchFiles, importFromUrl } = useFiles();
+  const { fetchFolders } = useFolders();
 
   // Normalize value to id
   const fileId = useMemo(() => (typeof value === 'string' ? value : value?.id || null), [value]);
@@ -239,12 +302,17 @@ export const File: React.FC<FileProps> = ({
   
   const imageThumbnail = useMemo(() => {
     if (!file) return null;
+    // SVGs are vector — server-side resizing is pointless.
     if (isSvg) {
       return getAssetUrl(file.id);
     }
     if (isImage) {
       const cacheBuster = (file as FileUpload & { modified_on?: string }).modified_on || file.uploaded_on || '';
-      return `${getAssetUrl(file.id)}?key=system-small-cover&cache-buster=${encodeURIComponent(cacheBuster)}`;
+      // Explicit transform params, not `key=<preset>`: DaaS silently ignores
+      // unknown presets and streams the full-size original, so the browser was
+      // downloading a multi-MB image to paint a 40px square.
+      const base = getAssetUrl(file.id, { width: 120, height: 120, fit: 'cover' });
+      return cacheBuster ? `${base}&cache-buster=${encodeURIComponent(cacheBuster)}` : base;
     }
     return null;
   }, [file, isImage, isSvg]);
@@ -332,6 +400,13 @@ export const File: React.FC<FileProps> = ({
     });
   }, [fetchFiles]);
 
+  // Handler for browsing library folders (real API)
+  const handleFetchLibraryFolders = useCallback(
+    (params: { parent: string | null; search?: string }) =>
+      fetchFolders({ parent: params.parent, search: params.search }),
+    [fetchFolders]
+  );
+
   // Handler for importing file from URL (real API)
   const handleImportFromUrl = useCallback(async (
     url: string,
@@ -371,19 +446,7 @@ export const File: React.FC<FileProps> = ({
         >
           <Group gap="sm">
             <Box style={fileStyles.preview}>
-              {imageThumbnail ? (
-                <Image
-                  src={imageThumbnail}
-                  alt={file.title || file.filename_download}
-                  w={40}
-                  h={40}
-                  fit="cover"
-                />
-              ) : fileExtension ? (
-                <Text style={fileStyles.extension}>{fileExtension}</Text>
-              ) : (
-                <IconFolderOpen size={16} color="var(--mantine-color-gray-6)" />
-              )}
+              <FileThumb file={file} src={imageThumbnail} extension={fileExtension} />
             </Box>
             <Box style={{ flex: 1 }}>
               <Text size="sm" fw={500}>{file.title || file.filename_download}</Text>
@@ -446,20 +509,14 @@ export const File: React.FC<FileProps> = ({
                 }}
                 data-testid="file-preview"
               >
-                {imageThumbnail ? (
-                  <Image
-                    src={imageThumbnail}
-                    alt={file.title || file.filename_download}
-                    w={40}
-                    h={40}
-                    fit="cover"
-                    data-testid="file-thumbnail"
-                  />
-                ) : fileExtension ? (
-                  <Text style={fileStyles.extension} data-testid="file-extension">{fileExtension}</Text>
-                ) : (
-                  <IconFolderOpen size={16} color="var(--mantine-color-gray-6)" />
-                )}
+                <FileThumb
+                  file={file}
+                  src={imageThumbnail}
+                  extension={fileExtension}
+                  imageTestId="file-thumbnail"
+                  extensionTestId="file-extension"
+                  iconTestId="file-category-icon"
+                />
               </Box>
               
               {/* File info */}
@@ -535,17 +592,7 @@ export const File: React.FC<FileProps> = ({
             <Paper withBorder p="sm">
               <Group>
                 <Box style={fileStyles.preview}>
-                  {imageThumbnail ? (
-                    <Image
-                      src={imageThumbnail}
-                      alt={file.title || file.filename_download}
-                      w={40}
-                      h={40}
-                      fit="cover"
-                    />
-                  ) : (
-                    <Text style={fileStyles.extension}>{fileExtension}</Text>
-                  )}
+                  <FileThumb file={file} src={imageThumbnail} extension={fileExtension} />
                 </Box>
                 <Box>
                   <Text fw={500}>{file.filename_download}</Text>
@@ -608,6 +655,7 @@ export const File: React.FC<FileProps> = ({
           onInput={handleUploadInput}
           onUploadFiles={handleUploadFiles}
           onFetchLibraryFiles={handleFetchLibraryFiles}
+          onFetchLibraryFolders={handleFetchLibraryFolders}
           onImportFromUrl={handleImportFromUrl}
         />
       </Box>

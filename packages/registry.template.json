@@ -1479,10 +1479,12 @@
       ],
       "dependencies": [
         "@mantine/core",
-        "@tabler/icons-react"
+        "@tabler/icons-react",
+        "@mantine/notifications"
       ],
       "internalDependencies": [
-        "types"
+        "types",
+        "hooks"
       ],
       "registryDependencies": [
         "upload"
@@ -1517,10 +1519,12 @@
       ],
       "dependencies": [
         "@mantine/core",
-        "@tabler/icons-react"
+        "@tabler/icons-react",
+        "@mantine/notifications"
       ],
       "internalDependencies": [
-        "types"
+        "types",
+        "hooks"
       ],
       "registryDependencies": [
         "upload"
@@ -1558,7 +1562,8 @@
       ],
       "internalDependencies": [
         "types",
-        "hooks"
+        "hooks",
+        "utils"
       ],
       "registryDependencies": [
         "upload"
@@ -1596,9 +1601,14 @@
       ],
       "dependencies": [
         "@mantine/core",
-        "@mantine/dropzone"
+        "@mantine/hooks",
+        "@mantine/dropzone",
+        "@mantine/notifications",
+        "@tabler/icons-react"
       ],
-      "internalDependencies": [],
+      "internalDependencies": [
+        "types"
+      ],
       "interface": {
         "id": "upload",
         "name": "Upload",
