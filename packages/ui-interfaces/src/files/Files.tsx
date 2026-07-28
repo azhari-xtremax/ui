@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Group, Stack, Text, Paper, Badge, Tooltip, Pagination, Menu, ActionIcon, Modal, TextInput, Loader } from '@mantine/core';
-import { IconTrash, IconDownload, IconExternalLink, IconFolder, IconDotsVertical, IconUpload, IconFolderOpen, IconX } from '@tabler/icons-react';
-import { type FileUpload } from '../upload';
+import { Box, Button, Group, Stack, Text, Paper, Badge, Tooltip, Pagination, Menu, ActionIcon, Loader } from '@mantine/core';
+import { IconTrash, IconDownload, IconExternalLink, IconDotsVertical, IconUpload, IconFolderOpen } from '@tabler/icons-react';
+import { FileThumbnail, LibraryPickerModal, type FileUpload } from '../upload';
 import '../upload/Upload.css';
 import { daasAPI, type DaaSFile } from '@buildpad/hooks';
-import { useFiles } from '@buildpad/hooks';
+import { useFiles, useFolders } from '@buildpad/hooks';
 import { isNewItem } from '@buildpad/utils';
 
 /**
@@ -73,11 +73,8 @@ export const Files: React.FC<FilesProps> = ({
   const [page, setPage] = useState(1);
   const [junctionLoaded, setJunctionLoaded] = useState(false);
   
-  // Library picker state
+  // Library picker state (search/pagination live inside LibraryPickerModal)
   const [libraryOpen, setLibraryOpen] = useState(false);
-  const [libraryFiles, setLibraryFiles] = useState<FileUpload[]>([]);
-  const [libraryLoading, setLibraryLoading] = useState(false);
-  const [librarySearch, setLibrarySearch] = useState('');
   
   // Permissions
   const [createAllowed, setCreateAllowed] = useState(true);
@@ -90,6 +87,7 @@ export const Files: React.FC<FilesProps> = ({
 
   // API hooks
   const { uploadFiles, fetchFiles } = useFiles();
+  const { fetchFolders } = useFolders();
 
   // Extract file ID from various formats (string, object, junction table format)
   const extractFileId = useCallback((item: unknown): string | null => {
@@ -430,34 +428,30 @@ export const Files: React.FC<FilesProps> = ({
     }
   }, [uploadFiles, folder, handleAddFiles]);
 
-  // Open library picker
-  const handleOpenLibrary = useCallback(async () => {
+  // Open library picker. The picker owns its own search/pagination state and
+  // fetching, so this only flips it open.
+  const handleOpenLibrary = useCallback(() => {
     setLibraryOpen(true);
-    setLibraryLoading(true);
-    try {
-      const result = await fetchFiles({ page: 1, limit: 20, search: '', folder });
-      setLibraryFiles(result.files || []);
-    } catch (err) {
-      console.error('Failed to fetch library files:', err);
-      setLibraryFiles([]);
-    } finally {
-      setLibraryLoading(false);
-    }
-  }, [fetchFiles, folder]);
+  }, []);
 
-  // Search library
-  const handleLibrarySearch = useCallback(async (search: string) => {
-    setLibrarySearch(search);
-    setLibraryLoading(true);
-    try {
-      const result = await fetchFiles({ page: 1, limit: 20, search, folder });
-      setLibraryFiles(result.files || []);
-    } catch (err) {
-      console.error('Failed to search library:', err);
-    } finally {
-      setLibraryLoading(false);
-    }
-  }, [fetchFiles, folder]);
+  // Page fetcher handed to the shared picker.
+  const handleFetchLibraryFiles = useCallback(
+    (params: { page: number; limit: number; search: string; folder?: string }) =>
+      fetchFiles({
+        page: params.page,
+        limit: params.limit,
+        search: params.search,
+        folder: params.folder,
+      }),
+    [fetchFiles]
+  );
+
+  // Folder browsing for the picker.
+  const handleFetchLibraryFolders = useCallback(
+    (params: { parent: string | null; search?: string }) =>
+      fetchFolders({ parent: params.parent, search: params.search }),
+    [fetchFolders]
+  );
 
   // Select file from library
   const handleSelectFromLibrary = useCallback((file: FileUpload) => {
@@ -477,20 +471,11 @@ export const Files: React.FC<FilesProps> = ({
       }}
     >
       <Group gap="sm" align="center" wrap="nowrap">
-        {/* File icon */}
-        <Box
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 'var(--mantine-radius-sm)',
-            backgroundColor: 'var(--mantine-color-gray-1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <IconFolder size={18} color="var(--mantine-color-gray-6)" />
-        </Box>
+        {/* Thumbnail for images, category icon otherwise — previously every
+            attached file rendered as a folder glyph regardless of its type. */}
+        <div className="library-row-thumb" data-testid="files-item-thumb">
+          <FileThumbnail file={file} size={32} />
+        </div>
 
         {/* File name */}
         <Text size="sm" style={{ flex: 1, minWidth: 0 }} truncate>
@@ -622,80 +607,16 @@ export const Files: React.FC<FilesProps> = ({
         onChange={handleFileInputChange}
       />
 
-      {/* Library picker modal */}
-      <Modal
+      {/* Library picker — shared implementation (search, pagination,
+          thumbnails, grid/list) from the upload interface. */}
+      <LibraryPickerModal
         opened={libraryOpen}
         onClose={() => setLibraryOpen(false)}
-        title="Choose from library"
-        size="lg"
-      >
-        <Stack>
-          <TextInput
-            placeholder="Search files..."
-            value={librarySearch}
-            onChange={(e) => handleLibrarySearch(e.target.value)}
-            rightSection={
-              libraryLoading ? (
-                <Loader size="xs" />
-              ) : librarySearch ? (
-                <ActionIcon variant="subtle" onClick={() => handleLibrarySearch('')}>
-                  <IconX size={14} />
-                </ActionIcon>
-              ) : null
-            }
-          />
-
-          <Box style={{ minHeight: 200 }}>
-            {libraryLoading ? (
-              <Stack align="center" justify="center" style={{ height: 200 }}>
-                <Loader />
-                <Text size="sm" c="dimmed">Loading files...</Text>
-              </Stack>
-            ) : libraryFiles.length === 0 ? (
-              <Stack align="center" justify="center" style={{ height: 200 }}>
-                <IconFolderOpen size={48} color="var(--mantine-color-gray-5)" />
-                <Text c="dimmed">No files found</Text>
-              </Stack>
-            ) : (
-              <div className="library-grid">
-                {libraryFiles.map((file) => (
-                  <Paper
-                    key={file.id}
-                    withBorder
-                    className="library-card"
-                    onClick={() => handleSelectFromLibrary(file)}
-                  >
-                    <div className="library-card-thumb">
-                      {file.type?.startsWith('image/') ? (
-                        <img
-                          src={`/api/assets/${file.id}?key=system-small-cover`}
-                          alt={file.title || file.filename_download}
-                          className="library-card-thumb-img"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none';
-                            (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.setProperty('display', 'flex');
-                          }}
-                        />
-                      ) : null}
-                      <div className={`library-card-fallback${file.type?.startsWith('image/') ? ' library-card-fallback--hidden' : ''}`}>
-                        <IconFolderOpen size={32} color="var(--mantine-color-gray-5)" />
-                      </div>
-                    </div>
-                    <Box p="xs">
-                      <Text size="xs" fw={500} lineClamp={1} title={file.title || file.filename_download}>
-                        {file.title || file.filename_download}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {Math.round((file.filesize || 0) / 1024)} KB
-                      </Text>
-                    </Box>
-                  </Paper>
-                ))}
-              </div>
-            )}
-          </Box>
-        </Stack>
-      </Modal>
+        onSelect={handleSelectFromLibrary}
+        folder={folder}
+        onFetchFiles={handleFetchLibraryFiles}
+        onFetchFolders={handleFetchLibraryFolders}
+      />
     </Stack>
   );
 };

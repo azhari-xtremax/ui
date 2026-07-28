@@ -7,6 +7,19 @@
 .library-card {
   overflow: hidden;
   cursor: pointer;
+  transition:
+    border-color var(--ds-transition-fast, 150ms ease),
+    box-shadow var(--ds-transition-fast, 150ms ease);
+}
+
+.library-card:hover,
+.library-card:focus-visible {
+  border-color: var(--mantine-primary-color-6);
+}
+
+.library-card:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-focus-ring, 0 0 0 3px rgba(234, 88, 12, 0.25));
 }
 
 .library-card-thumb {
@@ -39,4 +52,22 @@
 
 .library-card-fallback--hidden {
   display: none;
+}
+
+/* Compact thumbnail slot used by the picker's list (table) layout. */
+.library-row-thumb {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.library-row-thumb .library-card-thumb-img {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: var(--mantine-radius-sm);
 }

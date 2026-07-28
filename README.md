@@ -4,8 +4,8 @@ A pnpm workspace containing reusable components distributed via Copy & Own model
 
 ## 📚 Documentation
 
-| Document                                     | Description                            |
-| -------------------------------------------- | -------------------------------------- |
+| Document                                    | Description                            |
+| ------------------------------------------- | -------------------------------------- |
 | [QUICKSTART.md](QUICKSTART.md)               | Setup guide for MCP Server & CLI       |
 | [docs/DOCS_INDEX.md](docs/DOCS_INDEX.md)     | Complete documentation index           |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture diagrams           |
@@ -274,69 +274,76 @@ When you add components via CLI, the field-interface-mapper is automatically inc
 DaaS-compatible field interface components built with Mantine v8.
 
 **Core Components:**
-| Component | Description |
-|-----------|-------------|
-| `Boolean` | Switch toggle |
-| `Toggle` | Enhanced toggle with icons and state labels |
-| `DateTime` | Date/time picker |
-| `Input` | Single-line text input |
-| `Textarea` | Multi-line text input |
-| `InputCode` | Monospace code editor with line numbers |
+
+| Component     | Description                                 |
+| ------------- | ------------------------------------------- |
+| `Boolean`   | Switch toggle                               |
+| `Toggle`    | Enhanced toggle with icons and state labels |
+| `DateTime`  | Date/time picker                            |
+| `Input`     | Single-line text input                      |
+| `Textarea`  | Multi-line text input                       |
+| `InputCode` | Monospace code editor with line numbers     |
 
 **Selection Components:**
-| Component | Description |
-|-----------|-------------|
-| `SelectDropdown` | Dropdown select with search |
-| `SelectRadio` | Radio button selection |
-| `SelectMultipleCheckbox` | Checkbox group with "other" option |
-| `SelectMultipleCheckboxTree` | Tree-based hierarchical multi-select |
-| `SelectMultipleDropdown` | Dropdown-based multi-select with search |
-| `SelectIcon` | Icon picker with categorized Tabler icons |
-| `Tags` | Tag input with presets and custom tags |
-| `AutocompleteAPI` | External API-backed autocomplete |
-| `CollectionItemDropdown` | Collection item selector dropdown |
+
+| Component                      | Description                               |
+| ------------------------------ | ----------------------------------------- |
+| `SelectDropdown`             | Dropdown select with search               |
+| `SelectRadio`                | Radio button selection                    |
+| `SelectMultipleCheckbox`     | Checkbox group with "other" option        |
+| `SelectMultipleCheckboxTree` | Tree-based hierarchical multi-select      |
+| `SelectMultipleDropdown`     | Dropdown-based multi-select with search   |
+| `SelectIcon`                 | Icon picker with categorized Tabler icons |
+| `Tags`                       | Tag input with presets and custom tags    |
+| `AutocompleteAPI`            | External API-backed autocomplete          |
+| `CollectionItemDropdown`     | Collection item selector dropdown         |
 
 **Layout Components:**
-| Component | Description |
-|-----------|-----------|
-| `Divider` | Horizontal/vertical divider with title support |
-| `Notice` | Alert/notice component (info, success, warning, danger) |
-| `Slider` | Range slider with numeric type support |
-| `GroupDetail` | Collapsible form section |
+
+| Component       | Description                                             |
+| --------------- | ------------------------------------------------------- |
+| `Divider`     | Horizontal/vertical divider with title support          |
+| `Notice`      | Alert/notice component (info, success, warning, danger) |
+| `Slider`      | Range slider with numeric type support                  |
+| `GroupDetail` | Collapsible form section                                |
 
 **Rich Text Components:** _(require additional dependencies)_
-| Component | Description |
-|-----------|-----------|
-| `RichTextHtml` | WYSIWYG HTML editor (requires @tiptap packages) |
-| `RichTextMarkdown` | Markdown editor with live preview |
+
+| Component            | Description                                                      |
+| -------------------- | ---------------------------------------------------------------- |
+| `RichTextHtml`     | WYSIWYG HTML editor (requires @tiptap packages)                  |
+| `RichTextMarkdown` | Markdown editor with live preview                                |
 | `InputBlockEditor` | Block-based editor using EditorJS (SSR-safe with dynamic import) |
-| `InputCode` | Monospace code editor with syntax highlighting |
+| `InputCode`        | Monospace code editor with syntax highlighting                   |
 
 **Media Components:**
-| Component | Description |
-|-----------|-----------|
-| `File` | Single file with DaaS Files API integration |
-| `FileImage` | Image file picker with preview, lightbox, and crop |
-| `Files` | Multiple files interface (M2M relationship with junction table support) |
-| `Upload` | Low-level drag-and-drop file upload zone |
-| `Color` | Color picker with RGB/HSL support, presets, opacity |
-| `Map` | Interactive map placeholder for coordinates |
-| `MapWithRealMap` | Full MapLibre GL JS map with drawing tools |
+
+| Component          | Description                                                             |
+| ------------------ | ----------------------------------------------------------------------- |
+| `File`           | Single file with DaaS Files API integration                             |
+| `FileImage`      | Image file picker with preview, lightbox, and crop                      |
+| `Files`          | Multiple files interface (M2M relationship with junction table support) |
+| `Upload`         | Low-level drag-and-drop file upload zone                                |
+| `Color`          | Color picker with RGB/HSL support, presets, opacity                     |
+| `Map`            | Interactive map placeholder for coordinates                             |
+| `MapWithRealMap` | Full MapLibre GL JS map with drawing tools                              |
 
 **Relational Components:**
-| Component | Description |
-|-----------|-----------|
-| `ListM2M` | Many-to-Many list with hooks integration |
-| `ListM2O` | Many-to-One selector with hooks integration |
-| `ListO2M` | One-to-Many list with hooks integration |
-| `ListM2A` | Many-to-Any polymorphic list with hooks integration |
-| `ListM2MInterface` | Many-to-Many (render-prop variant) |
-| `ListM2OInterface` | Many-to-One (render-prop variant) |
-| `ListO2MInterface` | One-to-Many (render-prop variant) |
+
+| Component            | Description                                         |
+| -------------------- | --------------------------------------------------- |
+| `ListM2M`          | Many-to-Many list with hooks integration            |
+| `ListM2O`          | Many-to-One selector with hooks integration         |
+| `ListO2M`          | One-to-Many list with hooks integration             |
+| `ListM2A`          | Many-to-Any polymorphic list with hooks integration |
+| `ListM2MInterface` | Many-to-Many (render-prop variant)                  |
+| `ListM2OInterface` | Many-to-One (render-prop variant)                   |
+| `ListO2MInterface` | One-to-Many (render-prop variant)                   |
 
 **Workflow Components:**
-| Component | Description |
-|-----------|-------------|
+
+| Component          | Description                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------- |
 | `WorkflowButton` | Workflow state button with transitions, policy-based commands, and revision comparison |
 
 **Usage:**
@@ -367,12 +374,13 @@ import {
 Dynamic form component system inspired by DaaS v-form, with comprehensive Storybook documentation and built-in permission enforcement.
 
 **Components:**
-| Component | Description |
-|-----------|-------------|
-| `VForm` | Main dynamic form component that renders fields based on collection schema |
-| `FormField` | Individual field wrapper with label, validation, and interface rendering |
-| `FormFieldLabel` | Label component with required indicator and tooltip |
-| `FormFieldInterface` | Dynamic interface component loader |
+
+| Component              | Description                                                                |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `VForm`              | Main dynamic form component that renders fields based on collection schema |
+| `FormField`          | Individual field wrapper with label, validation, and interface rendering   |
+| `FormFieldLabel`     | Label component with required indicator and tooltip                        |
+| `FormFieldInterface` | Dynamic interface component loader                                         |
 
 **Features:**
 
@@ -449,14 +457,15 @@ pnpm test:e2e
 Dynamic collection components for forms, tables, navigation, and layouts. Inspired by DaaS's content module.
 
 **Components:**
-| Component | Description |
-|-----------|-------------|
-| `CollectionForm` | CRUD form wrapper with data fetching - uses VForm for rendering all 40+ interface types |
-| `CollectionList` | Dynamic table with pagination, search, selection, bulk actions |
-| `ContentLayout` | Shell layout with sidebar navigation and main content area |
-| `ContentNavigation` | Hierarchical sidebar navigation for collections with search and bookmarks |
-| `FilterPanel` | Field-type-aware filter builder for collection queries |
-| `SaveOptions` | Dropdown menu with save actions (save & stay, save & add new, etc.) |
+
+| Component             | Description                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `CollectionForm`    | CRUD form wrapper with data fetching - uses VForm for rendering all 40+ interface types |
+| `CollectionList`    | Dynamic table with pagination, search, selection, bulk actions                          |
+| `ContentLayout`     | Shell layout with sidebar navigation and main content area                              |
+| `ContentNavigation` | Hierarchical sidebar navigation for collections with search and bookmarks               |
+| `FilterPanel`       | Field-type-aware filter builder for collection queries                                  |
+| `SaveOptions`       | Dropdown menu with save actions (save & stay, save & add new, etc.)                     |
 
 **Architecture:**
 
@@ -506,11 +515,12 @@ import {
 Dynamic table component inspired by DaaS v-table, built with Mantine v8 and @dnd-kit.
 
 **Components:**
-| Component | Description |
-|-----------|-------------|
-| `VTable` | Main dynamic table component |
+
+| Component       | Description                                         |
+| --------------- | --------------------------------------------------- |
+| `VTable`      | Main dynamic table component                        |
 | `TableHeader` | Header row with sorting, resize handles, select all |
-| `TableRow` | Data row with selection, drag handle, custom cells |
+| `TableRow`    | Data row with selection, drag handle, custom cells  |
 
 **Features:**
 
@@ -657,21 +667,21 @@ See [QUICKSTART.md](./QUICKSTART.md) for detailed setup guide.
 
 Buildpad uses a **per-file checksum** system so updates only touch files you haven't customized:
 
-| Command | Description |
-|---------|-------------|
-| `buildpad outdated` | Check which installed components have newer versions |
-| `buildpad upgrade` | Upgrade components — silent overwrite for pristine files, interactive prompt for modified files |
-| `buildpad upgrade --three-way` | 3-way merge (diff3) for conflict resolution on modified files |
-| `buildpad upgrade --force` | Re-sync components even when already at the latest version (honours `--strategy`) |
-| `buildpad changelog <pkg>` | View changelog slices between installed and latest versions |
-| `buildpad migrate` | Migrate `buildpad.json` from schema v1 to v2 (enables per-file update tracking) |
+| Command                          | Description                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `buildpad outdated`            | Check which installed components have newer versions                                             |
+| `buildpad upgrade`             | Upgrade components — silent overwrite for pristine files, interactive prompt for modified files |
+| `buildpad upgrade --three-way` | 3-way merge (diff3) for conflict resolution on modified files                                    |
+| `buildpad upgrade --force`     | Re-sync components even when already at the latest version (honours`--strategy`)               |
+| `buildpad changelog <pkg>`     | View changelog slices between installed and latest versions                                      |
+| `buildpad migrate`             | Migrate`buildpad.json` from schema v1 to v2 (enables per-file update tracking)                 |
 
 **How it works:** Each component file copied to your project has an SHA256 checksum recorded in `buildpad.json`. On upgrade, pristine files (disk matches recorded hash) are silently overwritten. Customized files trigger an interactive prompt with skip/overwrite/.new/three-way merge options. Components carry per-package semver (e.g. `@buildpad/ui-interfaces@1.4.2`), so `outdated` only flags files from packages that actually changed. See [docs/PUBLISHING.md](docs/PUBLISHING.md) for the versioning and release workflow.
 
 ## 🔧 Workspace Commands
 
-| Command                      | Description                                      |
-| ---------------------------- | ------------------------------------------------ |
+| Command                        | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
 | `pnpm install`               | Install all dependencies                         |
 | `pnpm build`                 | Build all packages and apps                      |
 | `pnpm build:mcp`             | Build MCP server for AI agents                   |
@@ -679,11 +689,11 @@ Buildpad uses a **per-file checksum** system so updates only touch files you hav
 | `pnpm dev`                   | Run all apps in dev mode                         |
 | `pnpm mcp:dev`               | Run MCP server in watch mode                     |
 | `pnpm cli`                   | Run CLI tool locally                             |
-| `pnpm cli validate`          | Validate Buildpad installation in a project    |
+| `pnpm cli validate`          | Validate Buildpad installation in a project      |
 | `pnpm cli upgrade`           | Upgrade installed components in a test project   |
-| `pnpm cli changelog`         | View changelog for a package                      |
-| `pnpm cli migrate`           | Migrate buildpad.json from v1 to v2 schema        |
-| `pnpm storybook:interfaces`             | Run Storybook for ui-interfaces (port 6005)      |
+| `pnpm cli changelog`         | View changelog for a package                     |
+| `pnpm cli migrate`           | Migrate buildpad.json from v1 to v2 schema       |
+| `pnpm storybook:interfaces`  | Run Storybook for ui-interfaces (port 6005)      |
 | `pnpm storybook:form`        | Run VForm Storybook (port 6006)                  |
 | `pnpm storybook:table`       | Run VTable Storybook (port 6007)                 |
 | `pnpm storybook:collections` | Run Collections Storybook (port 6005)            |
@@ -831,14 +841,14 @@ See [buildpad-copilot](https://github.com/your-org/buildpad-copilot) for full do
 
 This workspace follows patterns from [DaaS](https://docs.daas.buildpad.ai):
 
-| DaaS Package        | Buildpad Equivalent        | Purpose                        |
-| ------------------- | ---------------------------- | ------------------------------ |
+| DaaS Package          | Buildpad Equivalent          | Purpose                        |
+| --------------------- | ---------------------------- | ------------------------------ |
 | `@daas/types`       | `@buildpad/types`          | Shared TypeScript types        |
 | `@daas/composables` | `@buildpad/hooks`          | Reusable React hooks           |
 | `@daas/utils`       | `@buildpad/services`       | Utility services               |
-| Vue interfaces      | `@buildpad/ui-interfaces`  | Field interface components     |
+| Vue interfaces        | `@buildpad/ui-interfaces`  | Field interface components     |
 | `v-form` component  | `@buildpad/ui-form`        | Dynamic form component (VForm) |
-| Collection views    | `@buildpad/ui-collections` | Dynamic form/list components   |
+| Collection views      | `@buildpad/ui-collections` | Dynamic form/list components   |
 
 **Key Principles:**
 

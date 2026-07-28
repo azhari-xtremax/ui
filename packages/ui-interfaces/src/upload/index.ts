@@ -1,2 +1,7 @@
-export { Upload, default } from './Upload';
-export type { UploadProps, FileUpload } from './Upload';
+export { Upload, FileThumbnail, LibraryPickerModal, default } from './Upload';
+export type {
+  UploadProps,
+  FileUpload,
+  LibraryFolder,
+  LibraryPickerModalProps,
+} from './Upload';
