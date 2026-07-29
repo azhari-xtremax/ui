@@ -7,7 +7,7 @@
  * @buildpad/ui-interfaces for interface components.
  */
 
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Alert, Skeleton, Text } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import type { FormField } from '../types';
@@ -16,6 +16,25 @@ import { InterfaceErrorBoundary } from './InterfaceErrorBoundary';
 
 // Import interface components
 import * as Interfaces from '@buildpad/ui-interfaces';
+
+/**
+ * The three multi-select interfaces are registered for `types: ['json','csv']`
+ * — storage is either a real array (`json`) or a comma-separated string
+ * (`csv`) — but none of the leaf components (or this pipeline, previously)
+ * normalized between the two shapes. A `csv` field therefore delivered a raw
+ * string straight to array-only leaf logic: substring-match reads
+ * (`string.includes` instead of `array.includes`), character-spread
+ * corruption on toggle, and `TypeError`s calling `.filter`/`.map` on a
+ * string. Normalizing once here — coerce to array on the way in, coerce back
+ * to a comma-string on the way out when the field really is `csv` — fixes
+ * the whole cluster (SelectMultipleCheckbox, SelectMultipleCheckboxTree,
+ * SelectMultipleDropdown) without touching each leaf.
+ */
+const MULTI_SELECT_INTERFACE_TYPES = new Set([
+  'select-multiple-checkbox',
+  'select-multiple-dropdown',
+  'select-multiple-checkbox-tree',
+]);
 
 /**
  * Get the default interface name for a given field type.
@@ -238,6 +257,39 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     return value;
   }, [value, field, interfaceConfig.type]);
 
+  const isMultiSelectInterface = MULTI_SELECT_INTERFACE_TYPES.has(interfaceConfig.type);
+
+  // Coerce a csv-stored string to an array before it reaches the leaf.
+  const normalizedMultiSelectValue = useMemo(() => {
+    if (!isMultiSelectInterface) return effectiveValue;
+    if (Array.isArray(effectiveValue)) return effectiveValue;
+    if (typeof effectiveValue === 'string') {
+      return effectiveValue.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return effectiveValue ?? [];
+  }, [isMultiSelectInterface, effectiveValue]);
+
+  // Whether this field's on-the-wire storage is a comma-string rather than a
+  // real array. `field.type === 'csv'` is the documented signal, but some
+  // DaaS backends report the underlying column type (e.g. "text") instead
+  // of the abstract "csv" type — so also trust what was actually observed:
+  // if the incoming value was a string, round-trip a string back out.
+  const isCsvStorage = field.type === 'csv' || typeof effectiveValue === 'string';
+
+  // Coerce the array a multi-select leaf emits back to a comma-string when
+  // the field's real storage is csv (leaves always emit arrays).
+  const handleMultiSelectChange = useCallback(
+    (next: unknown) => {
+      if (!onChange) return;
+      if (isCsvStorage && Array.isArray(next)) {
+        onChange(next.join(','));
+      } else {
+        onChange(next);
+      }
+    },
+    [onChange, isCsvStorage],
+  );
+
   // Show loading skeleton
   if (loading && !field.hideLoader) {
     return <Skeleton height={36} />;
@@ -258,8 +310,8 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
   }
 
   const interfaceProps: any = {
-    value: effectiveValue,
-    onChange: nonEditable ? undefined : onChange,
+    value: isMultiSelectInterface ? normalizedMultiSelectValue : effectiveValue,
+    onChange: nonEditable ? undefined : (isMultiSelectInterface ? handleMultiSelectChange : onChange),
     disabled: disabled || isEffectivelyReadonly,
     readonly: isEffectivelyReadonly,
     required: nonEditable ? false : required,
