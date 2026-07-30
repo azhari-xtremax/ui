@@ -351,6 +351,14 @@ export function useRelationO2MItems(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The related collection's real primary key column — not necessarily "id"
+  // (e.g. a slug-PK collection). Every read/write below must key items by
+  // this field; hardcoding `.id` silently no-ops removeItem/deleteItem/
+  // reorderItems (URL becomes `/api/items/{collection}/undefined`) and
+  // corrupts `setItems` filtering (every item's `.id` is `undefined`, so
+  // `i.id !== item.id` is false for all of them at once).
+  const pkField = relationInfo?.relatedPrimaryKeyField?.field || "id";
+
   // Load items from the related collection
   const loadItems = useCallback(
     async (params?: O2MQueryParams) => {
@@ -449,13 +457,13 @@ export function useRelationO2MItems(
         `/api/items/${collection}`,
         { method: "POST", body: JSON.stringify(itemData) },
       );
-      const id = created.data?.id;
+      const id = created.data?.[pkField];
       const fetched = await apiRequest<{ data: O2MItem }>(
         `/api/items/${collection}/${id}`,
       );
       return fetched.data as O2MItem;
     },
-    [relationInfo, parentPrimaryKey],
+    [relationInfo, parentPrimaryKey, pkField],
   );
 
   // Update an existing item
@@ -485,7 +493,7 @@ export function useRelationO2MItems(
       if (!relationInfo) return;
 
       await apiRequest(
-        `/api/items/${relationInfo.relatedCollection.collection}/${item.id}`,
+        `/api/items/${relationInfo.relatedCollection.collection}/${item[pkField]}`,
         {
           method: "PATCH",
           body: JSON.stringify({
@@ -493,10 +501,10 @@ export function useRelationO2MItems(
           }),
         },
       );
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      setItems((prev) => prev.filter((i) => i[pkField] !== item[pkField]));
       setTotalCount((prev) => Math.max(0, prev - 1));
     },
-    [relationInfo],
+    [relationInfo, pkField],
   );
 
   // Delete an item completely
@@ -505,13 +513,13 @@ export function useRelationO2MItems(
       if (!relationInfo) return;
 
       await apiRequest(
-        `/api/items/${relationInfo.relatedCollection.collection}/${item.id}`,
+        `/api/items/${relationInfo.relatedCollection.collection}/${item[pkField]}`,
         { method: "DELETE" },
       );
-      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      setItems((prev) => prev.filter((i) => i[pkField] !== item[pkField]));
       setTotalCount((prev) => Math.max(0, prev - 1));
     },
-    [relationInfo],
+    [relationInfo, pkField],
   );
 
   // Link existing items
@@ -542,7 +550,7 @@ export function useRelationO2MItems(
       const collection = relationInfo.relatedCollection.collection;
       await Promise.all(
         reorderedItems.map((item, index) =>
-          apiRequest(`/api/items/${collection}/${item.id}`, {
+          apiRequest(`/api/items/${collection}/${item[pkField]}`, {
             method: "PATCH",
             body: JSON.stringify({
               [relationInfo.sortField!]: index + 1,
@@ -552,7 +560,7 @@ export function useRelationO2MItems(
       );
       setItems(reorderedItems);
     },
-    [relationInfo],
+    [relationInfo, pkField],
   );
 
   // Move item up
