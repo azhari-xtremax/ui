@@ -152,6 +152,31 @@ interface M2MJunctionInfo {
   junctionField: string;
 }
 
+/**
+ * Fields safe to request in a fields= param — excludes O2M/M2M/M2A (no flat
+ * column value, 500s the backend when requested bare) and always includes
+ * the resolved PK. Shared by the initial readOne fetch and the
+ * createOne/updateOne calls in handleSave, all of which hit the same
+ * "backend defaults to selecting everything" failure mode when fields= is
+ * omitted (see the readOne call site below for the full explanation).
+ */
+function computeFetchableFields(fieldList: Field[], pkField: string): string[] {
+  const fetchable = fieldList
+    .filter((f) => {
+      const special = f.meta?.special ?? [];
+      const isNonFlatRelational =
+        special.some((s) => NON_FLAT_RELATIONAL_SPECIALS.has(s)) ||
+        (!!f.meta?.interface &&
+          NON_FLAT_RELATIONAL_INTERFACES.has(f.meta.interface));
+      return !isNonFlatRelational;
+    })
+    .map((f) => f.field);
+  if (!fetchable.includes(pkField)) {
+    fetchable.unshift(pkField);
+  }
+  return fetchable;
+}
+
 /** Narrow-check: is value a staged M2M changes object? */
 function isM2MChangesItem(value: unknown): value is {
   create: Record<string, unknown>[];
@@ -432,20 +457,10 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
           // Safe to drop: ListO2M/ListM2M/ListM2A each load their own linked
           // items independently via their relation hooks once mounted with
           // the real primaryKey — they don't depend on this initial value.
-          const fetchableFields = editableFields
-            .filter((f) => {
-              const special = f.meta?.special ?? [];
-              const isNonFlatRelational =
-                special.some((s) => NON_FLAT_RELATIONAL_SPECIALS.has(s)) ||
-                (!!f.meta?.interface &&
-                  NON_FLAT_RELATIONAL_INTERFACES.has(f.meta.interface));
-              return !isNonFlatRelational;
-            })
-            .map((f) => f.field);
-          const resolvedPkField = schemaPk ?? "id";
-          if (!fetchableFields.includes(resolvedPkField)) {
-            fetchableFields.unshift(resolvedPkField);
-          }
+          const fetchableFields = computeFetchableFields(
+            editableFields,
+            schemaPk ?? "id",
+          );
           const item = await itemsService.readOne(id, fetchableFields);
           initialData = { ...initialData, ...item };
         }
@@ -655,6 +670,11 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
 
       const itemsService = new ItemsService(collection);
 
+      // Restrict the create/update response representation to flat fields —
+      // same "backend defaults to selecting everything" 500 risk as the
+      // initial readOne fetch when the collection has an O2M/M2M/M2A field.
+      const saveFetchableFields = computeFetchableFields(fields, resolvedPk);
+
       // Helper: split dataToSave into scalar fields, M2M changes, and `extras`.
       // M2M changes ({create, update, delete}) are flushed via the junction
       // collection API rather than embedded in the parent PATCH body, because
@@ -721,7 +741,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
         // round-trip (the backend skips the DB write and returns 200, but
         // the network call still costs latency).
         if (Object.keys(changedData).length > 0) {
-          await itemsService.updateOne(id, changedData);
+          await itemsService.updateOne(id, changedData, saveFetchableFields);
         }
 
         // Flush M2M changes via junction collection APIs
@@ -751,7 +771,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
         if (afterSave === "copy") {
           const copyData = { ...dataToSave };
           delete copyData[resolvedPk];
-          const copyResult = await itemsService.createOne(copyData);
+          const copyResult = await itemsService.createOne(copyData, saveFetchableFields);
           onSuccess?.({ ...copyData, id: copyResult?.[resolvedPk] });
           return;
         }
@@ -787,7 +807,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
           scalarData[EXTRAS_COLUMN] = createdExtras;
         }
 
-        const result = await itemsService.createOne(scalarData);
+        const result = await itemsService.createOne(scalarData, saveFetchableFields);
         const newId = result?.[resolvedPk] as string | number | undefined;
 
         // Flush M2M changes now that we have the parent PK
