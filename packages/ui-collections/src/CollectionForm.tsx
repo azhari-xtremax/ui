@@ -709,17 +709,25 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
 
       if (mode === "edit" && id) {
         // Collect only changed fields, excluding self-persisting interfaces
-        // ("files" manages its own junction table independently) and O2M/M2A
-        // relational fields — these have no flat column to PATCH (same
-        // "no real flat column value" issue as the fields= fetch fix above),
-        // and unlike M2M (handled below via m2mJunctionMap/flushM2MChanges),
-        // there's no dedicated flush path for them: ListO2M/ListM2A persist
-        // their own linked/created/removed items directly via their own
-        // relation hooks, independent of this form's save. Sending whatever
-        // value happens to land in formData for one of these fields (e.g. a
-        // stale default seeded before the field ever loads) as a scalar PATCH
-        // value 500s the backend trying to write into an aliased relation.
-        const selfPersistingInterfaces = new Set(['files', 'list-o2m', 'list-m2a']);
+        // ("files" manages its own junction table independently) and O2M —
+        // O2M has no flat column to PATCH and no dedicated flush path
+        // (ListO2M persists linked/created/removed items directly via its
+        // own relation hooks, independent of this form's save; its onChange
+        // is never actually invoked). Sending whatever value happens to land
+        // in formData for an O2M field as a scalar PATCH value 500s the
+        // backend trying to write into an aliased relation.
+        //
+        // list-m2a is intentionally NOT in this set (a previous version of
+        // this fix wrongly included it, assuming ListM2A never calls
+        // onChange like ListO2M — it does: ListM2A's own effect emits a real
+        // {collection,item}[] replace-mode payload whenever its staged
+        // changes change, meant for exactly this scalar body. Excluding it
+        // silently discarded every M2A create/link/edit on save instead of
+        // persisting it — same 500 symptom gone, but the underlying write
+        // never happened either. The actual fix for that 500 is
+        // saveFetchableFields below (the fields= *response* representation),
+        // not stripping the field from the *request* body.
+        const selfPersistingInterfaces = new Set(['files', 'list-o2m']);
         const allChanged: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(dataToSave)) {
           if (initialFormData[key] === value) continue;
@@ -793,9 +801,10 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
         onSuccess?.({ ...dataToSave, id });
       } else {
         // Create mode: split out M2M before creating the parent record.
-        // Also strip self-persisting interfaces — "files", and O2M/M2A (see
-        // the matching comment in the edit-mode branch above for why).
-        const selfPersistingInterfaces = new Set(['files', 'list-o2m', 'list-m2a']);
+        // Also strip self-persisting interfaces — "files" and O2M only (see
+        // the matching comment in the edit-mode branch above for why M2A is
+        // deliberately not in this set).
+        const selfPersistingInterfaces = new Set(['files', 'list-o2m']);
         const cleanedDataToSave: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(dataToSave)) {
           const fieldDef = fields.find(f => f.field === key);
