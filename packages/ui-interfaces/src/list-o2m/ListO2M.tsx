@@ -251,6 +251,25 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   const relationError = isDemoMode ? null : hookError;
   const relationLoading = isDemoMode ? false : hookLoading;
 
+  // The related collection's real primary key column — not necessarily "id"
+  // (e.g. a slug-PK collection). Real (already-loaded) rows must be keyed by
+  // this field; hardcoding `.id` silently breaks React keys, the checkbox
+  // selection Set, and every staged update/delete match, since `.id` is
+  // `undefined` on such collections. Staged local-only rows ($temp_N
+  // creates, and the synthetic id given to demo/mock items) intentionally
+  // keep using their own `id`/`$temp_` scheme — that's not real collection
+  // data, so there's nothing to resolve.
+  const pkField = relationInfo?.relatedPrimaryKeyField?.field || "id";
+  const getPk = useCallback(
+    (item: O2MItem): string | number => {
+      if (typeof item.id === "string" && item.id.startsWith("$temp_")) {
+        return item.id;
+      }
+      return (item[pkField] as string | number) ?? item.id;
+    },
+    [pkField],
+  );
+
   // ── Priority #2: Permission checking ─────────────────────────────────────
   const relatedCollection = relationInfo?.relatedCollection?.collection || "";
   const { canPerform, loading: permLoading } = usePermissions({
@@ -375,11 +394,11 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   const displayItems: O2MItem[] = useMemo(() => {
     // Filter out items marked for deletion
     const deletedIds = new Set(changeset.delete.map((d) => d.id));
-    let merged = baseItems.filter((item) => !deletedIds.has(item.id));
+    let merged = baseItems.filter((item) => !deletedIds.has(getPk(item)));
 
     // Apply staged updates
     merged = merged.map((item) => {
-      const update = changeset.update.find((u) => u.id === item.id);
+      const update = changeset.update.find((u) => u.id === getPk(item));
       if (update) {
         const { $type, ...rest } = update;
         return { ...item, ...rest };
@@ -396,7 +415,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     // Append staged links (existing items picked via "Add Existing" while
     // the parent is unsaved — not in baseItems yet, so `update` above never
     // matches them; they need to be appended here to render at all).
-    const alreadyMergedIds = new Set(merged.map((item) => item.id));
+    const alreadyMergedIds = new Set(merged.map((item) => getPk(item)));
     const linkedItems: O2MItem[] = changeset.link
       .filter((l) => !alreadyMergedIds.has(l.id))
       .map((l) => {
@@ -405,7 +424,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       });
 
     return [...merged, ...linkedItems, ...createdItems];
-  }, [baseItems, changeset]);
+  }, [baseItems, changeset, getPk]);
 
   const totalCount = isDemoMode
     ? internalMockItems.length
@@ -644,7 +663,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         if (relationInfo?.relatedCollection?.collection) {
           const col = relationInfo.relatedCollection.collection;
           const qp = new URLSearchParams();
-          qp.set("filter", JSON.stringify({ id: { _in: ids } }));
+          qp.set("filter", JSON.stringify({ [pkField]: { _in: ids } }));
           if (resolvedFields.length > 0) qp.set("fields", resolvedFields.join(","));
           const resp = await apiRequest<{ data: O2MItem[] }>(
             `/api/items/${col}?${qp.toString()}`,
@@ -660,10 +679,10 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           setChangeset((prev) => {
             const existingLinkIds = new Set(prev.link.map((l) => l.id));
             const newLinks: StagedUpdate[] = fetched
-              .filter((item) => !existingLinkIds.has(item.id))
+              .filter((item) => !existingLinkIds.has(getPk(item)))
               .map((item) => {
                 const { $type: _t, $index: _i, $edits: _e, ...rest } = item;
-                return { ...rest, $type: "updated" as const, id: item.id };
+                return { ...rest, $type: "updated" as const, id: getPk(item) };
               });
             return {
               ...prev,
@@ -695,10 +714,10 @@ export const ListO2M: React.FC<ListO2MProps> = ({
 
     // If it's a staged link (existing item added while the parent was
     // unsaved), just un-stage it — nothing was ever linked server-side.
-    if (!isParentSaved && changeset.link.some((l) => l.id === item.id)) {
+    if (!isParentSaved && changeset.link.some((l) => l.id === getPk(item))) {
       setChangeset((prev) => ({
         ...prev,
-        link: prev.link.filter((l) => l.id !== item.id),
+        link: prev.link.filter((l) => l.id !== getPk(item)),
       }));
       return;
     }
@@ -715,10 +734,11 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       }
     } else {
       // Stage deletion in changeset
+      const pk = getPk(item);
       setChangeset((prev) => ({
         ...prev,
-        update: prev.update.filter((u) => u.id !== item.id),
-        delete: [...prev.delete, { $type: "deleted", id: item.id }],
+        update: prev.update.filter((u) => u.id !== pk),
+        delete: [...prev.delete, { $type: "deleted", id: pk }],
       }));
     }
   };
@@ -729,7 +749,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   const handleBatchRemove = async () => {
     const ids = Array.from(selectedIds);
     for (const id of ids) {
-      const item = displayItems.find((i) => i.id === id);
+      const item = displayItems.find((i) => getPk(i) === id);
       if (item) await handleRemoveItem(item);
     }
     clearSelection();
@@ -1051,16 +1071,16 @@ export const ListO2M: React.FC<ListO2MProps> = ({
             </Table.Thead>
             <Table.Tbody>
               {displayItems.map((item, index) => (
-                <Table.Tr key={item.id} data-testid={`o2m-row-${item.id}`}>
+                <Table.Tr key={getPk(item)} data-testid={`o2m-row-${getPk(item)}`}>
                   {/* Batch checkbox */}
                   {!isDisabled && (
                     <Table.Td>
                       <Checkbox
                         size="xs"
-                        checked={selectedIds.has(item.id)}
-                        onChange={() => toggleSelection(item.id)}
-                        aria-label={`Select item ${item.id}`}
-                        data-testid={`o2m-check-${item.id}`}
+                        checked={selectedIds.has(getPk(item))}
+                        onChange={() => toggleSelection(getPk(item))}
+                        aria-label={`Select item ${getPk(item)}`}
+                        data-testid={`o2m-check-${getPk(item)}`}
                       />
                     </Table.Td>
                   )}
@@ -1073,7 +1093,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                           size="xs"
                           disabled={index === 0}
                           onClick={() => handleMoveUp(index)}
-                          data-testid={`o2m-move-up-${item.id}`}
+                          data-testid={`o2m-move-up-${getPk(item)}`}
                         >
                           <IconChevronUp size={12} />
                         </ActionIcon>
@@ -1082,7 +1102,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                           size="xs"
                           disabled={index === displayItems.length - 1}
                           onClick={() => handleMoveDown(index)}
-                          data-testid={`o2m-move-down-${item.id}`}
+                          data-testid={`o2m-move-down-${getPk(item)}`}
                         >
                           <IconChevronDown size={12} />
                         </ActionIcon>
@@ -1107,7 +1127,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                           <ActionIcon
                             variant="subtle"
                             size="sm"
-                            data-testid={`o2m-link-${item.id}`}
+                            data-testid={`o2m-link-${getPk(item)}`}
                             aria-label="View item"
                           >
                             <IconExternalLink size={14} />
@@ -1122,7 +1142,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                             color="gray"
                             size="sm"
                             onClick={() => handleEditItem(item)}
-                            data-testid={`o2m-edit-${item.id}`}
+                            data-testid={`o2m-edit-${getPk(item)}`}
                             aria-label="Edit item"
                           >
                             <IconEdit size={14} />
@@ -1146,7 +1166,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                               color="red"
                               size="sm"
                               onClick={() => handleRemoveItem(item)}
-                              data-testid={`o2m-remove-${item.id}`}
+                              data-testid={`o2m-remove-${getPk(item)}`}
                               aria-label={
                                 effectiveRemoveAction === "delete"
                                   ? "Delete item"
@@ -1172,7 +1192,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           <Stack gap="xs" data-testid="o2m-list">
             {displayItems.map((item, index) => (
               <Paper
-                key={item.id}
+                key={getPk(item)}
                 p="sm"
                 withBorder
                 style={{
@@ -1181,7 +1201,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                 onClick={() =>
                   !isDisabled && updateAllowed && handleEditItem(item)
                 }
-                data-testid={`o2m-item-${item.id}`}
+                data-testid={`o2m-item-${getPk(item)}`}
               >
                 <Group justify="space-between">
                   <Group>
@@ -1195,7 +1215,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                             e.stopPropagation();
                             handleMoveUp(index);
                           }}
-                          data-testid={`o2m-list-move-up-${item.id}`}
+                          data-testid={`o2m-list-move-up-${getPk(item)}`}
                         >
                           <IconChevronUp size={14} />
                         </ActionIcon>
@@ -1207,7 +1227,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                             e.stopPropagation();
                             handleMoveDown(index);
                           }}
-                          data-testid={`o2m-list-move-down-${item.id}`}
+                          data-testid={`o2m-list-move-down-${getPk(item)}`}
                         >
                           <IconChevronDown size={14} />
                         </ActionIcon>
@@ -1221,7 +1241,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                         variant="subtle"
                         size="sm"
                         onClick={(e) => e.stopPropagation()}
-                        data-testid={`o2m-list-link-${item.id}`}
+                        data-testid={`o2m-list-link-${getPk(item)}`}
                       >
                         <IconExternalLink size={14} />
                       </ActionIcon>
@@ -1238,7 +1258,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                             e.stopPropagation();
                             handleRemoveItem(item);
                           }}
-                          data-testid={`o2m-list-remove-${item.id}`}
+                          data-testid={`o2m-list-remove-${getPk(item)}`}
                         >
                           {effectiveRemoveAction === "delete" ? (
                             <IconTrash size={14} />
