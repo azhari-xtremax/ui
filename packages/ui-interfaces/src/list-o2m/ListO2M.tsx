@@ -1376,7 +1376,12 @@ export const ListO2M: React.FC<ListO2MProps> = ({
             }
             mode={isCreatingNew ? "create" : "edit"}
             defaultValues={
-              isCreatingNew && relationInfo.reverseJunctionField
+              // Only pre-fill the reverse FK when the parent is actually saved
+              // (primaryKey is a real id, not the "+" new-record placeholder).
+              // For an unsaved parent, the link is established later by
+              // staging into the changeset on save — pre-filling here would
+              // send the literal "+" placeholder as the FK value on create.
+              isCreatingNew && relationInfo.reverseJunctionField && isParentSaved
                 ? {
                     [relationInfo.reverseJunctionField.field]: primaryKey,
                   }
