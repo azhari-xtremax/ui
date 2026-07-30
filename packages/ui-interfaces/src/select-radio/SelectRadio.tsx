@@ -73,9 +73,13 @@ export function SelectRadio({
       return 1;
     }
 
+    // A choice missing `text` (malformed/seed data) previously crashed here
+    // via val.text.length — guard with `?? ''` so it's treated as the empty
+    // string for width-measurement purposes instead of throwing.
     const widestOptionLength = choices.reduce((acc, val) => {
-      if (val.text.length > acc.length) {
-        return val.text;
+      const text = val.text ?? '';
+      if (text.length > acc.length) {
+        return text;
       }
       return acc;
     }, '').length;
@@ -178,7 +182,7 @@ export function SelectRadio({
             <Radio
               key={String(choice.value)}
               value={String(choice.value)}
-              label={choice.text}
+              label={choice.text ?? String(choice.value)}
               disabled={disabled || choice.disabled}
               size="sm"
               styles={{
