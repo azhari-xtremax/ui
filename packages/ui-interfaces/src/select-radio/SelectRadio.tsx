@@ -178,9 +178,18 @@ export function SelectRadio({
         size="sm"
       >
         <Stack gap="sm" mt={label ? "xs" : 0} style={gridStyle}>
-          {choices.map((choice) => (
+          {choices.map((choice, index) => (
+            // Index-qualified key: choices whose values stringify identically
+            // (e.g. number 1 vs string '1') would otherwise collide on
+            // key={String(choice.value)} — a React duplicate-key warning,
+            // same fix already applied to SelectMultipleCheckbox(Tree). The
+            // `value` prop below is intentionally left as String(choice.value)
+            // (unqualified) since it drives Radio.Group's native selection
+            // matching — two colliding choices sharing one native radio value
+            // (so selecting one visually checks both) is bug 3.7's separate,
+            // documented, still-unfixed limitation, not addressed here.
             <Radio
-              key={String(choice.value)}
+              key={`${index}-${String(choice.value)}`}
               value={String(choice.value)}
               label={choice.text ?? String(choice.value)}
               disabled={disabled || choice.disabled}
