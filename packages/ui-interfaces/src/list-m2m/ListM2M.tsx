@@ -1032,11 +1032,17 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         // call, but never staged a junction row linking it to the parent —
         // the hook's createItem()/selectItems() were never called, so the
         // new item had no junction row and vanished on reload. The item
-        // already exists (CollectionForm just created it), so link it by id
-        // via selectItems rather than createItem (which would deep-create a
-        // second related item).
-        if (isCreatingNew && data?.id != null) {
-            selectItems([data.id as string | number]);
+        // already exists (CollectionForm just created it), so link it by its
+        // real PK via selectItems rather than createItem (which would
+        // deep-create a second related item). `data` is CollectionForm's raw
+        // created-item response, keyed by the related collection's actual PK
+        // — not necessarily "id" (e.g. labels.code) — so read it dynamically
+        // the same way the fields-query fix below does.
+        if (isCreatingNew && relationInfo && data) {
+            const createdPk = data[relationInfo.relatedPrimaryKeyField?.field || "id"];
+            if (createdPk != null) {
+                selectItems([createdPk as string | number]);
+            }
         }
 
         // After editing a related item, reload to show updated data
