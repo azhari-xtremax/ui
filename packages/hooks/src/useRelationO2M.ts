@@ -1,6 +1,6 @@
 import { FieldsService, apiRequest } from "@buildpad/services";
 import type { Field } from "@buildpad/types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Resolve a collection's real primary key field (name + type), the same way
@@ -350,6 +350,7 @@ export function useRelationO2MItems(
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   // The related collection's real primary key column — not necessarily "id"
   // (e.g. a slug-PK collection). Every read/write below must key items by
@@ -362,6 +363,8 @@ export function useRelationO2MItems(
   // Load items from the related collection
   const loadItems = useCallback(
     async (params?: O2MQueryParams) => {
+      const requestId = ++requestIdRef.current;
+
       if (!relationInfo || !parentPrimaryKey) {
         setItems([]);
         setTotalCount(0);
@@ -422,6 +425,8 @@ export function useRelationO2MItems(
           `/api/items/${relationInfo.relatedCollection.collection}?${queryString}`,
         );
 
+        if (requestIdRef.current !== requestId) return; // superseded by a newer call
+
         setItems(data.data || []);
         setTotalCount(
           data.meta?.total_count ||
@@ -430,13 +435,14 @@ export function useRelationO2MItems(
             0,
         );
       } catch (err) {
+        if (requestIdRef.current !== requestId) return;
         const errorMessage =
           err instanceof Error ? err.message : "Failed to load related items";
         setError(errorMessage);
         setItems([]);
         setTotalCount(0);
       } finally {
-        setLoading(false);
+        if (requestIdRef.current === requestId) setLoading(false);
       }
     },
     [relationInfo, parentPrimaryKey],
