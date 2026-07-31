@@ -43,6 +43,7 @@ export interface SelectMultipleDropdownProps {
   hidePickedOptions?: boolean;
   width?: string;
   color?: string;
+  'aria-label'?: string;
 }
 
 export function SelectMultipleDropdown({
@@ -62,6 +63,7 @@ export function SelectMultipleDropdown({
   hidePickedOptions = false,
   width,
   color = 'blue',
+  'aria-label': ariaLabel,
 }: SelectMultipleDropdownProps) {
   // Normalize a raw csv-string value to an array before anything below reads
   // it. `type === 'csv'` is the documented signal, but also trust what was
@@ -126,7 +128,9 @@ export function SelectMultipleDropdown({
     }
 
     // Sort values based on their position in the original choices array
-    const sortedValue = newValue.sort((a, b) => {
+    // (copy first — Array.prototype.sort mutates in place, and this is
+    // Mantine's own array reference)
+    const sortedValue = [...newValue].sort((a, b) => {
       const indexA = choices.findIndex(choice => String(choice.value) === a);
       const indexB = choices.findIndex(choice => String(choice.value) === b);
 
@@ -190,7 +194,7 @@ export function SelectMultipleDropdown({
         error={error}
         required={required}
         searchable={searchable}
-        clearable={clearable && allowNone}
+        clearable={clearable}
         maxValues={maxValues}
         hidePickedOptions={hidePickedOptions}
         withAsterisk={required}
@@ -201,7 +205,7 @@ export function SelectMultipleDropdown({
           shadow: 'var(--mantine-shadow-md)',
         }}
         rightSection={<IconChevronDown size={16} />}
-        aria-label={label || 'Multiple select dropdown'}
+        aria-label={ariaLabel || label || 'Multiple select dropdown'}
         styles={{
           input: {
             cursor: disabled ? 'not-allowed' : 'pointer',

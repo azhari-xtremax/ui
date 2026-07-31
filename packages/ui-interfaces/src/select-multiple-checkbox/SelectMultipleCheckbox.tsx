@@ -16,6 +16,7 @@ import { IconPlus, IconX } from '@tabler/icons-react';
 export interface Option {
   text: string;
   value: string | number | boolean;
+  disabled?: boolean;
 }
 
 export interface SelectMultipleCheckboxProps {
@@ -94,6 +95,11 @@ export function SelectMultipleCheckbox({
     }
     return color;
   }, [color]);
+
+  // `mantineColor` is only a real Mantine palette name when it's not a raw
+  // hex/CSS-color literal — interpolating a hex into `var(--mantine-color-*)`
+  // produces an invalid custom-property name and silently drops the style.
+  const isHexOrRawColor = /^#|^rgb|^hsl/.test(mantineColor);
 
   // Handle displaying limited choices or all choices
   const hideChoices = useMemo(() => choices.length > itemsShown, [choices.length, itemsShown]);
@@ -252,7 +258,7 @@ export function SelectMultipleCheckbox({
               label={item.text}
               checked={normalizedValue.includes(item.value)}
               onChange={(event) => handleCheckboxChange(item.value, event.currentTarget.checked)}
-              disabled={disabled}
+              disabled={disabled || item.disabled}
               size="sm"
               color={mantineColor}
               aria-label={`Select ${item.text}`}
@@ -264,7 +270,7 @@ export function SelectMultipleCheckbox({
                   border: '1px solid var(--mantine-color-gray-3)',
                   borderRadius: 'var(--mantine-radius-xs)', // Tokenized border radius
                   transition: 'all 200ms ease',
-                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  cursor: disabled || item.disabled ? 'not-allowed' : 'pointer',
                 },
               }}
             />
@@ -301,8 +307,8 @@ export function SelectMultipleCheckbox({
               wrapperProps={{
                 style: {
                   padding: '12px',
-                  backgroundColor: `var(--mantine-color-${mantineColor}-light)`,
-                  border: `1px solid var(--mantine-color-${mantineColor}-6)`,
+                  backgroundColor: isHexOrRawColor ? `${mantineColor}22` : `var(--mantine-color-${mantineColor}-light)`,
+                  border: isHexOrRawColor ? `1px solid ${mantineColor}` : `1px solid var(--mantine-color-${mantineColor}-6)`,
                   borderRadius: 'var(--mantine-radius-sm)',
                 },
               }}

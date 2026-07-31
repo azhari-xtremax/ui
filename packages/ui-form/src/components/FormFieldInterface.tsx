@@ -313,7 +313,7 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     value: isMultiSelectInterface ? normalizedMultiSelectValue : effectiveValue,
     onChange: nonEditable ? undefined : (isMultiSelectInterface ? handleMultiSelectChange : onChange),
     disabled: disabled || isEffectivelyReadonly,
-    readonly: isEffectivelyReadonly,
+    readOnly: isEffectivelyReadonly,
     required: nonEditable ? false : required,
     error,
     autofocus,
