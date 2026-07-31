@@ -23,6 +23,7 @@ export interface SelectRadioProps {
   iconOn?: string;
   iconOff?: string;
   color?: string;
+  'aria-label'?: string;
 }
 
 export function SelectRadio({
@@ -38,6 +39,7 @@ export function SelectRadio({
   iconOn: _iconOn = 'radio_button_checked',
   iconOff: _iconOff = 'radio_button_unchecked',
   color = 'blue',
+  'aria-label': ariaLabel,
 }: SelectRadioProps) {
   const [otherValue, setOtherValue] = useState('');
   const [showOtherInput, setShowOtherInput] = useState(false);
@@ -164,7 +166,9 @@ export function SelectRadio({
   // `value == null ? '' : String(value)` (not `String(value || '')`) so a
   // stored `0` or `false` still stringifies to a real, matchable value
   // instead of collapsing to the same empty string as "no value".
-  const currentValue = usesOtherValue ? '__other__' : (value == null ? '' : String(value));
+  const currentValue = (usesOtherValue || showOtherInput)
+    ? '__other__'
+    : (value == null ? '' : String(value));
 
   return (
     <Stack gap="xs" w={width}>
@@ -176,6 +180,7 @@ export function SelectRadio({
         error={error}
         required={required}
         size="sm"
+        aria-label={!label ? ariaLabel : undefined}
       >
         <Stack gap="sm" mt={label ? "xs" : 0} style={gridStyle}>
           {choices.map((choice, index) => (
