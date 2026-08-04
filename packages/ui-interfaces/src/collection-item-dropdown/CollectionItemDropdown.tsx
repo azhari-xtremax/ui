@@ -71,8 +71,8 @@ interface CollectionInfo {
  * Based on DaaS collection-item-dropdown interface.
  */
 export interface CollectionItemDropdownProps {
-    /** Current value containing key and collection */
-    value?: CollectionItemDropdownValue | null;
+    /** Current value containing key and collection. Also accepts a raw key, a JSON string, or a resolved item object for interoperability with external data sources. */
+    value?: CollectionItemDropdownValue | string | number | Record<string, unknown> | null;
     /** Callback fired when value changes */
     onChange?: (value: CollectionItemDropdownValue | null) => void;
     /** The collection to select items from (optional if showCollectionSelect is true) */
