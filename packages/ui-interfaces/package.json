@@ -44,12 +44,12 @@
     "./system-permissions": "./src/system-permissions/index.ts"
   },
   "peerDependencies": {
-    "@buildpad/hooks": "workspace:*",
-    "@buildpad/services": "workspace:*",
-    "@buildpad/types": "workspace:*",
-    "@buildpad/ui-collections": "workspace:*",
-    "@buildpad/ui-form": "workspace:*",
-    "@buildpad/utils": "workspace:*",
+    "@buildpad/hooks": "workspace:^",
+    "@buildpad/services": "workspace:^",
+    "@buildpad/types": "workspace:^",
+    "@buildpad/ui-collections": "workspace:^",
+    "@buildpad/ui-form": "workspace:^",
+    "@buildpad/utils": "workspace:^",
     "@mantine/core": "^8.0.0",
     "@mantine/dates": "^8.0.0",
     "@mantine/hooks": "^8.0.0",
