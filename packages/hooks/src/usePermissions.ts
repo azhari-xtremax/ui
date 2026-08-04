@@ -11,8 +11,28 @@
  * @module @buildpad/hooks/usePermissions
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { ModuleAccessMap } from '@buildpad/types';
 import { useDaaSContext } from './useDaaSContext';
+
+/** Stable empty map so `moduleAccess` keeps a constant identity until loaded. */
+const EMPTY_MODULE_ACCESS: ModuleAccessMap = {};
+
+/**
+ * Read the active scope URI from the `daas_resource_uri` cookie.
+ *
+ * DaaS resolves `/permissions/me` against the active Resource URI, so a change
+ * here must trigger a refetch — otherwise a tenant switch leaves the previous
+ * tenant's permissions in state. The header itself is attached by the
+ * provider's `getHeaders()`; this only observes the value.
+ */
+function readActiveScope(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)daas_resource_uri=([^;]*)/);
+  if (!match) return null;
+  const value = decodeURIComponent(match[1]).trim();
+  return value === '' ? null : value;
+}
 
 /**
  * Permission action types (matches DaaS actions)
@@ -52,6 +72,12 @@ export interface UserPermissions {
   data: Record<string, Record<string, unknown>>;
   /** Whether user is admin (bypasses all checks) */
   isAdmin: boolean;
+  /**
+   * OR-merged module-level access keys. Granted keys only — DaaS drops `false`
+   * when merging across policies. `null` when the fetch failed, which keeps
+   * `hasModuleAccess` failing closed.
+   */
+  moduleAccess: ModuleAccessMap | null;
 }
 
 /**
@@ -66,6 +92,11 @@ export interface PermissionsState {
   error: string | null;
   /** Cached permissions by collection */
   permissions: Record<string, CollectionPermissions>;
+  /**
+   * Resolved module-level access keys for the current user at the active scope.
+   * `{}` until loaded or when the fetch failed. Contains granted keys only.
+   */
+  moduleAccess: ModuleAccessMap;
 }
 
 /**
@@ -74,6 +105,20 @@ export interface PermissionsState {
 export interface PermissionsMethods {
   /** Check if user can perform action on collection */
   canPerform: (collection: string, action: PermissionAction) => boolean;
+  /**
+   * Check whether the user holds a module-level access key.
+   *
+   * Admins hold every key. **Fails closed** — returns `false` while loading and
+   * on error, deliberately unlike `canPerform`, which is optimistic. A
+   * capability flag gates something the user is presumed *not* to have, so an
+   * unresolved state must never render the gated control. Show a skeleton while
+   * `loading` if flicker matters.
+   *
+   * @example
+   * const { hasModuleAccess } = usePermissions();
+   * {hasModuleAccess('reports:export') && <Button>Export</Button>}
+   */
+  hasModuleAccess: (key: string) => boolean;
   /** Get accessible fields for a collection and action */
   getAccessibleFields: (collection: string, action: PermissionAction) => string[];
   /** Check if a specific field is accessible */
@@ -138,6 +183,7 @@ export function usePermissions(options: UsePermissionsOptions = {}): UsePermissi
   const [error, setError] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<Record<string, CollectionPermissions>>({});
   const [globalPermissions, setGlobalPermissions] = useState<UserPermissions | null>(null);
+  const [moduleAccess, setModuleAccess] = useState<ModuleAccessMap>(EMPTY_MODULE_ACCESS);
 
   // Stabilise the `collections` dependency by CONTENT rather than array
   // identity. Callers frequently pass an inline array (or rely on the default
@@ -207,6 +253,10 @@ export function usePermissions(options: UsePermissionsOptions = {}): UsePermissi
       return {
         data: data.data || {},
         isAdmin: data.isAdmin ?? false,
+        // Absent on DaaS builds predating Module-Level Access. `{}` (rather
+        // than null) is right here: the request succeeded, the user simply
+        // holds no keys.
+        moduleAccess: data.moduleAccess ?? {},
       };
     } catch (err) {
       console.error('Error fetching permissions:', err);
@@ -259,7 +309,8 @@ export function usePermissions(options: UsePermissionsOptions = {}): UsePermissi
       const global = await fetchGlobalPermissions();
       setGlobalPermissions(global);
       setIsAdmin(global?.isAdmin ?? false);
-      
+      setModuleAccess(global?.moduleAccess ?? EMPTY_MODULE_ACCESS);
+
       // If admin, no need to fetch individual collection permissions
       if (global?.isAdmin) {
         setLoading(false);
@@ -274,6 +325,10 @@ export function usePermissions(options: UsePermissionsOptions = {}): UsePermissi
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch permissions';
       setError(errorMessage);
+      // Fail closed for module access. Collection permissions keep whatever
+      // they had (consumers treat "unknown" as full access, by design), but a
+      // capability flag must never be granted off a failed request.
+      setModuleAccess(EMPTY_MODULE_ACCESS);
     } finally {
       setLoading(false);
     }
@@ -301,6 +356,14 @@ export function usePermissions(options: UsePermissionsOptions = {}): UsePermissi
     return false;
   }, [isAdmin, globalPermissions, permissions]);
   
+  // Check a module-level access key.
+  // Stable on [isAdmin, moduleAccess] — consumers gate render on this, and an
+  // unstable identity would re-fire their effects on every render.
+  const hasModuleAccess = useCallback((key: string): boolean => {
+    if (isAdmin) return true;
+    return moduleAccess[key] === true;
+  }, [isAdmin, moduleAccess]);
+
   // Get accessible fields for action
   const getAccessibleFields = useCallback((
     collection: string,
@@ -375,26 +438,60 @@ export function usePermissions(options: UsePermissionsOptions = {}): UsePermissi
   const hasToken =
     Boolean(token) ||
     Boolean(contextGetHeaders && 'Authorization' in contextGetHeaders());
+
+  // DaaS resolves /permissions/me against the active Resource URI, so the
+  // response is scope-dependent and must be re-fetched when the scope changes.
+  // Read on every render (a cookie read is cheap) so a ScopeSwitcher that only
+  // rewrites the cookie still re-fires this effect — the value is a primitive,
+  // so an unchanged scope produces no extra work.
+  const activeScope = readActiveScope();
+
   useEffect(() => {
     if (!autoFetch) return;
     if (expectsToken && !hasToken) return;
     refresh();
-  }, [autoFetch, refresh, expectsToken, hasToken]);
-  
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFetch, refresh, expectsToken, hasToken, activeScope]);
+
   return {
     // State
     isAdmin,
     loading,
     error,
     permissions,
+    moduleAccess,
     // Methods
     canPerform,
+    hasModuleAccess,
     getAccessibleFields,
     isFieldAccessible,
     filterFields,
     fetchCollectionPermissions,
     refresh,
   };
+}
+
+/**
+ * Check a single module-level access key.
+ *
+ * Sugar over `usePermissions().hasModuleAccess`. Fails closed while loading.
+ *
+ * @example
+ * const canExport = useModuleAccess('reports:export');
+ * return canExport ? <Button>Export</Button> : null;
+ */
+export function useModuleAccess(key: string): boolean {
+  const { hasModuleAccess } = usePermissions();
+  return useMemo(() => hasModuleAccess(key), [hasModuleAccess, key]);
+}
+
+/**
+ * The full resolved module access map for the current user.
+ * Useful for rendering a dynamic capability list.
+ */
+export function useModuleAccessMap(): ModuleAccessMap {
+  const { moduleAccess } = usePermissions();
+  return moduleAccess;
 }
 
 export default usePermissions;

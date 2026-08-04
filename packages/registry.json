@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microbuild-ui/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-07-25T16:21:27.946Z",
+  "generatedAt": "2026-08-04T08:10:26.345Z",
   "version": "1.9.1",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -201,7 +201,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.1"
     },
     "types": {
       "name": "types",
@@ -235,7 +235,7 @@
         {
           "source": "types/src/users.ts",
           "target": "lib/buildpad/types/users.ts",
-          "sourceSha256": "501b1d5e671f5bbd57dfbe381e28d04e53d623769d4d30d8f521c0b7cc0ebae4"
+          "sourceSha256": "8b6167a4e1c9c73e6c376287260100cc6ac552e4151473c58a481afc54c50b7d"
         },
         {
           "source": "cli/templates/lib/types/index.ts",
@@ -245,11 +245,11 @@
       ],
       "sourcePackage": "@buildpad/types",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     "services": {
       "name": "services",
-      "description": "Service classes for fields, collections, items, permissions, and DaaS API config",
+      "description": "Service classes for fields, collections, items, permissions, and DaaS API config, plus server-side guards: collection permissions (auth/enforcer) and module-level access keys (module-access/enforce).",
       "files": [
         {
           "source": "services/src/api-request.ts",
@@ -274,7 +274,7 @@
         {
           "source": "services/src/permissions.ts",
           "target": "lib/buildpad/services/permissions.ts",
-          "sourceSha256": "ed5ab59784291d552034665e95eb1d49b2aac1e6c0c33d7604a8ea71226b4393"
+          "sourceSha256": "45008b3245a527864cf4cea5b98aee678ee7948882335712eebb9dc5e274e337"
         },
         {
           "source": "services/src/daas-context.tsx",
@@ -302,6 +302,11 @@
           "sourceSha256": "498e44e46519230f573f4a6c99dec516f99ff82daf221ef61ed5edf56065b399"
         },
         {
+          "source": "cli/templates/lib/module-access/enforce.ts",
+          "target": "lib/module-access/enforce.ts",
+          "sourceSha256": "715cffc4ad1513ee7d6268f3ab920acbcaf8bfd3ec57cbea4c3d8f02d7c2c631"
+        },
+        {
           "source": "cli/templates/lib/services/index.ts",
           "target": "lib/buildpad/services/index.ts",
           "sourceSha256": "fd1872d3a69b59f0a89b69b9ab0970ebcbf35bf8df568be7daacd1b09191f397"
@@ -313,7 +318,7 @@
       ],
       "sourcePackage": "@buildpad/services",
       "version": "1.9.3",
-      "lastChangedIn": "1.6.0"
+      "lastChangedIn": "1.9.3"
     },
     "hooks": {
       "name": "hooks",
@@ -442,7 +447,7 @@
         {
           "source": "hooks/src/usePermissions.ts",
           "target": "lib/buildpad/hooks/usePermissions.ts",
-          "sourceSha256": "b75eddb0b07edabb8a5bb43e8b301e7f2dbb878f4cebd7e71cd2db8b3a7fca34"
+          "sourceSha256": "91ab663bad31eb5fded8734128fe1cc3a920241d6bcaffeb6ac2e92b6e8bc5cf"
         },
         {
           "source": "hooks/src/useDaaSContext.tsx",
@@ -491,7 +496,7 @@
       ],
       "sourcePackage": "@buildpad/hooks",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     "api-routes": {
       "name": "api-routes",
@@ -619,7 +624,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.8.0"
+      "lastChangedIn": "1.9.1"
     },
     "content-routes": {
       "name": "content-routes",
@@ -652,7 +657,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.1"
     },
     "files-routes": {
       "name": "files-routes",
@@ -685,11 +690,11 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.5.0"
+      "lastChangedIn": "1.9.1"
     },
     "users-routes": {
       "name": "users-routes",
-      "description": "Users/roles/policies admin module pages — /users, /users/[id], /roles, /roles/[id], /policies, /policies/[id] (list + create/edit for each access-control domain). Installs under the (authenticated) route group so the pages inherit DaaSProviderWrapper and the AuthenticatedShell. Requires the users-management component.",
+      "description": "Users/roles/policies admin module pages — /users, /users/[id], /roles, /roles/[id], /policies, /policies/[id], /module-access-keys (list + create/edit for each access-control domain, plus the module-level access key registry). Installs under the (authenticated) route group so the pages inherit DaaSProviderWrapper and the AuthenticatedShell. Requires the users-management component.",
       "files": [
         {
           "source": "cli/templates/app/users/page.tsx",
@@ -720,6 +725,11 @@
           "source": "cli/templates/app/policies/[id]/page.tsx",
           "target": "app/(authenticated)/policies/[id]/page.tsx",
           "sourceSha256": "0c5367719efd8918c26d0ee7ad143bee6a369d14315efdeca0b6799326376017"
+        },
+        {
+          "source": "cli/templates/app/module-access-keys/page.tsx",
+          "target": "app/(authenticated)/module-access-keys/page.tsx",
+          "sourceSha256": "1671cdf6728a96210c12e57acbecbed19815a0dfcd87da06c2fd6d74fa6682b5"
         }
       ],
       "internalDependencies": [
@@ -751,7 +761,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.1"
     },
     "forms-routes": {
       "name": "forms-routes",
@@ -794,7 +804,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.6.0"
+      "lastChangedIn": "1.9.1"
     },
     "supabase-auth": {
       "name": "supabase-auth",
@@ -832,7 +842,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.1"
     },
     "external-oauth": {
       "name": "external-oauth",
@@ -883,7 +893,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.1"
     },
     "scope-routes": {
       "name": "scope-routes",
@@ -920,7 +930,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.1"
     },
     "design-system": {
       "name": "design-system",
@@ -929,17 +939,17 @@
         {
           "source": "cli/templates/app/design-tokens.css",
           "target": "app/design-tokens.css",
-          "sourceSha256": "d225f860e786eb16823c18198b313acebe93ed18f24da3421722caa0c29646d4"
+          "sourceSha256": "2c485fee1d94a6b0e5393d34767e9d546480e528290188efd48cfcdd865a79ce"
         },
         {
           "source": "cli/templates/app/globals.css",
           "target": "app/globals.css",
-          "sourceSha256": "9bc54b075d9afa7b706020f1404e8136300ff7a053f9da317f92e2631e7c3bcb"
+          "sourceSha256": "3df463eab8d72c1bb559208568d258816eccab34c8bc14d9e43387150fe7ff89"
         },
         {
           "source": "cli/templates/lib/theme.ts",
           "target": "lib/theme.ts",
-          "sourceSha256": "f800464f7a569176c3a88bfa9f0bcdc907cfb1983895daf95945ccae2a876af8"
+          "sourceSha256": "e419acdae03416b3b1bead609901f6b28345a3065e08a6155955383ef0d587be"
         },
         {
           "source": "cli/templates/components/ColorSchemeToggle.tsx",
@@ -959,7 +969,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.9.1",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.1"
     }
   },
   "components": [
@@ -1004,7 +1014,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "textarea",
@@ -1040,7 +1050,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "input-code",
@@ -1078,7 +1088,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.9.2"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "input-hash",
@@ -1119,7 +1129,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "system-token",
@@ -1163,7 +1173,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "system-permissions",
@@ -1256,7 +1266,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "input-block-editor",
@@ -1313,7 +1323,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "tags",
@@ -1350,7 +1360,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "select-dropdown",
@@ -1390,7 +1400,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "select-radio",
@@ -1426,7 +1436,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "select-multiple-checkbox",
@@ -1462,7 +1472,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "select-multiple-checkbox-tree",
@@ -1500,7 +1510,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "select-multiple-dropdown",
@@ -1537,7 +1547,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "select-icon",
@@ -1573,7 +1583,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "autocomplete-api",
@@ -1610,7 +1620,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "collection-item-dropdown",
@@ -1695,7 +1705,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "boolean",
@@ -1731,7 +1741,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "toggle",
@@ -1767,7 +1777,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "file",
@@ -1811,7 +1821,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "file-image",
@@ -1854,7 +1864,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "files",
@@ -1897,7 +1907,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "upload",
@@ -1943,7 +1953,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "color",
@@ -1978,7 +1988,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "list-m2m",
@@ -2035,7 +2045,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "select-dropdown-m2o",
@@ -2093,7 +2103,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "list-o2m",
@@ -2140,7 +2150,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "list-m2a",
@@ -2195,7 +2205,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "divider",
@@ -2231,7 +2241,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "notice",
@@ -2267,7 +2277,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "group-detail",
@@ -2304,7 +2314,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "group-accordion",
@@ -2340,7 +2350,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "group-raw",
@@ -2375,7 +2385,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "slider",
@@ -2413,7 +2423,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "rich-text-html",
@@ -2466,7 +2476,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.3.1"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "rich-text-markdown",
@@ -2524,7 +2534,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.9.1"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "vform",
@@ -2678,7 +2688,7 @@
       ],
       "sourcePackage": "@buildpad/ui-form",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "collection-form",
@@ -2712,7 +2722,7 @@
       ],
       "sourcePackage": "@buildpad/ui-collections",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "vtable",
@@ -2728,7 +2738,7 @@
         {
           "source": "ui-table/src/VTable.css",
           "target": "components/ui/vtable.css",
-          "sourceSha256": "6f450295455f7cde97fb1c1e5f22831075be6d609f4eda25f18d5a50d58d39ec"
+          "sourceSha256": "72e231f4d37fd883f4040f39e86071b824a8c84c0b42c7866c31f12d953e8fc1"
         },
         {
           "source": "ui-table/src/components/TableHeader.tsx",
@@ -2738,7 +2748,7 @@
         {
           "source": "ui-table/src/components/TableHeader.css",
           "target": "components/ui/table-header.css",
-          "sourceSha256": "dd62b4e5790440a8b5942d4c6f4a2819293a889b74bfde1c4f47e04c5f826a2b"
+          "sourceSha256": "af3d85f93234a2cd724378e6a2984ef59cdd80377f445d2f8fc67b5bb99181fd"
         },
         {
           "source": "ui-table/src/components/TableRow.tsx",
@@ -2748,7 +2758,7 @@
         {
           "source": "ui-table/src/components/TableRow.css",
           "target": "components/ui/table-row.css",
-          "sourceSha256": "248459ad1bf157014786fe688274f6e4e5cd4c0f600c569deca784bed143e176"
+          "sourceSha256": "297b4729257f3f4208008befb8ca0afb57078c6c8fe6c38ac65d8b892f4affd8"
         },
         {
           "source": "ui-table/src/types.ts",
@@ -2767,7 +2777,7 @@
       "internalDependencies": [],
       "sourcePackage": "@buildpad/ui-table",
       "version": "1.9.3",
-      "lastChangedIn": "1.9.2"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "collection-list",
@@ -2783,7 +2793,7 @@
         {
           "source": "ui-collections/src/CollectionList.css",
           "target": "components/ui/collection-list.css",
-          "sourceSha256": "626cbbd01a2aefbb16439e5dea1b05eccfd94c3046277b7c9880671b771b6e25"
+          "sourceSha256": "f00280268cc60986f48d68c9f656d950d9676bb7e8fafccfab6441a68aea2fab"
         },
         {
           "source": "ui-collections/src/CollectionListToolbar.tsx",
@@ -2843,7 +2853,7 @@
       ],
       "sourcePackage": "@buildpad/ui-collections",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "content-navigation",
@@ -2868,7 +2878,7 @@
       ],
       "sourcePackage": "@buildpad/ui-collections",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "content-layout",
@@ -2893,7 +2903,7 @@
       ],
       "sourcePackage": "@buildpad/ui-collections",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "save-options",
@@ -2914,7 +2924,7 @@
       "internalDependencies": [],
       "sourcePackage": "@buildpad/ui-collections",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "map",
@@ -2952,7 +2962,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "map-with-real-map",
@@ -2992,7 +3002,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "workflow-button",
@@ -3045,7 +3055,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "1.9.3",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "file-manager",
@@ -3151,19 +3161,19 @@
       ],
       "sourcePackage": "@buildpad/ui-files",
       "version": "1.9.3",
-      "lastChangedIn": "1.5.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "users-management",
       "title": "UsersManagement",
       "excludeFromAll": true,
-      "description": "Users, roles, and policies administration (RBAC management) — user list/detail with role assignment (M2M) and direct policy attachment, role list/detail with member management, hierarchy, and scope-assignment rules, policy list/detail with access flags and a per-collection permissions matrix (via system-permissions). Composes the useUsers/useRoles/usePolicies hooks.",
+      "description": "Users, roles, and policies administration (RBAC management) — user list/detail with role assignment (M2M) and direct policy attachment, role list/detail with member management, hierarchy, and scope-assignment rules, policy list/detail with access flags and BOTH permission dimensions: a per-collection matrix (Record-Level Access, via system-permissions) and a capability-key tree (Module-Level Access), plus the /module-access-keys registry manager. Composes the useUsers/useRoles/usePolicies/useModuleAccessKeys hooks.",
       "category": "admin",
       "files": [
         {
           "source": "ui-users/src/UsersManager.tsx",
           "target": "components/ui/users-management/users-manager.tsx",
-          "sourceSha256": "224c654623e3390d0bb6b271d481e24895366e77a93cb6872e91aa3c18045050"
+          "sourceSha256": "f9be8c05f02d6e9cefed21ee49d7e3536cf2ffba460108d202f6861abe5031ce"
         },
         {
           "source": "ui-users/src/UsersManager.css",
@@ -3188,7 +3198,7 @@
         {
           "source": "ui-users/src/RolesManager.tsx",
           "target": "components/ui/users-management/roles-manager.tsx",
-          "sourceSha256": "304bc8a5fa4d8a229e5f7d6973dbd857f90bc9d9f017b6b72d83994fce16169d"
+          "sourceSha256": "55086de95700728a6a81926cda51c058ad4e95c5bfc61b9137a259742a24ab53"
         },
         {
           "source": "ui-users/src/RoleDetail.tsx",
@@ -3208,17 +3218,27 @@
         {
           "source": "ui-users/src/PoliciesManager.tsx",
           "target": "components/ui/users-management/policies-manager.tsx",
-          "sourceSha256": "03d9cba420b1ecf248911fb1224ca8268fc29ff7ade4ea4399d6719fad759c44"
+          "sourceSha256": "ba93c7c6d3fb61496ee29a64b846a9636bb0f47aee252b9b3538a78a39e130a9"
         },
         {
           "source": "ui-users/src/PolicyDetail.tsx",
           "target": "components/ui/users-management/policy-detail.tsx",
-          "sourceSha256": "198388df52ad7df90ac02c3739dc2e98030a139a5f8600c49cb3442c2894f689"
+          "sourceSha256": "1228fb5a984f1369fd7de86ccbf733a91aaf30017d9f94cb39d4455d3007ba98"
         },
         {
           "source": "ui-users/src/PolicyAttachmentManager.tsx",
           "target": "components/ui/users-management/policy-attachment-manager.tsx",
           "sourceSha256": "a3d3f7e360a362db5195c9f76fb6d2fb11f39807bb03e466b31dfa10415a1135"
+        },
+        {
+          "source": "ui-users/src/ModuleAccessPanel.tsx",
+          "target": "components/ui/users-management/module-access-panel.tsx",
+          "sourceSha256": "842bd10d5082fd3321e4438f3c1b93c57fad23b868c0d3833c9249a232d787ad"
+        },
+        {
+          "source": "ui-users/src/ModuleAccessKeysManager.tsx",
+          "target": "components/ui/users-management/module-access-keys-manager.tsx",
+          "sourceSha256": "60d44853035c9300671872168f1ac6379f623acba0baf7e04648d808422bcf54"
         },
         {
           "source": "ui-users/src/PolicyPickerModal.tsx",
@@ -3258,7 +3278,7 @@
         {
           "source": "ui-users/src/ListFooter.tsx",
           "target": "components/ui/users-management/list-footer.tsx",
-          "sourceSha256": "7d118bb436adc3a5a977009fdb15746b46170518f57e7a473a5668e438f03c48"
+          "sourceSha256": "59e79c078f7dd9c57b12266b03bbb8a88b799a6cc203d98b3536282cd1965bfc"
         },
         {
           "source": "ui-users/src/ListEmptyState.tsx",
@@ -3288,7 +3308,7 @@
         {
           "source": "ui-users/src/index.ts",
           "target": "components/ui/users-management/index.ts",
-          "sourceSha256": "e557cad95db6ca77808c3df42e6da4b72c22039c1add6f3c75829b50a12947ab"
+          "sourceSha256": "bc68c830d67f9b32be6b2e51ec1da02c2a3aacecae63fefc1b651820ec2969f1"
         }
       ],
       "dependencies": [
@@ -3309,7 +3329,7 @@
       ],
       "sourcePackage": "@buildpad/ui-users",
       "version": "1.9.3",
-      "lastChangedIn": "1.7.0"
+      "lastChangedIn": "1.9.3"
     },
     {
       "name": "form-builder",
@@ -3420,7 +3440,7 @@
       ],
       "sourcePackage": "@buildpad/ui-forms",
       "version": "1.9.3",
-      "lastChangedIn": "1.6.0"
+      "lastChangedIn": "1.9.3"
     }
   ],
   "categories": [
