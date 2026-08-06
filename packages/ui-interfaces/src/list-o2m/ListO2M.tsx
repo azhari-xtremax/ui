@@ -63,6 +63,16 @@ interface StagedDelete {
   $type: "deleted";
   id: string | number;
 }
+/**
+ * An existing related item picked via "Add Existing" while the parent is still
+ * unsaved. Carries the fetched display fields so the row can render, but only
+ * `id` + the FK are emitted on save — see the emit effect.
+ */
+interface StagedLink {
+  $type: "linked";
+  id: string | number;
+  [key: string]: unknown;
+}
 
 /** The full changeset that tracks all pending mutations */
 interface O2MChangeset {
@@ -76,7 +86,7 @@ interface O2MChangeset {
    * been linked to the parent yet, so they need their own bucket to be
    * both rendered in `displayItems` and emitted with the FK on save.
    */
-  link: StagedUpdate[];
+  link: StagedLink[];
 }
 
 const EMPTY_CHANGESET: O2MChangeset = { create: [], update: [], delete: [], link: [] };
@@ -232,8 +242,10 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   mockItems,
   mockRelationInfo,
 }) => {
-  // ── Ensure value is always an array ──────────────────────────────────────
-  const value = valueProp ?? [];
+  // `value` is accepted for interface parity with the other relational
+  // components but is not read: this component is the source of truth for its
+  // own pending changes and emits them through `onChange`.
+  void valueProp;
 
   // ── Demo / mock mode ─────────────────────────────────────────────────────
   const isDemoMode = mockItems !== undefined;
@@ -323,6 +335,10 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   // change on every create/edit) — otherwise interleaved creates can be
   // assigned the same $index/$temp id.
   const createIndexRef = useRef(0);
+  // Whether we've ever emitted. Lets the effect below suppress *only* the
+  // mount emit: once the user has staged something, going back to an empty
+  // changeset must still be emitted so the parent form drops the field edit.
+  const hasEmittedRef = useRef(false);
 
   // Check if parent item is saved (valid PK, not '+' convention for new)
   const isParentSaved = primaryKey && primaryKey !== "+";
@@ -409,7 +425,10 @@ export const ListO2M: React.FC<ListO2MProps> = ({
 
   const totalCount = isDemoMode
     ? internalMockItems.length
-    : hookTotalCount + changeset.create.length - changeset.delete.length;
+    : hookTotalCount +
+      changeset.create.length +
+      changeset.link.length -
+      changeset.delete.length;
   const loading = isDemoMode ? false : relationLoading || itemsLoading;
 
   // ── Emit changeset to parent onChange ───────────────────────────────────
@@ -421,12 +440,16 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       changeset.delete.length > 0 ||
       changeset.link.length > 0;
 
-    // Bail whenever nothing is staged — including on mount. Previously this
-    // fell through when `value` was already populated (`!hasChanges &&
-    // value.length === 0` is false for a populated value), so the payload
-    // stayed `[]` and the trailing guard below (`value.length > 0`) fired
-    // onChange([]) on mount, silently clearing an existing O2M value.
-    if (!hasChanges) return;
+    // Suppress the mount emit only. Previously this fell through when `value`
+    // was already populated (`!hasChanges && value.length === 0` is false for a
+    // populated value), so the payload stayed `[]` and the trailing guard
+    // (`value.length > 0`) fired onChange([]) on mount, silently clearing an
+    // existing O2M value.
+    //
+    // Bailing on `!hasChanges` alone is not enough: once something has been
+    // staged, un-staging it back to empty must still emit `[]`, otherwise the
+    // parent form keeps the last payload and saves items the user removed.
+    if (!hasChanges && !hasEmittedRef.current) return;
 
     const fkField = relationInfo?.reverseJunctionField?.field;
     const payload: Record<string, unknown>[] = [];
@@ -440,13 +463,16 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       });
     }
 
-    // Links: existing items picked while the parent is unsaved — they
-    // aren't linked server-side yet, so emit them the same way as creates
-    // (data + FK pointing at the parent).
+    // Links: existing items picked while the parent is unsaved. Emit the
+    // reference only (id + FK) — DaaS links by id and fills in the real parent
+    // key. The staged entry also carries the fetched display fields so the row
+    // can render, but those must NOT be echoed back: when the display template
+    // references a nested path (e.g. `{{author_id.name}}`) the fetched row
+    // contains a nested object, and DaaS then silently drops the whole entry
+    // from the save (201, `posts: []`) instead of linking it.
     for (const item of changeset.link) {
-      const { $type, ...data } = item;
       payload.push({
-        ...data,
+        id: item.id,
         ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
       });
     }
@@ -462,6 +488,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       payload.push({ id: item.id, $delete: true });
     }
 
+    hasEmittedRef.current = true;
     onChange(payload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [changeset]);
@@ -472,7 +499,10 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   const isUniqueConstrained = guardInfo?.isForeignKeyUnique === true;
   const effectiveItemCount = isDemoMode ? internalMockItems.length : hookTotalCount;
   const hasExistingItem =
-    (effectiveItemCount > 0 || changeset.create.length > 0) && isUniqueConstrained;
+    (effectiveItemCount > 0 ||
+      changeset.create.length > 0 ||
+      changeset.link.length > 0) &&
+    isUniqueConstrained;
 
   // ── Priority #5: Singleton guard ────────────────────────────────────────
   const isSingleton = guardInfo?.isSingleton === true;
@@ -659,11 +689,11 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           // effect above, which now injects the FK for `link` entries).
           setChangeset((prev) => {
             const existingLinkIds = new Set(prev.link.map((l) => l.id));
-            const newLinks: StagedUpdate[] = fetched
+            const newLinks: StagedLink[] = fetched
               .filter((item) => !existingLinkIds.has(item.id))
               .map((item) => {
                 const { $type: _t, $index: _i, $edits: _e, ...rest } = item;
-                return { ...rest, $type: "updated" as const, id: item.id };
+                return { ...rest, $type: "linked" as const, id: item.id };
               });
             return {
               ...prev,
