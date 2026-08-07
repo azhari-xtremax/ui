@@ -224,6 +224,71 @@ describe("ListO2M — Add Existing on an unsaved parent", () => {
   });
 });
 
+describe("ListO2M — Add Existing on an already-saved parent", () => {
+  // Regression: selecting an existing item used to link it via an immediate
+  // API call (bypassing onChange), so the parent form's dirty-tracking never
+  // saw the change and its Save button stayed disabled even though the link
+  // had already been written server-side. Add Existing must always defer to
+  // onChange/the changeset, the same as it does for an unsaved parent.
+  beforeEach(() => {
+    (apiRequest as jest.Mock).mockResolvedValue({
+      data: [{ id: "p9", name: "Picked post" }],
+    });
+  });
+
+  it("stages the pick and emits via onChange instead of linking immediately", async () => {
+    const onChange = jest.fn();
+
+    render(
+      wrap(
+        <ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} onChange={onChange} />,
+      ),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+
+    await waitFor(() => expect(screen.getByTestId("o2m-remove-p9")).toBeInTheDocument());
+    expect(screen.getByText("Picked post")).toBeInTheDocument();
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls.at(-1)![0]).toEqual([{ id: "p9", category_id: "cat-1" }]);
+  });
+
+  it("un-stages on remove without ever having called selectItems", async () => {
+    const hookReturn = {
+      items: [],
+      totalCount: 0,
+      loading: false,
+      loadItems: jest.fn(),
+      selectItems: jest.fn().mockResolvedValue(undefined),
+      removeItem: jest.fn().mockResolvedValue(undefined),
+      deleteItem: jest.fn().mockResolvedValue(undefined),
+      moveItemUp: jest.fn(),
+      moveItemDown: jest.fn(),
+    };
+    (useRelationO2MItems as jest.Mock).mockReturnValue(hookReturn);
+
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />));
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(screen.getByTestId("o2m-remove-p9")).toBeInTheDocument());
+
+    expect(hookReturn.selectItems).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId("o2m-remove-p9"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("o2m-remove-p9")).not.toBeInTheDocument(),
+    );
+
+    // Un-staging a not-yet-saved pick must not call the immediate unlink/delete
+    // API either — it was never linked server-side to begin with.
+    expect(hookReturn.removeItem).not.toHaveBeenCalled();
+    expect(hookReturn.deleteItem).not.toHaveBeenCalled();
+  });
+});
+
 describe("ListO2M — staged creates on an unsaved parent", () => {
   /** create → open edit (re-memoizes handleFormSuccess) → create */
   async function stageTwoCreatesAroundAnEdit() {
