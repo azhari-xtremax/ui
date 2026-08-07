@@ -165,6 +165,10 @@
           "target": "lib/buildpad/types/field-spec.ts"
         },
         {
+          "source": "types/src/module-access.ts",
+          "target": "lib/buildpad/types/module-access.ts"
+        },
+        {
           "source": "types/src/users.ts",
           "target": "lib/buildpad/types/users.ts"
         },
