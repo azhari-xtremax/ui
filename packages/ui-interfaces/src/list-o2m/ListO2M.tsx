@@ -376,7 +376,6 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     totalCount: hookTotalCount,
     loading: itemsLoading,
     loadItems,
-    selectItems,
     removeItem,
     deleteItem,
     moveItemUp: hookMoveItemUp,
@@ -645,67 +644,54 @@ export const ListO2M: React.FC<ListO2MProps> = ({
 
   /**
    * Select existing items from the related collection.
+   *
+   * Always stages into the `link` bucket and defers the actual link to the
+   * parent form's save, regardless of whether the parent is already saved.
+   * Previously, picking an item on an already-saved parent linked it via an
+   * immediate API call here — bypassing `onChange` entirely, so the parent
+   * form's dirty-tracking never saw the change and the Save button stayed
+   * disabled even though the row had already been linked server-side.
+   * Staging unconditionally makes the two cases behave the same way: nothing
+   * is persisted until the user clicks Save.
    */
   const handleSelectItems = async (ids: (string | number)[]) => {
     setSelectError(null);
 
-    if (isParentSaved) {
-      try {
-        await selectItems(ids);
-        closeSelectModal();
-        if (relationInfo && primaryKey) {
-          loadItems({
-            limit,
-            page: currentPage,
-            search: enableSearchFilter ? search : undefined,
-            sortField,
-            sortDirection,
-            fields: resolvedFields,
-          });
-        }
-      } catch (err) {
-        console.error("Error selecting items:", err);
-        setSelectError("Failed to link items. Please try again.");
-      }
-    } else {
-      // Stage: fetch item data for display, then add to changeset
-      try {
-        const { apiRequest } = await import("@buildpad/services");
-        if (relationInfo?.relatedCollection?.collection) {
-          const col = relationInfo.relatedCollection.collection;
-          const qp = new URLSearchParams();
-          qp.set("filter", JSON.stringify({ id: { _in: ids } }));
-          if (resolvedFields.length > 0) qp.set("fields", resolvedFields.join(","));
-          const resp = await apiRequest<{ data: O2MItem[] }>(
-            `/api/items/${col}?${qp.toString()}`,
-          );
-          const fetched = resp.data || [];
+    try {
+      const { apiRequest } = await import("@buildpad/services");
+      if (relationInfo?.relatedCollection?.collection) {
+        const col = relationInfo.relatedCollection.collection;
+        const qp = new URLSearchParams();
+        qp.set("filter", JSON.stringify({ id: { _in: ids } }));
+        if (resolvedFields.length > 0) qp.set("fields", resolvedFields.join(","));
+        const resp = await apiRequest<{ data: O2MItem[] }>(
+          `/api/items/${col}?${qp.toString()}`,
+        );
+        const fetched = resp.data || [];
 
-          // Stage into `link`, not `update` — the parent is unsaved, so
-          // these items aren't in baseItems yet. `update` only patches
-          // items already present in baseItems (see displayItems above),
-          // so pushing them there silently dropped the selection and never
-          // rendered it; it also emitted no FK on save (see the emit
-          // effect above, which now injects the FK for `link` entries).
-          setChangeset((prev) => {
-            const existingLinkIds = new Set(prev.link.map((l) => l.id));
-            const newLinks: StagedLink[] = fetched
-              .filter((item) => !existingLinkIds.has(item.id))
-              .map((item) => {
-                const { $type: _t, $index: _i, $edits: _e, ...rest } = item;
-                return { ...rest, $type: "linked" as const, id: item.id };
-              });
-            return {
-              ...prev,
-              link: [...prev.link, ...newLinks],
-            };
-          });
-          closeSelectModal();
-        }
-      } catch (err) {
-        console.error("Error staging items:", err);
-        setSelectError("Failed to select items. Please try again.");
+        // Stage into `link`, not `update` — the item may not be in
+        // `baseItems` yet (unsaved parent), and even when it is, `update`
+        // is reserved for edits to items already linked to this parent.
+        // `link` both renders the row and emits the FK on save (see the
+        // emit effect above).
+        setChangeset((prev) => {
+          const existingLinkIds = new Set(prev.link.map((l) => l.id));
+          const newLinks: StagedLink[] = fetched
+            .filter((item) => !existingLinkIds.has(item.id))
+            .map((item) => {
+              const { $type: _t, $index: _i, $edits: _e, ...rest } = item;
+              return { ...rest, $type: "linked" as const, id: item.id };
+            });
+          return {
+            ...prev,
+            link: [...prev.link, ...newLinks],
+          };
+        });
+        closeSelectModal();
       }
+    } catch (err) {
+      console.error("Error staging items:", err);
+      setSelectError("Failed to select items. Please try again.");
     }
   };
 
@@ -723,9 +709,11 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       return;
     }
 
-    // If it's a staged link (existing item added while the parent was
-    // unsaved), just un-stage it — nothing was ever linked server-side.
-    if (!isParentSaved && changeset.link.some((l) => l.id === item.id)) {
+    // If it's a staged link (an existing item picked via "Add Existing"
+    // that hasn't been saved yet — regardless of whether the parent itself
+    // is saved, selection is always deferred now), just un-stage it —
+    // nothing was ever linked server-side.
+    if (changeset.link.some((l) => l.id === item.id)) {
       setChangeset((prev) => ({
         ...prev,
         link: prev.link.filter((l) => l.id !== item.id),
@@ -1383,7 +1371,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           </Alert>
         )}
 
-        {!isParentSaved && !selectError && (
+        {!selectError && (
           <Alert
             icon={<IconAlertCircle size={16} />}
             title="Items will be linked when you save"
