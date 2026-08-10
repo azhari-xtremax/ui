@@ -400,3 +400,33 @@ describe("edit fetch relational-field exclusion", () => {
     expect(fields).not.toContain("comments");
   });
 });
+
+describe("submit containment through portals", () => {
+  it("does not bubble the form's submit into an ancestor page form across a portal", async () => {
+    const { createPortal } = await import("react-dom");
+    mockItemsCreateOne.mockResolvedValueOnce({ id: 9, title: "t" });
+    const outerSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+
+    // Mirrors the real bug shape: the page form is an ancestor in the REACT
+    // tree while the CollectionForm lives elsewhere in the DOM via a portal
+    // (Mantine Modal). React bubbles synthetic submit along the React tree.
+    function Page() {
+      return (
+        <form onSubmit={outerSubmit} data-testid="outer-page-form">
+          {createPortal(
+            <CollectionForm collection="posts" mode="create" />,
+            document.body,
+          )}
+        </form>
+      );
+    }
+
+    render(<Page />, { wrapper });
+
+    await waitFor(() => screen.getByTestId("form-submit-btn"));
+    fireEvent.click(screen.getByTestId("form-submit-btn"));
+
+    await waitFor(() => expect(mockItemsCreateOne).toHaveBeenCalled());
+    expect(outerSubmit).not.toHaveBeenCalled();
+  });
+});

@@ -30,15 +30,17 @@ jest.mock("@buildpad/hooks", () => ({
 jest.mock("@buildpad/ui-collections", () => {
   const R = require("react");
   return {
-    CollectionForm: ({ onSuccess }: any) =>
-      R.createElement(
+    CollectionForm: ({ onSuccess, defaultValues }: any) => {
+      (globalThis as any).__lastFormDefaults = defaultValues;
+      return R.createElement(
         "button",
         {
           "data-testid": "mock-form-save",
           onClick: () => onSuccess({ name: (globalThis as any).__formName ?? "New" }),
         },
         "save",
-      ),
+      );
+    },
     CollectionList: ({ bulkActions }: any) =>
       R.createElement(
         "button",
@@ -355,5 +357,29 @@ describe("ListO2M — staged creates on an unsaved parent", () => {
     // otherwise the parent form still holds — and saves — the removed child
     expect(onEmit.mock.calls.length).toBeGreaterThan(callsAfterStage);
     expect(onEmit.mock.calls.at(-1)![0]).toEqual([]);
+  });
+});
+
+describe("Create New reverse-FK default", () => {
+  it("does not pre-fill the '+' placeholder as the child's FK for an unsaved parent", async () => {
+    setHookItems([]);
+    render(wrap(<Controlled onEmit={jest.fn()} enableCreate primaryKey="+" />));
+
+    fireEvent.click(await screen.findByTestId("o2m-create-btn"));
+    await screen.findByTestId("mock-form-save");
+
+    const defaults = (globalThis as any).__lastFormDefaults ?? {};
+    expect(defaults.category_id).toBeUndefined();
+  });
+
+  it("pre-fills the real parent id as the child's FK once the parent is saved", async () => {
+    setHookItems([]);
+    render(wrap(<Controlled onEmit={jest.fn()} enableCreate primaryKey="cat-7" />));
+
+    fireEvent.click(await screen.findByTestId("o2m-create-btn"));
+    await screen.findByTestId("mock-form-save");
+
+    const defaults = (globalThis as any).__lastFormDefaults ?? {};
+    expect(defaults.category_id).toBe("cat-7");
   });
 });
