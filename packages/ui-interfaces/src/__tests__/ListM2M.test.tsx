@@ -16,6 +16,7 @@ import { ListM2M } from '../list-m2m/ListM2M';
 const mockUseRelationM2M = jest.fn();
 const mockUseRelationPermissionsM2M = jest.fn();
 const mockSelectItems = jest.fn();
+const mockLoadItems = jest.fn();
 const mockRemoveItem = jest.fn();
 
 jest.mock('@buildpad/hooks', () => {
@@ -53,7 +54,7 @@ jest.mock('@buildpad/hooks', () => {
                 setChanges({ create: [], update: [], delete: [] });
             }, []);
 
-            const loadItems = ReactActual.useRef(jest.fn()).current;
+            const loadItems = mockLoadItems;
             const createItem = ReactActual.useRef(jest.fn()).current;
             const updateItem = ReactActual.useRef(jest.fn()).current;
             const reorderItems = ReactActual.useRef(jest.fn()).current;
@@ -204,5 +205,30 @@ describe('ListM2M "Create New" junction linking', () => {
         await waitFor(() => {
             expect(mockSelectItems).toHaveBeenCalledWith(['new-tag-id']);
         });
+    });
+});
+
+describe('ListM2M fields= query PK resolution', () => {
+    it('resolves the bootstrap "id" to the related PK field in the items query', async () => {
+        mockUseRelationM2M.mockReturnValue({
+            relationInfo: {
+                ...RELATION_INFO,
+                relatedPrimaryKeyField: { field: 'code', type: 'string' },
+            },
+            loading: false,
+            error: null,
+        });
+
+        // Real mode: no mockRelationInfo/mockItems so the load effect runs.
+        render(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={1} />
+            </MantineProvider>
+        );
+
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalled());
+        const fields: string[] = mockLoadItems.mock.calls.at(-1)?.[0]?.fields ?? [];
+        expect(fields).toContain('tag_id.code');
+        expect(fields).not.toContain('tag_id.id');
     });
 });
