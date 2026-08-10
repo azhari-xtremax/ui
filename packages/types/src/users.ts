@@ -11,6 +11,8 @@
  * user in each of those modules' own narrower shapes. Both are left untouched.
  */
 
+import type { ModuleAccessMap } from './module-access';
+
 /**
  * User account status.
  */
@@ -169,6 +171,18 @@ export interface Policy {
 
   /** Allows using the `X-On-Behalf-Of` header to delegate audit identity */
   delegate_access?: boolean;
+
+  /**
+   * Module-level capability grants — `{ "reports:export": true }`.
+   *
+   * OR-merged across every policy a user holds: any `true` grants the key.
+   * Only `true` entries are meaningful; the platform drops `false` when
+   * merging, and the editor deletes a key rather than writing `false`.
+   *
+   * Keys come from the `daas_module_access_keys` registry — see
+   * `ModuleAccessKey` in `./module-access`.
+   */
+  module_access?: ModuleAccessMap | null;
 
   /** Number of users this policy is attached to (list/detail enrichment) */
   userCount?: number;

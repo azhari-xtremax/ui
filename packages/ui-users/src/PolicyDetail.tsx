@@ -10,6 +10,7 @@ import {
   Paper,
   Stack,
   Switch,
+  Tabs,
   Text,
   Textarea,
   TextInput,
@@ -19,7 +20,7 @@ import { notifications } from '@mantine/notifications';
 import { IconTrash } from '@tabler/icons-react';
 import { usePermissions, usePolicies } from '@buildpad/hooks';
 import { apiRequest } from '@buildpad/services';
-import type { Permission, Policy } from '@buildpad/types';
+import type { ModuleAccessMap, Permission, Policy } from '@buildpad/types';
 import { SelectIcon } from '@buildpad/ui-interfaces/select-icon';
 import {
   SystemPermissions,
@@ -27,6 +28,7 @@ import {
 } from '@buildpad/ui-interfaces/system-permissions';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { InfoPanel } from './InfoPanel';
+import { ModuleAccessPanel } from './ModuleAccessPanel';
 
 /** The editable subset of `Policy` this form manages. */
 interface PolicyFormValues {
@@ -36,6 +38,12 @@ interface PolicyFormValues {
   admin_access: boolean;
   app_access: boolean;
   delegate_access: boolean;
+  /**
+   * Module-level capability grants. Part of the form values (rather than
+   * tracked separately like the permission matrix) so it rides the existing
+   * dirty-detection and the single `updatePolicy` write.
+   */
+  module_access: ModuleAccessMap;
 }
 
 const EMPTY_FORM: PolicyFormValues = {
@@ -45,6 +53,7 @@ const EMPTY_FORM: PolicyFormValues = {
   admin_access: false,
   app_access: false,
   delegate_access: false,
+  module_access: {},
 };
 
 function hasAlterations(alterations: PermissionAlterations | null): boolean {
@@ -170,6 +179,7 @@ export const PolicyDetail: React.FC<PolicyDetailProps> = ({
         admin_access: Boolean(fetched.admin_access),
         app_access: Boolean(fetched.app_access),
         delegate_access: Boolean(fetched.delegate_access),
+        module_access: fetched.module_access ?? {},
       };
       setInitialValues(formValues);
       setValues(formValues);
@@ -358,19 +368,54 @@ export const PolicyDetail: React.FC<PolicyDetailProps> = ({
             </Stack>
           </Paper>
 
+          {/*
+            The two permission dimensions, matching the platform's Policy
+            editor: Record-Level = collection CRUD (daas_permissions rows),
+            Module-Level = named application capabilities
+            (daas_policies.module_access).
+          */}
           {!isNew && policy && (
             <Paper shadow="xs" p="md" withBorder mt="md">
-              <SystemPermissions
-                key={`permissions-${permissionsVersion}`}
-                primaryKey={id}
-                value={alterations}
-                onChange={setAlterations}
-                appAccess={values.app_access}
-                adminAccess={values.admin_access}
-                label="Permissions"
-                description="Per-collection permissions granted by this policy"
-                data-testid="policy-detail-permissions"
-              />
+              <Tabs defaultValue="record-level">
+                <Tabs.List mb="md">
+                  <Tabs.Tab value="record-level" data-testid="policy-detail-tab-record">
+                    Record-Level Access
+                  </Tabs.Tab>
+                  <Tabs.Tab value="module-level" data-testid="policy-detail-tab-module">
+                    Module-Level Access
+                  </Tabs.Tab>
+                </Tabs.List>
+
+                <Tabs.Panel value="record-level">
+                  <SystemPermissions
+                    key={`permissions-${permissionsVersion}`}
+                    primaryKey={id}
+                    value={alterations}
+                    onChange={setAlterations}
+                    appAccess={values.app_access}
+                    adminAccess={values.admin_access}
+                    label="Permissions"
+                    description="Per-collection permissions granted by this policy"
+                    data-testid="policy-detail-permissions"
+                  />
+                </Tabs.Panel>
+
+                <Tabs.Panel value="module-level">
+                  <Stack gap="xs">
+                    <Text size="sm" c="dimmed">
+                      Application capabilities granted by this policy, independent of
+                      collection permissions.
+                    </Text>
+                    <ModuleAccessPanel
+                      value={values.module_access}
+                      onChange={(module_access) =>
+                        setValues((prev) => ({ ...prev, module_access }))
+                      }
+                      adminAccess={values.admin_access}
+                    />
+                  </Stack>
+                </Tabs.Panel>
+              </Tabs>
             </Paper>
           )}
         </Grid.Col>

@@ -1,106 +1,208 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
-import '@testing-library/jest-dom';
-import { DaaSProvider } from '@buildpad/services';
-import type { M2MDisplayItem } from '@buildpad/hooks';
-
-// ListM2M pulls in CollectionList/CollectionForm from @buildpad/ui-collections,
-// which transitively imports the RichTextMarkdown interface (tiptap) — that
-// chain breaks under ts-jest's CJS interop. Stub it out; these tests only
-// exercise ListM2M's own pagination/rendering logic, not the create/select
-// modals' internals.
-jest.mock('@buildpad/ui-collections', () => ({
-  CollectionList: () => <div data-testid="collection-list" />,
-  CollectionForm: () => <div data-testid="collection-form" />,
-}));
-
+import { Notifications } from '@mantine/notifications';
 import { ListM2M } from '../list-m2m/ListM2M';
 
-const renderWithProvider = (component: React.ReactElement) => {
-  return render(
-    <DaaSProvider config={{ url: 'https://example.test', token: 'test-token' }} autoFetchUser={false}>
-      <MantineProvider>{component}</MantineProvider>
-    </DaaSProvider>,
-  );
+// ListM2M consumes @buildpad/hooks directly (useRelationM2M / useRelationPermissionsM2M /
+// useRelationMultipleM2M / useFieldMetadata). Mock the whole module so tests are
+// deterministic and don't hit the network.
+//
+// useRelationMultipleM2M is given a small *stateful* fake implementation (built with
+// real React state) rather than a static jest.fn() return value, because the two
+// behaviors under test here — the revert-to-empty notification and "Create New"
+// junction linking — are both driven by ListM2M reacting to `changes` transitioning
+// between states across renders. A static mock can't express that transition.
+const mockUseRelationM2M = jest.fn();
+const mockUseRelationPermissionsM2M = jest.fn();
+const mockSelectItems = jest.fn();
+const mockRemoveItem = jest.fn();
+
+jest.mock('@buildpad/hooks', () => {
+    const ReactActual = require('react');
+
+    return {
+        isValidPrimaryKey: (pk: unknown) => pk !== undefined && pk !== null && pk !== '' && pk !== '+',
+        useRelationM2M: (...args: unknown[]) => mockUseRelationM2M(...args),
+        useRelationPermissionsM2M: (...args: unknown[]) => mockUseRelationPermissionsM2M(...args),
+        useFieldMetadata: () => ({ getDisplayName: (f: string) => f, loading: false }),
+        useRelationMultipleM2M: (relationInfo: unknown, _pk: unknown) => {
+            const [changes, setChanges] = ReactActual.useState({
+                create: [] as Record<string, unknown>[],
+                update: [] as Record<string, unknown>[],
+                delete: [] as (string | number)[],
+            });
+
+            const selectItems = ReactActual.useCallback((ids: (string | number)[]) => {
+                mockSelectItems(ids);
+                setChanges((prev: any) => ({
+                    ...prev,
+                    create: [...prev.create, ...ids.map((id: string | number) => ({ $type: 'created', id }))],
+                }));
+            }, []);
+
+            const removeItem = ReactActual.useCallback((item: any) => {
+                mockRemoveItem(item);
+                setChanges((prev: any) => ({
+                    ...prev,
+                    create: prev.create.filter((c: any) => c.id !== item.id),
+                }));
+            }, []);
+
+            const resetChanges = ReactActual.useCallback(() => {
+                setChanges({ create: [], update: [], delete: [] });
+            }, []);
+
+            const loadItems = ReactActual.useRef(jest.fn()).current;
+            const createItem = ReactActual.useRef(jest.fn()).current;
+            const updateItem = ReactActual.useRef(jest.fn()).current;
+            const reorderItems = ReactActual.useRef(jest.fn()).current;
+            const moveItemUp = ReactActual.useRef(jest.fn()).current;
+            const moveItemDown = ReactActual.useRef(jest.fn()).current;
+            const getSelectedRelatedPKs = ReactActual.useCallback(() => new Set(), []);
+            const getChanges = ReactActual.useCallback(() => changes, [changes]);
+
+            const displayItems = changes.create.map((c: any) => ({ ...c }));
+
+            return {
+                displayItems,
+                fetchedItems: [],
+                totalCount: displayItems.length,
+                loading: false,
+                error: null,
+                loadItems,
+                createItem,
+                selectItems,
+                removeItem,
+                updateItem,
+                reorderItems,
+                moveItemUp,
+                moveItemDown,
+                getSelectedRelatedPKs,
+                getChanges,
+                hasChanges: changes.create.length > 0 || changes.update.length > 0 || changes.delete.length > 0,
+                setLocalChanges: setChanges,
+                resetChanges,
+                changes,
+            };
+        },
+    };
+});
+
+jest.mock('@buildpad/ui-collections', () => ({
+    CollectionForm: ({ onSuccess }: any) => (
+        <div data-testid="collection-form">
+            <button onClick={() => onSuccess?.({ id: 'new-tag-id', name: 'Brand new tag' })}>
+                Save Form
+            </button>
+        </div>
+    ),
+    CollectionList: ({ bulkActions }: any) => (
+        <div data-testid="collection-list">
+            {bulkActions && (
+                <button onClick={() => bulkActions[0].action([42])}>Add Selected</button>
+            )}
+        </div>
+    ),
+}));
+
+const TestWrapper = ({ children }: { children: React.ReactNode }) => (
+    <MantineProvider>
+        <Notifications />
+        {children}
+    </MantineProvider>
+);
+
+const RELATION_INFO = {
+    relatedCollection: { collection: 'tags', meta: {} },
+    junctionCollection: { collection: 'articles_tags' },
+    junctionField: { field: 'tag_id', type: 'integer' },
+    reverseJunctionField: { field: 'article_id', type: 'integer' },
+    relatedPrimaryKeyField: { field: 'id', type: 'integer' },
+    junctionPrimaryKeyField: { field: 'id', type: 'integer' },
+    sortField: undefined,
 };
 
 const defaultProps = {
-  collection: 'articles',
-  field: 'tags',
-  primaryKey: 1,
+    collection: 'articles',
+    field: 'tags',
+    primaryKey: 1,
+    enableCreate: true,
+    enableSelect: true,
+    mockRelationInfo: RELATION_INFO,
 };
 
-/** Build `count` plain (fetched) mock items with sequential ids. */
-function fetchedItems(count: number): M2MDisplayItem[] {
-  return Array.from({ length: count }, (_, i) => ({ id: i + 1, sort: i + 1 }));
-}
-
-describe('ListM2M mockItems rendering', () => {
-  it('renders provided mock items in list layout', () => {
-    renderWithProvider(
-      <ListM2M {...defaultProps} layout="list" mockItems={fetchedItems(2)} />,
-    );
-
-    expect(screen.getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-  });
-
-  it('shows the "new" badge on locally-created items', () => {
-    const items: M2MDisplayItem[] = [
-      { id: 1, sort: 1 },
-      { id: '$new-0', sort: 2, $type: 'created' },
-    ];
-
-    renderWithProvider(
-      <ListM2M {...defaultProps} layout="list" limit={10} mockItems={items} />,
-    );
-
-    // Only 2 items total (below the limit) => single page => created item visible.
-    expect(screen.getByText('NEW')).toBeInTheDocument();
-  });
+beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
+    mockUseRelationPermissionsM2M.mockReturnValue({
+        createAllowed: true,
+        selectAllowed: true,
+        updateAllowed: true,
+        deleteAllowed: true,
+    });
 });
 
-describe('ListM2M pagination (bug 3.5: staged creates rendered on every page)', () => {
-  it('hides locally-created items on non-last pages and shows them on the last page', () => {
-    // 3 fetched items + 1 staged create = 4 total, limit 2 => 2 pages.
-    // The create should only be visible once currentPage reaches the last page (2).
-    const items: M2MDisplayItem[] = [
-      ...fetchedItems(3),
-      { id: '$new-0', sort: 4, $type: 'created' },
-    ];
+describe('ListM2M revert-to-empty notification', () => {
+    it('notifies the parent with an empty changeset after every staged change is undone', async () => {
+        const onChange = jest.fn();
+        const { container } = render(
+            <TestWrapper>
+                <ListM2M {...defaultProps} onChange={onChange} />
+            </TestWrapper>,
+        );
 
-    renderWithProvider(
-      <ListM2M {...defaultProps} layout="list" limit={2} mockItems={items} />,
-    );
+        const selectBtn = await screen.findByText('Add Existing');
+        fireEvent.click(selectBtn);
+        const addSelectedBtn = await screen.findByText('Add Selected');
+        fireEvent.click(addSelectedBtn);
 
-    // Page 1 (default): created item must not render.
-    expect(screen.queryByText('NEW')).not.toBeInTheDocument();
+        // A non-empty changeset was staged and reported.
+        await waitFor(() => {
+            expect(onChange).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    create: expect.arrayContaining([expect.objectContaining({ id: 42 })]),
+                }),
+            );
+        });
+        onChange.mockClear();
 
-    // Navigate to the last page (2).
-    const pageTwoButton = screen.getByRole('button', { name: '2' });
-    fireEvent.click(pageTwoButton);
+        // Undo it — remove the item that was just added (the row's trash icon
+        // button — the component doesn't expose a data-testid/aria-label for it,
+        // so target it via the tabler trash icon rendered inside).
+        await waitFor(() => {
+            expect(container.querySelector('svg.tabler-icon-trash')).toBeTruthy();
+        });
+        const trashIcon = container.querySelector('svg.tabler-icon-trash')!;
+        const removeBtn = trashIcon.closest('button')!;
+        fireEvent.click(removeBtn);
 
-    // Now on the last page: the staged create becomes visible.
-    expect(screen.getByText('NEW')).toBeInTheDocument();
-  });
+        // Parent must be told the changeset is empty again, not left holding
+        // the previous non-empty payload.
+        await waitFor(() => {
+            expect(onChange).toHaveBeenCalledWith({ create: [], update: [], delete: [] });
+        });
+    });
+});
 
-  it('does not render the staged create more than once while paging back and forth', () => {
-    const items: M2MDisplayItem[] = [
-      ...fetchedItems(2),
-      { id: '$new-0', sort: 3, $type: 'created' },
-    ];
+describe('ListM2M "Create New" junction linking', () => {
+    it('links the newly created related item via selectItems, not just closing the drawer', async () => {
+        render(
+            <TestWrapper>
+                <ListM2M {...defaultProps} />
+            </TestWrapper>,
+        );
 
-    renderWithProvider(
-      <ListM2M {...defaultProps} layout="list" limit={2} mockItems={items} />,
-    );
+        const createBtn = await screen.findByText('Create New');
+        fireEvent.click(createBtn);
 
-    const pageTwoButton = screen.getByRole('button', { name: '2' });
-    fireEvent.click(pageTwoButton);
-    expect(screen.getAllByText('NEW')).toHaveLength(1);
+        const saveBtn = await screen.findByText('Save Form');
+        fireEvent.click(saveBtn);
 
-    const pageOneButton = screen.getByRole('button', { name: '1' });
-    fireEvent.click(pageOneButton);
-    expect(screen.queryByText('NEW')).not.toBeInTheDocument();
-  });
+        // handleEditFormSuccess must call selectItems([data.id]) to stage a
+        // junction row linking the newly created item — not silently drop it.
+        await waitFor(() => {
+            expect(mockSelectItems).toHaveBeenCalledWith(['new-tag-id']);
+        });
+    });
 });

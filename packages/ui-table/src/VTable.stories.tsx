@@ -213,7 +213,7 @@ export const InlineStyle: Story = {
  * Table with column sorting
  */
 export const WithSorting: Story = {
-  render: () => {
+  render: function Render() {
     const [sort, setSort] = useState<Sort>({ by: "name", desc: false });
 
     // Sort items based on current sort state
@@ -244,7 +244,7 @@ export const WithSorting: Story = {
  * Table with multiple row selection
  */
 export const WithMultipleSelection: Story = {
-  render: () => {
+  render: function Render() {
     const [selected, setSelected] = useState<unknown[]>([]);
 
     return (
@@ -281,7 +281,7 @@ export const WithMultipleSelection: Story = {
  * Table with single row selection (radio buttons)
  */
 export const WithSingleSelection: Story = {
-  render: () => {
+  render: function Render() {
     const [selected, setSelected] = useState<unknown[]>([]);
 
     return (
@@ -308,7 +308,7 @@ export const WithSingleSelection: Story = {
  * Table with column resizing
  */
 export const WithColumnResize: Story = {
-  render: () => {
+  render: function Render() {
     const [headers, setHeaders] = useState<HeaderRaw[]>(sampleHeaders);
 
     return (
@@ -328,7 +328,7 @@ export const WithColumnResize: Story = {
  * Table with manual row reordering
  */
 export const WithManualSort: Story = {
-  render: () => {
+  render: function Render() {
     const [items, setItems] = useState<Item[]>(productItems);
     const [sort, setSort] = useState<Sort>({ by: "sort", desc: false });
 
@@ -550,7 +550,7 @@ export const FixedHeader: Story = {
  * Product table with different column alignments
  */
 export const ProductTable: Story = {
-  render: () => {
+  render: function Render() {
     const [sort, setSort] = useState<Sort>({ by: null, desc: false });
 
     return (
@@ -587,7 +587,7 @@ export const ProductTable: Story = {
  * Full-featured table with all options enabled
  */
 export const FullFeatured: Story = {
-  render: () => {
+  render: function Render() {
     const [headers, setHeaders] = useState<HeaderRaw[]>(sampleHeaders);
     const [items, setItems] = useState<Item[]>(sampleItems);
     const [selected, setSelected] = useState<unknown[]>([]);
@@ -683,7 +683,7 @@ export const WithHeaderAppend: Story = {
  * header. Useful for sort, alignment, and visibility controls.
  */
 export const WithHeaderContextMenu: Story = {
-  render: () => {
+  render: function Render() {
     const [sort, setSort] = useState<Sort>({ by: null, desc: false });
 
     return (
@@ -821,7 +821,7 @@ export const CustomRowHeight: Story = {
  * Clicking the active sort column toggles direction, never clears it.
  */
 export const MustSort: Story = {
-  render: () => {
+  render: function Render() {
     const [sort, setSort] = useState<Sort>({ by: "name", desc: false });
 
     return (
@@ -864,7 +864,7 @@ export const CustomLoadingText: Story = {
  * Useful for side effects like opening a detail panel.
  */
 export const WithItemSelectedCallback: Story = {
-  render: () => {
+  render: function Render() {
     const [selected, setSelected] = useState<unknown[]>([]);
     const [lastEvent, setLastEvent] = useState<string>("");
 
