@@ -361,3 +361,21 @@ describe('SelectMultipleCheckbox stringify-colliding choices', () => {
     consoleError.mockRestore();
   });
 });
+
+describe('SelectMultipleCheckbox per-option disabled', () => {
+  it('disables only the flagged option', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[
+            { text: 'Open', value: 'open' },
+            { text: 'Locked', value: 'locked', disabled: true },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Locked')).toBeDisabled();
+    expect(screen.getByLabelText('Open')).not.toBeDisabled();
+  });
+});

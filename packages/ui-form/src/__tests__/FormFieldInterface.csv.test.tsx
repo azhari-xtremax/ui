@@ -17,8 +17,8 @@ import { MantineProvider } from '@mantine/core';
 // click, exactly like the real multi-select leaves (which always emit arrays).
 const received: { value: unknown }[] = [];
 jest.mock('@buildpad/ui-interfaces', () => ({
-    SelectMultipleCheckbox: ({ value, onChange }: any) => {
-        received.push({ value });
+    SelectMultipleCheckbox: ({ value, onChange, readOnly }: any) => {
+        received.push({ value, readOnly });
         return (
             <button data-testid="probe-emit" onClick={() => onChange?.(['a', 'b'])}>
                 emit
@@ -110,5 +110,21 @@ describe('FormFieldInterface csv normalization', () => {
         expect(received.at(-1)?.value).toEqual(['x']);
         fireEvent.click(screen.getByTestId('probe-emit'));
         expect(onChange).toHaveBeenCalledWith(['a', 'b']);
+    });
+});
+
+describe('FormFieldInterface readOnly forwarding', () => {
+    it('forwards readonly state under the camelCase prop the leaves consume', () => {
+        render(
+            wrap(
+                <FormFieldInterface
+                    field={{ ...baseField, type: 'json' }}
+                    value={['x']}
+                    readonly
+                />,
+            ),
+        );
+
+        expect((received.at(-1) as { value: unknown; readOnly?: boolean }).readOnly).toBe(true);
     });
 });

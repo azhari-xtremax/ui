@@ -332,3 +332,31 @@ describe('SelectMultipleCheckboxTree', () => {
     expect(reactCheckbox).toBeChecked();
   });
 });
+
+describe('SelectMultipleCheckboxTree search edge cases', () => {
+  it('does not crash when the search query contains regex special characters', async () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={[
+            { text: 'Alpha (primary)', value: 'a' },
+            { text: 'Beta', value: 'b' },
+            // Filler so the choice count crosses the search-input threshold
+            ...Array.from({ length: 12 }, (_, i) => ({
+              text: `Filler ${i}`,
+              value: `f${i}`,
+            })),
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search...');
+    fireEvent.change(searchInput, { target: { value: '(primary' } });
+
+    await waitFor(
+      () => expect(screen.queryByText('Beta')).not.toBeInTheDocument(),
+      { timeout: 1500 },
+    );
+  });
+});
