@@ -76,6 +76,7 @@ const RELATION_INFO = {
         // deliberately not named "id" — guards the hardcoded-PK regression
         paragraphs: { field: "code", type: "string" },
     },
+    sortField: "sort",
     relation: { field: "page_id", collection: "pages_blocks" },
 };
 
@@ -225,5 +226,35 @@ describe("ListM2A onChange payload — junction value flattening", () => {
         expect(onChange).toHaveBeenLastCalledWith([
             { collection: "headings", item: "u-1" },
         ]);
+    });
+});
+
+describe("ListM2A drag gating — paginated sets", () => {
+    const rows = (n: number) =>
+        Array.from({ length: n }, (_, i) => ({
+            id: `j${i}`,
+            collection: "headings",
+            item: `u${i}`,
+            sort: i + 1,
+        }));
+
+    it("disables drag and shows the explanatory notice when totalCount exceeds one page", () => {
+        // 15 visible rows (a full page) of a 30-row set: the old
+        // visibleItems-based conditions left drag enabled with no notice.
+        setItemsHook({ totalCount: 30, displayItems: rows(15) });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} />));
+
+        expect(screen.getByTestId("m2a-drag-disabled-notice")).toBeInTheDocument();
+        expect(screen.queryAllByTestId(/^m2a-drag-handle-/)).toHaveLength(0);
+    });
+
+    it("enables drag with no notice when all items fit on one page", () => {
+        setItemsHook({ totalCount: 3, displayItems: rows(3) });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} />));
+
+        expect(screen.queryByTestId("m2a-drag-disabled-notice")).toBeNull();
+        expect(screen.queryAllByTestId(/^m2a-drag-handle-/)).toHaveLength(3);
     });
 });
