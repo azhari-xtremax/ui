@@ -105,3 +105,21 @@ describe('SelectMultipleDropdown', () => {
     });
   });
 });
+
+describe('SelectMultipleDropdown stringify-colliding choices', () => {
+  it('renders instead of crashing when two choice values stringify identically', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          choices={[
+            { text: 'Number one', value: 1 },
+            { text: 'String one', value: '1' },
+            { text: 'Two', value: 2 },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    expect(screen.getByText(/Two|Select/)).toBeInTheDocument();
+  });
+});

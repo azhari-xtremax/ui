@@ -1,5 +1,12 @@
 # @buildpad/utils
 
+## 1.10.0
+
+### Patch Changes
+
+- Updated dependencies [5981327]
+  - @buildpad/types@1.10.0
+
 ## 1.9.3
 
 ### Patch Changes

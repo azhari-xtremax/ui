@@ -338,3 +338,26 @@ describe('SelectMultipleCheckbox', () => {
     });
   });
 });
+
+describe('SelectMultipleCheckbox stringify-colliding choices', () => {
+  it('does not log a duplicate-key warning when two choice values stringify identically', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[
+            { text: 'Number one', value: 1 },
+            { text: 'String one', value: '1' },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    const dupKeyWarnings = consoleError.mock.calls.filter((args) =>
+      String(args[0]).includes('same key'),
+    );
+    expect(dupKeyWarnings).toHaveLength(0);
+    consoleError.mockRestore();
+  });
+});

@@ -28,6 +28,14 @@ export {
   type CollectionActionAccess,
   type FieldPermissions,
 } from "./permissions";
+export {
+  ModuleAccessKeysService,
+  createModuleAccessKeysService,
+  buildModuleAccessTree,
+  leafModuleAccessKeys,
+  MODULE_ACCESS_KEYS_COLLECTION,
+  type ModuleAccessKeyInput,
+} from "./module-access-keys";
 
 // DaaS Context Provider — browser calls DaaS directly, no Next.js proxy needed.
 // CORS is handled on the DaaS side via CORS_ORIGINS env variable.

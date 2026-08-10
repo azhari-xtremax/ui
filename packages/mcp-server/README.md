@@ -241,6 +241,41 @@ Get RBAC (Role-Based Access Control) setup patterns for DaaS applications. Retur
 
 **Dynamic variables supported:** `$CURRENT_USER`, `$CURRENT_USER.<field>`, `$CURRENT_ROLE`, `$CURRENT_ROLES`, `$CURRENT_POLICIES`, `$NOW`
 
+Covers collection CRUD only. Every response also carries a `moduleAccess` reminder pointing at the tool below.
+
+### `get_module_access_pattern`
+
+Get the **Module-Level Access** setup sequence — application capability flags that are *not* tied to a collection.
+
+DaaS has two independent permission dimensions:
+
+| Dimension | Stored on | Controls |
+|---|---|---|
+| Record-Level Access | `daas_permissions` rows | Which collections a user can CRUD, with which fields and filters |
+| Module-Level Access | `daas_policies.module_access` (JSONB) | Whether a user holds a named application capability |
+
+Use this for any gate collection permissions cannot express: showing a button, page, section, or nav item to some users, or restricting a workflow transition. **Never gate on role names** (`user.role === 'manager'`) — this is the sanctioned mechanism.
+
+```json
+{
+  "keys": [{ "key": "reports:export", "display_name": "Export Reports" }],
+  "folder": "Reporting",
+  "policyName": "Manager Policy"
+}
+```
+
+Returns the `module_access_keys` + `policies` tool calls to register and grant the keys, plus three guard patterns:
+
+| Guard | Where | What |
+|---|---|---|
+| Client | React component | `usePermissions().hasModuleAccess('reports:export')` — UX only; **fails closed** while loading |
+| Server | API route | `enforceModuleAccess('reports:export')` → `ModuleAccessError(403)` — the security boundary |
+| Workflow | Command JSON | `module_access_keys: ["reports:export"]`, OR'd with `policies` |
+
+**Key rules:** format `^[a-z][a-z0-9_:./-]*$`, globally unique, convention `<domain>:<capability>`. The `system:` and `workflow:` namespaces are reserved by the platform. Keys are OR-merged across every policy a user holds; admins hold every key. Resolution respects the active scope (Resource URI).
+
+Registry management UI ships in the `users-management` component (`ModuleAccessKeysManager`, mounted at `/module-access-keys`); per-policy granting is the "Module-Level Access" tab of `PolicyDetail`.
+
 ## Usage with Copilot
 
 Once configured, you can ask Copilot:
