@@ -356,3 +356,19 @@ describe('SelectDropdown allowOther', () => {
     expect(onChange).not.toHaveBeenCalledWith('Alpha');
   });
 });
+
+describe('SelectDropdown stringify-colliding choices', () => {
+  it('renders instead of crashing when two choice values stringify identically', () => {
+    renderWithProvider(
+      <SelectDropdown
+        choices={[
+          { text: 'Number one', value: 1 },
+          { text: 'String one', value: '1' },
+          { text: 'Two', value: 2 },
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId('select-dropdown')).toBeInTheDocument();
+  });
+});

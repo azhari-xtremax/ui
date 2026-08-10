@@ -144,19 +144,35 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
 
   // Convert choices to Mantine Select format with icon/color support
   const selectData = React.useMemo(() => {
-    const base = processedChoices.map((choice) => ({
-      value: String(choice.value),
-      label: choice.text,
-      disabled: choice.disabled || false,
-      // Store original choice for rendering
-      icon: choice.icon,
-      color: choice.color,
-    }));
+    // Mantine's <Select> requires globally-unique string `value`s in `data`
+    // and throws "Duplicate options are not supported" otherwise. Choices
+    // with different typed values that stringify identically (e.g. number 1
+    // vs string '1') would collide here — drop the second occurrence so the
+    // field renders (matching handleChange below, which already resolves
+    // the *first* matching choice by stringified value, so the dropped
+    // choice was never independently selectable anyway).
+    const seen = new Set<string>();
+    const base: { value: string; label: string; disabled: boolean; icon: string | null | undefined; color: string | null | undefined }[] = [];
+    for (const choice of processedChoices) {
+      const strValue = String(choice.value);
+      if (seen.has(strValue)) continue;
+      seen.add(strValue);
+      base.push({
+        value: strValue,
+        label: choice.text,
+        disabled: choice.disabled || false,
+        // Store original choice for rendering
+        icon: choice.icon,
+        color: choice.color,
+      });
+    }
 
     // allowOther: a previously-committed custom value won't be in `choices`,
     // so Mantine's <Select> (which only highlights/displays values present
     // in `data`) would otherwise show it blank. Inject it as a synthetic
-    // option so the current value round-trips correctly.
+    // option so the current value round-trips correctly. (Runs after the
+    // dedup above, so the some() check is against the values Mantine will
+    // actually receive.)
     if (allowOther && value !== null && value !== undefined && value !== '') {
       const strValue = String(value);
       if (!base.some((item) => item.value === strValue)) {
@@ -185,6 +201,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       onChange(trimmed);
     }
   }, [allowOther, onChange, otherSearchValue, choices]);
+
 
   // Handle value changes
   const handleChange = React.useCallback(
