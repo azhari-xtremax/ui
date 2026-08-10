@@ -772,7 +772,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                 )}
 
                 {/* Drag disabled notice (paginated) */}
-                {hasSortField && !disabled && visibleItems.length > limit && (
+                {hasSortField && !disabled && totalCount > limit && (
                     <Alert icon={<IconAlertCircle size={16} />} color="warning" mb="md" data-testid="m2a-drag-disabled-notice">
                         Drag &amp; drop sorting is disabled when items are paginated. Reduce items or increase page size to enable.
                     </Alert>

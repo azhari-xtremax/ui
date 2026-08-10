@@ -767,6 +767,20 @@ export function useRelationM2AItems(
 
         items.push(...createdItems);
 
+        // 3. Order by the (possibly locally-staged) sort value, so reorders
+        // staged via reorderItems are reflected in the rendered list AND in
+        // the replace-mode payload the interface emits (payload order is what
+        // the backend persists — it carries no sort values). Items without a
+        // numeric sort keep their relative order at the end (stable sort).
+        const sortKey = relationInfo.sortField;
+        if (sortKey) {
+            items.sort((a, b) => {
+                const av = typeof a[sortKey] === 'number' ? (a[sortKey] as number) : Number.POSITIVE_INFINITY;
+                const bv = typeof b[sortKey] === 'number' ? (b[sortKey] as number) : Number.POSITIVE_INFINITY;
+                return av - bv;
+            });
+        }
+
         return items;
     }, [fetchedItems, changes, relationInfo, junctionPKField]);
 
