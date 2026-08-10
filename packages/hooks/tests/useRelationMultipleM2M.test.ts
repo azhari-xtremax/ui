@@ -154,3 +154,36 @@ describe('useRelationMultipleM2M display order', () => {
     );
   });
 });
+
+describe('useRelationMultipleM2M out-of-order responses', () => {
+  it('ignores a superseded loadItems response that resolves after a newer call', async () => {
+    const relationInfo = makeRelationInfo();
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    let resolveFirst!: (v: unknown) => void;
+    const first = new Promise((r) => {
+      resolveFirst = r;
+    });
+    apiRequestMock.mockReturnValueOnce(first);
+    apiRequestMock.mockResolvedValueOnce({ data: pageOfItems(2, 2), meta: { total_count: 4 } });
+
+    let firstCall!: Promise<void>;
+    act(() => {
+      firstCall = result.current.loadItems({ limit: 2, page: 1, fields: [] });
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 2, page: 2, fields: [] });
+    });
+
+    expect(result.current.fetchedItems.map((i) => i.id)).toEqual([3, 4]);
+
+    // The stale first call resolves late with page 1 data — it must not win.
+    await act(async () => {
+      resolveFirst({ data: pageOfItems(1, 2), meta: { total_count: 4 } });
+      await firstCall;
+    });
+
+    expect(result.current.fetchedItems.map((i) => i.id)).toEqual([3, 4]);
+    expect(result.current.loading).toBe(false);
+  });
+});
