@@ -158,3 +158,44 @@ describe('SelectRadio falsy and type-mismatched values', () => {
     expect(screen.queryByPlaceholderText(/other/i)).not.toBeInTheDocument();
   });
 });
+
+describe('SelectRadio malformed choices', () => {
+  it('renders instead of crashing when a choice is missing text, labeling it by value', () => {
+    render(
+      <TestWrapper>
+        <SelectRadio
+          choices={[
+            { text: 'Named', value: 'named' },
+            { value: 'unnamed' } as { text: string; value: string },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Named')).toBeInTheDocument();
+    expect(screen.getByLabelText('unnamed')).toBeInTheDocument();
+  });
+
+  it('does not log a duplicate-key warning for choices whose values stringify identically', () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    render(
+      <TestWrapper>
+        <SelectRadio
+          choices={[
+            { text: 'Number one', value: 1 },
+            { text: 'String one', value: '1' },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    const dupKeyWarnings = consoleError.mock.calls.filter((args) =>
+      String(args[0]).includes('same key'),
+    );
+    expect(dupKeyWarnings).toHaveLength(0);
+    expect(screen.getByLabelText('Number one')).toBeInTheDocument();
+    expect(screen.getByLabelText('String one')).toBeInTheDocument();
+    consoleError.mockRestore();
+  });
+});
