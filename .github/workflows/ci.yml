@@ -27,6 +27,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Lint (react-hooks)
+        run: pnpm lint
+
       # Full history + tags: build-registry.mjs derives lastChangedIn from git tags
       - run: git fetch --tags --unshallow || git fetch --tags
 

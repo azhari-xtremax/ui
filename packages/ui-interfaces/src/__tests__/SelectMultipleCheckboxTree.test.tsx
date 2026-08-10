@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
-import { SelectMultipleCheckboxTree, TreeChoice } from './SelectMultipleCheckboxTree';
+import { SelectMultipleCheckboxTree, TreeChoice } from '../select-multiple-checkbox/SelectMultipleCheckboxTree';
 
 // Test wrapper with MantineProvider
 const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -200,12 +200,13 @@ describe('SelectMultipleCheckboxTree', () => {
     const searchInput = screen.getByPlaceholderText('Search...');
     fireEvent.change(searchInput, { target: { value: 'React' } });
 
-    // Wait for debounced search
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // After search, only React should be visible
+    // Wait out the debounce via waitFor — a bare setTimeout races the
+    // debounced state update outside act() and asserts before the re-render.
+    await waitFor(
+      () => expect(screen.queryByText('Vue')).not.toBeInTheDocument(),
+      { timeout: 1500 },
+    );
     expect(screen.getAllByText('React')).toHaveLength(1);
-    expect(screen.queryByText('Vue')).not.toBeInTheDocument();
   });
 
   it('handles show selection only toggle', () => {
@@ -329,5 +330,33 @@ describe('SelectMultipleCheckboxTree', () => {
     const reactCheckbox = screen.getByLabelText('React');
     // Check that the checkbox has the correct color by checking it's checked
     expect(reactCheckbox).toBeChecked();
+  });
+});
+
+describe('SelectMultipleCheckboxTree search edge cases', () => {
+  it('does not crash when the search query contains regex special characters', async () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={[
+            { text: 'Alpha (primary)', value: 'a' },
+            { text: 'Beta', value: 'b' },
+            // Filler so the choice count crosses the search-input threshold
+            ...Array.from({ length: 12 }, (_, i) => ({
+              text: `Filler ${i}`,
+              value: `f${i}`,
+            })),
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search...');
+    fireEvent.change(searchInput, { target: { value: '(primary' } });
+
+    await waitFor(
+      () => expect(screen.queryByText('Beta')).not.toBeInTheDocument(),
+      { timeout: 1500 },
+    );
   });
 });

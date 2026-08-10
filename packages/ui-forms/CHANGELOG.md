@@ -1,5 +1,20 @@
 # @buildpad/ui-forms
 
+## 1.10.0
+
+### Patch Changes
+
+- Updated dependencies [4976915]
+- Updated dependencies [2e6bee7]
+- Updated dependencies [5981327]
+  - @buildpad/ui-interfaces@1.10.0
+  - @buildpad/types@1.10.0
+  - @buildpad/services@1.10.0
+  - @buildpad/hooks@1.10.0
+  - @buildpad/ui-collections@1.10.0
+  - @buildpad/utils@1.10.0
+  - @buildpad/ui-form@1.10.0
+
 ## 1.9.3
 
 ### Patch Changes
