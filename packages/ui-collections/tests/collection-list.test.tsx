@@ -672,3 +672,37 @@ describe("CollectionList", () => {
     });
   });
 });
+
+describe("relational-field exclusion in the items query", () => {
+  it("omits O2M/M2M/M2A fields from fields= even when their type is not alias", async () => {
+    mockFieldsReadAll.mockResolvedValue([
+      ...SAMPLE_FIELDS,
+      // Mirrors the live-instance shape: an M2A field whose column type
+      // reports "text", flagged only via meta.special / meta.interface.
+      { field: "blocks", type: "text", meta: { special: ["m2a"], interface: "list-m2a", sort: 4, hidden: false } },
+      { field: "comments", type: "text", meta: { interface: "list-o2m", sort: 5, hidden: false } },
+    ]);
+    mockPermissionsGetAccess.mockResolvedValue({});
+    mockApiRequest.mockImplementation((url: string) => {
+      if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(3));
+      return Promise.resolve(SAMPLE_ITEMS);
+    });
+
+    renderList();
+
+    await waitFor(() => {
+      const itemCalls = mockApiRequest.mock.calls.filter(
+        ([url]) => !String(url).includes("aggregate"),
+      );
+      expect(itemCalls.length).toBeGreaterThan(0);
+    });
+
+    const itemUrl = String(
+      mockApiRequest.mock.calls.filter(([url]) => !String(url).includes("aggregate")).at(-1)![0],
+    );
+    expect(itemUrl).toContain("title");
+    expect(itemUrl).not.toContain("blocks");
+    expect(itemUrl).not.toContain("comments");
+    expect(screen.queryByText("Blocks")).not.toBeInTheDocument();
+  });
+});
