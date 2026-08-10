@@ -25,7 +25,7 @@ export const Image: Story = { args: { file: imageFile } };
 export const Document: Story = { args: { file: pdfFile } };
 
 export const Selected: Story = {
-  render: (args) => {
+  render: function Render(args) {
     const [selected, setSelected] = useState(true);
     return (
       <Box maw={220}>

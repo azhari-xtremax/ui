@@ -27,7 +27,7 @@ export const Default: Story = {
 
 /** Interactive selection — click the card checkboxes to toggle. */
 export const WithSelection: Story = {
-  render: () => {
+  render: function Render() {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(
       new Set([mockFiles[0].id])
     );
