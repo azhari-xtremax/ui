@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
-import { SelectMultipleDropdown } from './SelectMultipleDropdown';
+import { SelectMultipleDropdown } from '../select-multiple-checkbox/SelectMultipleDropdown';
 
 const TestWrapper = ({ children }: { children: React.ReactNode }) => (
   <MantineProvider>{children}</MantineProvider>

@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MantineProvider } from '@mantine/core';
-import { SelectMultipleCheckbox, Option } from './SelectMultipleCheckbox';
+import { SelectMultipleCheckbox, Option } from '../select-multiple-checkbox/SelectMultipleCheckbox';
 
 // Test wrapper component
 const TestWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
