@@ -265,6 +265,21 @@ export function useRelationMultipleM2M(
 
         items.push(...createdItems);
 
+        // 3. Order by the (possibly locally-staged) sort value so reorders are
+        // reflected immediately in the rendered list. The staged updates
+        // themselves are emitted to the parent as a ChangesItem and persist on
+        // save regardless — this sort is what makes the arrows/drag feel
+        // applied *before* the save round-trip. Items without a numeric sort
+        // keep their relative order at the end (stable sort).
+        const sortKey = relationInfo.sortField;
+        if (sortKey) {
+            items.sort((a, b) => {
+                const av = typeof a[sortKey] === 'number' ? (a[sortKey] as number) : Number.POSITIVE_INFINITY;
+                const bv = typeof b[sortKey] === 'number' ? (b[sortKey] as number) : Number.POSITIVE_INFINITY;
+                return av - bv;
+            });
+        }
+
         return items;
     }, [fetchedItems, changes, relationInfo, junctionPKField, junctionFieldName]);
 

@@ -130,3 +130,27 @@ describe('useRelationMultipleM2M reorder pageOffset', () => {
     expect(result.current.getChanges()).toEqual({ create: [], update: [], delete: [] });
   });
 });
+
+describe('useRelationMultipleM2M display order', () => {
+  it('reorders displayItems to follow the staged sort values', async () => {
+    const relationInfo = makeRelationInfo();
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    apiRequestMock.mockResolvedValueOnce({ data: pageOfItems(1, 3), meta: { total_count: 3 } });
+    await act(async () => {
+      await result.current.loadItems({ limit: 3, page: 1, fields: [] });
+    });
+    await waitFor(() => expect(result.current.fetchedItems).toHaveLength(3));
+
+    const items = result.current.displayItems;
+    act(() => {
+      result.current.reorderItems([items[1], items[2], items[0]]);
+    });
+
+    // Without displayItems ordering by the staged sort, the list keeps fetch
+    // order and the reorder is invisible until a server round-trip.
+    await waitFor(() =>
+      expect(result.current.displayItems.map((i) => i.id)).toEqual([2, 3, 1]),
+    );
+  });
+});
