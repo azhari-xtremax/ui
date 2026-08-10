@@ -1,6 +1,6 @@
 {
   "name": "@buildpad/ui-files",
-  "version": "1.9.3",
+  "version": "1.10.0",
   "description": "Files management UI (manager + detail) for Buildpad projects",
   "type": "module",
   "main": "./dist/index.js",
@@ -30,10 +30,10 @@
     "@mantine/core": "^8.0.0",
     "@mantine/hooks": "^8.0.0",
     "@mantine/notifications": "^8.0.0",
-    "@buildpad/hooks": "workspace:*",
-    "@buildpad/services": "workspace:*",
-    "@buildpad/types": "workspace:*",
-    "@buildpad/ui-interfaces": "workspace:*",
+    "@buildpad/hooks": "workspace:^",
+    "@buildpad/services": "workspace:^",
+    "@buildpad/types": "workspace:^",
+    "@buildpad/ui-interfaces": "workspace:^",
     "@tabler/icons-react": "^3.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"

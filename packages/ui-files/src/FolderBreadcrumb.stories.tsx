@@ -11,7 +11,7 @@ export default meta;
 type Story = StoryObj<typeof FolderBreadcrumb>;
 
 export const Nested: Story = {
-  render: () => {
+  render: function Render() {
     const [path, setPath] = useState<FolderPathItem[]>([
       { id: 'a', name: 'Marketing' },
       { id: 'b', name: 'Campaigns' },

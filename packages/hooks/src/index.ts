@@ -17,6 +17,8 @@ export {
 } from './useAuth';
 export {
   usePermissions,
+  useModuleAccess,
+  useModuleAccessMap,
   type PermissionAction,
   type PermissionDetails,
   type CollectionPermissions,
@@ -26,6 +28,7 @@ export {
   type UsePermissionsOptions,
   type UsePermissionsReturn,
 } from './usePermissions';
+export { useModuleAccessKeys } from './useModuleAccessKeys';
 export {
   useDaaSContext,
   useIsDaaSReady,
