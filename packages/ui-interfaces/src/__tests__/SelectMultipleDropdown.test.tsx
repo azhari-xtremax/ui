@@ -47,14 +47,61 @@ describe('SelectMultipleDropdown', () => {
   it('handles null values gracefully', () => {
     render(
       <TestWrapper>
-        <SelectMultipleDropdown 
+        <SelectMultipleDropdown
           value={null}
           onChange={() => {}}
           choices={sampleChoices}
         />
       </TestWrapper>
     );
-    
+
     expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  describe('csv-string value normalization', () => {
+    it('renders pills for a csv-string value instead of dropping the data', () => {
+      render(
+        <TestWrapper>
+          <SelectMultipleDropdown
+            value="react,vue"
+            onChange={() => {}}
+            choices={sampleChoices}
+          />
+        </TestWrapper>
+      );
+
+      expect(screen.getAllByText('React').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Vue').length).toBeGreaterThan(0);
+    });
+
+    it('trims whitespace and drops empty entries from a csv-string value', () => {
+      render(
+        <TestWrapper>
+          <SelectMultipleDropdown
+            value=" react ,,angular"
+            onChange={() => {}}
+            choices={sampleChoices}
+          />
+        </TestWrapper>
+      );
+
+      expect(screen.getAllByText('React').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Angular').length).toBeGreaterThan(0);
+    });
+
+    it('renders without crashing when using type="csv" with an array value', () => {
+      render(
+        <TestWrapper>
+          <SelectMultipleDropdown
+            type="csv"
+            value={[]}
+            onChange={() => {}}
+            choices={sampleChoices}
+          />
+        </TestWrapper>
+      );
+
+      expect(screen.getByRole('textbox')).toBeInTheDocument();
+    });
   });
 });

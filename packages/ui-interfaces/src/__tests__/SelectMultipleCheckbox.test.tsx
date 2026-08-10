@@ -267,8 +267,74 @@ describe('SelectMultipleCheckbox', () => {
         <SelectMultipleCheckbox choices={mockChoices} width="half-width" />
       </TestWrapper>
     );
-    
+
     const gridElement = container.querySelector('[class*="mantine-Grid-root"]');
     expect(gridElement).toBeInTheDocument();
+  });
+
+  describe('csv-string value normalization', () => {
+    it('checks the options selected by a csv-string value', () => {
+      render(
+        <TestWrapper>
+          <SelectMultipleCheckbox choices={mockChoices} value="option1,option3" />
+        </TestWrapper>
+      );
+
+      expect(screen.getByLabelText('Option 1')).toBeChecked();
+      expect(screen.getByLabelText('Option 2')).not.toBeChecked();
+      expect(screen.getByLabelText('Option 3')).toBeChecked();
+    });
+
+    it('trims whitespace and drops empty entries from a csv-string value', () => {
+      render(
+        <TestWrapper>
+          <SelectMultipleCheckbox choices={mockChoices} value=" option1 ,,option2" />
+        </TestWrapper>
+      );
+
+      expect(screen.getByLabelText('Option 1')).toBeChecked();
+      expect(screen.getByLabelText('Option 2')).toBeChecked();
+    });
+
+    it('emits a comma-string when toggling a checkbox with a csv-string value', async () => {
+      const onChange = jest.fn();
+      render(
+        <TestWrapper>
+          <SelectMultipleCheckbox choices={mockChoices} value="option1,option2" onChange={onChange} />
+        </TestWrapper>
+      );
+
+      fireEvent.click(screen.getByLabelText('Option 1'));
+
+      await waitFor(() => {
+        expect(onChange).toHaveBeenCalledWith('option2');
+      });
+    });
+
+    it('emits a comma-string via type="csv" even when the array value is empty', async () => {
+      const onChange = jest.fn();
+      render(
+        <TestWrapper>
+          <SelectMultipleCheckbox choices={mockChoices} type="csv" value={[]} onChange={onChange} />
+        </TestWrapper>
+      );
+
+      fireEvent.click(screen.getByLabelText('Option 1'));
+
+      await waitFor(() => {
+        expect(onChange).toHaveBeenCalledWith('option1');
+      });
+    });
+
+    it('does not crash and correctly identifies other values with a csv-string value and allowOther', () => {
+      render(
+        <TestWrapper>
+          <SelectMultipleCheckbox choices={mockChoices} value="option1,custom_value" allowOther />
+        </TestWrapper>
+      );
+
+      expect(screen.getByLabelText('custom_value')).toBeInTheDocument();
+      expect(screen.getByLabelText('custom_value')).toBeChecked();
+    });
   });
 });
