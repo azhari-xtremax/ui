@@ -5,7 +5,7 @@ description: Cut a lockstep release of all @buildpad packages — version bump, 
 
 # Buildpad Release
 
-Releases ALL `@buildpad/*` packages in **lockstep**: every package ships the same version, every release (single `fixed` group in `.changeset/config.json`). Only `@buildpad/cli` and `@buildpad/mcp` are published to npm; the other 8 are `private: true` registry-source packages whose version feeds `packages/registry.json` (per-component `version` / `lastChangedIn`) — that is what drives `npx buildpad outdated` / `upgrade` in consumer apps.
+Releases ALL `@buildpad/*` packages in **lockstep**: every package ships the same version, every release (single `fixed` group in `.changeset/config.json` — 13 packages as of 1.10.0). Only `@buildpad/cli` and `@buildpad/mcp` are published to npm; the other 11 are `private: true` registry-source packages whose version feeds `packages/registry.json` (per-component `version` / `lastChangedIn`) — that is what drives `npx buildpad outdated` / `upgrade` in consumer apps.
 
 Authoritative reference: `docs/PUBLISHING.md`. This skill is the operational checklist; if the two disagree, reconcile them in the same PR.
 
@@ -15,6 +15,7 @@ Authoritative reference: `docs/PUBLISHING.md`. This skill is the operational che
 - Lockstep is not noisy for consumers: `lastChangedIn` is tag-derived per component, so unchanged components don't get flagged by `outdated`.
 - The top-level `"version"` in `packages/registry.template.json` must match the release version (v1-manifest consumers compare against it directly; `changeset version` does NOT update it — do it manually).
 - Consumers fetch `registry.json` and sources from `raw.githubusercontent.com/microbuild-ui/ui/main/...` — **a release is live the moment it lands on `main`**, independent of npm publish.
+- **Peer ranges must stay `workspace:^`.** Seven packages declare their internal peers (`@buildpad/types`, `services`, `hooks`, `utils`, `ui-form`, `ui-table`, `ui-interfaces`, `ui-collections`) as peerDependencies. `workspace:*` pins to the exact version, so any bump is out of range — and changesets bumps an out-of-range peer *dependent* by a **major**, which the `fixed` group then spreads to all 13 packages. That is how a single minor changeset produced 2.0.0 on 1.9.3 with CHANGELOGs containing only Minor and Patch sections, and why every 1.x minor before 1.10.0 was a hand-written bump that bypassed changesets. Fixed in 1.10.0; changing a peer range also requires regenerating `pnpm-lock.yaml`, which records the specifier.
 
 ## Primary flow — CI via Changesets (preferred)
 
@@ -24,8 +25,8 @@ The pipeline is `.github/workflows/publish.yml` (changesets/action on pushes to 
 2. **Pre-release checks on the release PR:**
    - `pnpm build:registry && pnpm registry:check` — registry.json regenerated and committed (the artifact on `main` is what consumers download).
    - `pnpm build` passes (builds registry, then `ui-form` first for its `.d.ts`, then the rest).
-3. **Merge to `main`** → the changesets action opens a **"chore: version packages" PR** (bumps all 10 `package.json`s, writes CHANGELOGs).
-4. **On that Version Packages PR, before merging:** bump `packages/registry.template.json` top-level `"version"` to the new version and re-run `pnpm build:registry`; commit both to the PR. Verify all 10 packages got the SAME version.
+3. **Merge to `main`** → the changesets action opens a **"chore: version packages" PR** (bumps all 13 `package.json`s, writes CHANGELOGs).
+4. **On that Version Packages PR, before merging:** bump `packages/registry.template.json` top-level `"version"` to the new version and re-run `pnpm build:registry`; commit both to the PR. Verify all 13 packages got the SAME version, and that the bump matches the highest changeset (see *Peer ranges* below — a minor that comes out as a major means a `workspace:*` peer range crept back in).
 5. **Merge the Version Packages PR** → CI publishes `@buildpad/cli` + `@buildpad/mcp` to npm and creates git tags (per-package tags incl. private packages — `privatePackages.tag: true`). Tags are what `build-registry.mjs` uses to derive `lastChangedIn` in FUTURE releases — they are load-bearing, never skip them.
 
 ## Fallback flow — manual local release
@@ -34,7 +35,7 @@ Only when CI is unavailable or for a forced realignment (like 1.1.0 itself):
 
 1. Clean tree on `main` (up to date). `pnpm registry:check` passes before starting.
 2. Choose the version: `npm view @buildpad/cli versions` — new version > latest published, > every `packages/*/package.json`, and ≥ the consumer floor (see policy above).
-3. Apply: `pnpm changeset version` (if changesets pending) or set `"version"` in all 10 `packages/*/package.json` by hand AND hand-write `## X.Y.Z` CHANGELOG entries (changesets heading format — `### Minor Changes` / `### Patch Changes` — the CLI's `changelog`/`upgrade` commands parse these).
+3. Apply: `pnpm changeset version` (if changesets pending) or set `"version"` in all 13 `packages/*/package.json` by hand AND hand-write `## X.Y.Z` CHANGELOG entries (changesets heading format — `### Minor Changes` / `### Patch Changes` — the CLI's `changelog`/`upgrade` commands parse these).
 4. Bump `packages/registry.template.json` top-level `"version"`. Do NOT touch root `package.json` or `apps/*` (private, not released).
 5. `pnpm build:registry && pnpm registry:check && pnpm build`.
 6. Sanity:
@@ -58,3 +59,5 @@ Note: if versions were bumped by hand with no changesets pending, merging to `ma
 - **`registry.template.json` top-level version left stale** (sat at 1.0.0 across releases) while package versions moved.
 - **Manual per-package bumps on the `release` branch without tags or lockstep** — error-prone; use the changesets flow.
 - **Forgetting `pnpm build:registry` before merge** → `main` serves a `registry.json` whose hashes/versions don't match the sources consumers download. `pnpm registry:check` in CI guards this — never bypass it.
+- **A red `pnpm build` on `main` silently stops all releases.** In `publish.yml` the "Build packages" step runs *before* `changesets/action`, so a compile error skips the action entirely — no Version Packages PR, no publish, no tags, and no failure that looks release-related. A single `TS2339` in `ui-interfaces` blocked every release from 1.9.2 to 1.10.0 (2026-07-24 → 08-04) while `package.json` and the private tags moved to 1.9.3, which never reached npm. **Before assuming the release flow works, check that the last `publish.yml` run on `main` was green** — `gh run list --workflow=publish.yml` or the Actions tab. If it is red, fix the build first; nothing else in this checklist matters.
+- **Half-released versions.** `changeset publish` tags each package as it succeeds, so an npm failure part-way leaves git tags for a version npm never received (1.9.3: 11 private tags, no `@buildpad/cli@1.9.3`, npm still on 1.9.2). Don't try to re-run that version — skip it and release the next one; compare `npm view @buildpad/cli version` against `packages/cli/package.json` before starting.

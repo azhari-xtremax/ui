@@ -296,7 +296,7 @@ const MOCK_ITEMS = [
  * @param permissionsPayload - override the /api/permissions/me response data
  */
 const createMockApiDecorator = (permissionsPayload: Record<string, unknown> = {}): Decorator => {
-  const decorator: Decorator = (Story) => {
+  const MockApiDecorator: Decorator = (Story) => {
     const originalFetch = window.fetch;
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -445,7 +445,7 @@ const createMockApiDecorator = (permissionsPayload: Record<string, unknown> = {}
 
   return <Story />;
   };
-  return decorator;
+  return MockApiDecorator;
 };
 
 /** Default admin mock — empty access map → full access */
@@ -621,7 +621,7 @@ export const WithFilter: Story = {
  * The clicked item data is displayed below the table.
  */
 export const WithItemClick: Story = {
-  render: () => {
+  render: function Render() {
     const [clicked, setClicked] = useState<Record<string, unknown> | null>(
       null,
     );
@@ -717,7 +717,7 @@ export const WithFilterPanel: Story = {
  * Clicking the button fires the `onCreate` callback.
  */
 export const WithCreateButton: Story = {
-  render: () => {
+  render: function Render() {
     const [count, setCount] = useState(0);
     return (
       <Stack gap="md">
@@ -862,7 +862,7 @@ export const RestrictedFields: Story = {
  * Decorator that supports DELETE requests for CRUD stories.
  */
 const createCrudApiDecorator = (): Decorator => {
-  const decorator: Decorator = (Story) => {
+  const CrudApiDecorator: Decorator = (Story) => {
     const originalFetch = window.fetch;
     let mockItems = [...MOCK_ITEMS];
 
@@ -973,7 +973,7 @@ const createCrudApiDecorator = (): Decorator => {
 
     return <Story />;
   };
-  return decorator;
+  return CrudApiDecorator;
 };
 
 /**
@@ -982,7 +982,7 @@ const createCrudApiDecorator = (): Decorator => {
  */
 export const WithBuiltInDelete: Story = {
   decorators: [createCrudApiDecorator()],
-  render: () => {
+  render: function Render() {
     const [log, setLog] = useState<string[]>([]);
     const addLog = (msg: string) =>
       setLog((prev) => [...prev, `${new Date().toLocaleTimeString()} — ${msg}`]);
