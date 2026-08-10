@@ -533,7 +533,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'get_rbac_pattern',
-        description: 'Get RBAC (Role-Based Access Control) setup patterns for DaaS applications. Returns complete MCP tool call sequences to set up roles, policies, access, and permissions with dynamic variables.',
+        description: 'Get RBAC (Role-Based Access Control) setup patterns for DaaS applications. Returns complete MCP tool call sequences to set up roles, policies, access, and permissions with dynamic variables. Covers collection CRUD only — for non-CRUD capability gates (buttons, pages, workflow transitions) use get_module_access_pattern.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -553,6 +553,36 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['pattern'],
+        },
+      },
+      {
+        name: 'get_module_access_pattern',
+        description: 'Get the Module-Level Access setup sequence — application capability flags (e.g. "reports:export") that are NOT tied to a collection. Use for any gate that collection CRUD permissions cannot express: showing a button, page, section, or nav item to some users, or restricting a workflow transition. Returns tool calls to register keys in daas_module_access_keys and grant them on a policy, plus the client, server, and workflow guard patterns. NEVER gate on role names — this is the sanctioned mechanism.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            keys: {
+              type: 'array',
+              description: 'Capability keys to register. Format <domain>:<capability>, lowercase, matching ^[a-z][a-z0-9_:./-]*$. The system: and workflow: namespaces are reserved.',
+              items: {
+                type: 'object',
+                properties: {
+                  key: { type: 'string', description: 'The capability key, e.g. "reports:export"' },
+                  display_name: { type: 'string', description: 'Label shown in the Policy editor' },
+                  description: { type: 'string', description: 'What the key grants' },
+                },
+                required: ['key'],
+              },
+            },
+            folder: {
+              type: 'string',
+              description: 'Optional folder name to group the keys under in the Policy editor (creates a node with key=null)',
+            },
+            policyName: {
+              type: 'string',
+              description: 'Name of the policy the keys will be granted on (for the generated step description)',
+            },
+          },
         },
       },
       {
@@ -1196,6 +1226,10 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
         return handleGetRbacPattern(args as any);
       }
 
+      if (name === 'get_module_access_pattern') {
+        return handleGetModuleAccessPattern(args as any);
+      }
+
       // --- Phase 5: versioning tools ---
 
       if (name === 'get_package_versions') {
@@ -1524,7 +1558,134 @@ function handleGetRbacPattern(args: { pattern: string; collections?: string[]; r
   }
 
   return {
-    content: [{ type: 'text', text: JSON.stringify({ pattern: args.pattern, ...pattern }, null, 2) }],
+    content: [{
+      type: 'text',
+      text: JSON.stringify({ pattern: args.pattern, ...pattern, moduleAccess: MODULE_ACCESS_REMINDER }, null, 2),
+    }],
+  };
+}
+
+/**
+ * Appended to every RBAC pattern.
+ *
+ * `daas_permissions` only covers collection CRUD. Any gate that is not "can
+ * this user read/write this collection" — a button, a page, a nav item, a
+ * workflow transition — is a module access key. Without this reminder agents
+ * fall back to role-name checks (`user.role === 'manager'`), which the
+ * create-rbac skill explicitly forbids.
+ */
+const MODULE_ACCESS_REMINDER = {
+  note: 'Record-Level Access (above) covers collection CRUD only. Every NON-CRUD capability gate must be a Module-Level Access key — never a role-name check.',
+  whenToUse: [
+    'A button, page, section, or nav item shown only to some users',
+    'A workflow transition restricted to certain users (use command.module_access_keys)',
+    'Any feature gate not expressible as create/read/update/delete on a collection',
+  ],
+  forbidden: [
+    "user.role === 'manager'", 'roleName checks', 'is_admin / isManager fields',
+    "roleObj.name === 'Administrator'",
+  ],
+  nextStep: "Call get_module_access_pattern with the capability keys this feature needs.",
+};
+
+/**
+ * Generate the Module-Level Access setup sequence: register keys, grant them on
+ * policies, and guard them on both sides.
+ */
+function handleGetModuleAccessPattern(args: {
+  keys?: Array<{ key: string; display_name?: string; description?: string }>;
+  folder?: string;
+  policyName?: string;
+}) {
+  const keys = args.keys?.length ? args.keys : [{ key: '<domain>:<capability>', display_name: '<Display Name>' }];
+  const folder = args.folder;
+  const policyName = args.policyName || '<policy-name>';
+
+  const steps: Array<Record<string, unknown>> = [];
+  let step = 1;
+
+  if (folder) {
+    steps.push({
+      step: step++,
+      note: 'Folder node — groups related keys in the Policy editor. key MUST be null.',
+      tool: 'module_access_keys',
+      args: { action: 'create', data: { display_name: folder, key: null, sort: 10 } },
+    });
+  }
+
+  keys.forEach((k, i) => {
+    steps.push({
+      step: step++,
+      tool: 'module_access_keys',
+      args: {
+        action: 'create',
+        data: {
+          ...(folder ? { parent_id: '<folder-uuid>' } : {}),
+          display_name: k.display_name ?? k.key,
+          description: k.description ?? `Grants ${k.key}`,
+          key: k.key,
+          sort: (i + 1) * 10,
+        },
+      },
+    });
+  });
+
+  steps.push({
+    step: step++,
+    note: `Grant on ${policyName}. Only true grants; omit or delete a key to revoke. OR-merged across all of a user's policies.`,
+    tool: 'policies',
+    args: {
+      action: 'update',
+      id: '<policy-uuid>',
+      data: { module_access: Object.fromEntries(keys.map((k) => [k.key, true])) },
+    },
+  });
+
+  const firstKey = keys[0].key;
+
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        pattern: 'module_access',
+        description: 'Application capability flags that are not tied to a collection. The second permission dimension beside daas_permissions.',
+        concepts: {
+          registry: 'daas_module_access_keys — hierarchical. key=null is a folder; only leaves are grantable.',
+          grant: 'daas_policies.module_access JSONB — { "key": true }.',
+          merge: 'OR across every policy the user holds. Admins hold every key.',
+          keyFormat: '^[a-z][a-z0-9_:./-]*$, globally unique. Convention <domain>:<capability>.',
+          reserved: 'system: and workflow: are platform namespaces — use your own prefix.',
+          scope: 'Resolved against the active Resource URI, so grants respect multi-tenant scope.',
+        },
+        steps,
+        clientGuard: {
+          note: 'UI checks are UX only — they decide what renders, never what is allowed.',
+          import: "import { usePermissions } from '@/lib/buildpad/hooks';",
+          example: `const { hasModuleAccess } = usePermissions();\n{hasModuleAccess('${firstKey}') && <Button onClick={handleExport}>Export</Button>}`,
+          failClosed: 'hasModuleAccess returns false while loading and on error — deliberately unlike canPerform, which is optimistic. Render a skeleton if flicker matters; never render the gated control.',
+        },
+        serverGuard: {
+          note: 'THE security boundary. Required in every route performing a gated action.',
+          install: 'npx @buildpad/cli add services',
+          import: "import { enforceModuleAccess } from '@/lib/module-access/enforce';",
+          example: `// app/api/reports/export/route.ts\nexport async function GET() {\n  await enforceModuleAccess('${firstKey}');  // throws ModuleAccessError(403)\n  // ...\n}`,
+        },
+        workflowGuard: {
+          note: 'For state-machine transitions, gate the command itself. module_access_keys and policies are OR\'d.',
+          example: { name: 'approve', next_state: 'approved', policies: [], module_access_keys: [firstKey], actions: [] },
+        },
+        capabilityMatrix: {
+          note: 'STOP-SHIP artifact — produce this before considering the feature complete.',
+          columns: ['key', 'granted policies', 'UI guard location(s)', 'API guard location(s)'],
+        },
+        verification: [
+          'Granted user can use the gated action',
+          'Ungranted user does not see the control',
+          'Ungranted user gets 403 when calling the API directly (UI bypassed)',
+          'Admin bypass works on BOTH client and server',
+        ],
+      }, null, 2),
+    }],
   };
 }
 

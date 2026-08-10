@@ -442,16 +442,16 @@ importers:
   packages/ui-form:
     dependencies:
       '@buildpad/services':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../services
       '@buildpad/types':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../types
       '@buildpad/ui-interfaces':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../ui-interfaces
       '@buildpad/utils':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../utils
       '@mantine/core':
         specifier: ^8.0.0
@@ -702,7 +702,7 @@ importers:
   packages/ui-interfaces:
     dependencies:
       '@buildpad/utils':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../utils
       '@dnd-kit/core':
         specifier: ^6.3.1
