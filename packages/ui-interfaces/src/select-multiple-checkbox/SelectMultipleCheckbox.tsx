@@ -307,7 +307,9 @@ export function SelectMultipleCheckbox({
               wrapperProps={{
                 style: {
                   padding: '12px',
-                  backgroundColor: isHexOrRawColor ? `${mantineColor}22` : `var(--mantine-color-${mantineColor}-light)`,
+                  // color-mix works for hex AND rgb()/hsl() — a bare `\u0024{color}22`
+                  // alpha suffix is only valid for hex literals.
+                  backgroundColor: isHexOrRawColor ? `color-mix(in srgb, ${mantineColor} 13%, transparent)` : `var(--mantine-color-${mantineColor}-light)`,
                   border: isHexOrRawColor ? `1px solid ${mantineColor}` : `1px solid var(--mantine-color-${mantineColor}-6)`,
                   borderRadius: 'var(--mantine-radius-sm)',
                 },
