@@ -19,7 +19,7 @@
     "dev:docs": "pnpm --filter docs dev",
     "dev:host": "pnpm --filter storybook-host dev",
     "install:all": "pnpm install",
-    "lint": "pnpm -r lint",
+    "lint": "eslint .",
     "mcp:dev": "pnpm --filter @buildpad/mcp dev",
     "publish-packages": "pnpm build && changeset publish",
     "release": "pnpm build && changeset publish",
@@ -53,7 +53,11 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.10",
     "@playwright/test": "^1.50.1",
+    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@typescript-eslint/parser": "^8.66.0",
     "dotenv": "^17.2.3",
+    "eslint": "^10.8.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "rimraf": "^5.0.5",
     "tsx": "^4.19.4",
     "typescript": "^5.9.3"

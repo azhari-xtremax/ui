@@ -265,6 +265,21 @@ export function useRelationMultipleM2M(
 
         items.push(...createdItems);
 
+        // 3. Order by the (possibly locally-staged) sort value so reorders are
+        // reflected immediately in the rendered list. The staged updates
+        // themselves are emitted to the parent as a ChangesItem and persist on
+        // save regardless — this sort is what makes the arrows/drag feel
+        // applied *before* the save round-trip. Items without a numeric sort
+        // keep their relative order at the end (stable sort).
+        const sortKey = relationInfo.sortField;
+        if (sortKey) {
+            items.sort((a, b) => {
+                const av = typeof a[sortKey] === 'number' ? (a[sortKey] as number) : Number.POSITIVE_INFINITY;
+                const bv = typeof b[sortKey] === 'number' ? (b[sortKey] as number) : Number.POSITIVE_INFINITY;
+                return av - bv;
+            });
+        }
+
         return items;
     }, [fetchedItems, changes, relationInfo, junctionPKField, junctionFieldName]);
 
@@ -468,8 +483,15 @@ export function useRelationMultipleM2M(
 
     /**
      * Reorder all visible items by updating their sort fields locally.
+     *
+     * `reorderedItems` is only the *current page's* items (both `displayItems`
+     * here and the caller's `visibleItems` are built from `fetchedItems`,
+     * which is itself a single paginated fetch) — so numbering positions
+     * `1..reorderedItems.length` assigns page-local sort values. Pass
+     * `pageOffset` (e.g. `(currentPage - 1) * limit`) so multi-page lists
+     * get globally-unique sorts instead of every page colliding on 1..N.
      */
-    const reorderItems = useCallback((reorderedItems: M2MDisplayItem[]): void => {
+    const reorderItems = useCallback((reorderedItems: M2MDisplayItem[], pageOffset = 0): void => {
         if (!relationInfo?.sortField) return;
         const sortKey = relationInfo.sortField;
 
@@ -479,7 +501,7 @@ export function useRelationMultipleM2M(
 
             for (let i = 0; i < reorderedItems.length; i++) {
                 const item = reorderedItems[i];
-                const newSort = i + 1;
+                const newSort = pageOffset + i + 1;
                 const currentSort = item[sortKey] as number | undefined;
 
                 if (currentSort === newSort) continue;
@@ -503,24 +525,24 @@ export function useRelationMultipleM2M(
         });
     }, [relationInfo, junctionPKField]);
 
-    /** Move item up in the visible list */
-    const moveItemUp = useCallback((index: number): void => {
+    /** Move item up in the visible list (`pageOffset`: see reorderItems) */
+    const moveItemUp = useCallback((index: number, pageOffset = 0): void => {
         if (index <= 0 || !relationInfo?.sortField) return;
         const visible = displayItems.filter(i => i.$type !== 'deleted');
         if (index >= visible.length) return;
         const reordered = [...visible];
         [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-        reorderItems(reordered);
+        reorderItems(reordered, pageOffset);
     }, [displayItems, relationInfo, reorderItems]);
 
-    /** Move item down in the visible list */
-    const moveItemDown = useCallback((index: number): void => {
+    /** Move item down in the visible list (`pageOffset`: see reorderItems) */
+    const moveItemDown = useCallback((index: number, pageOffset = 0): void => {
         if (!relationInfo?.sortField) return;
         const visible = displayItems.filter(i => i.$type !== 'deleted');
         if (index >= visible.length - 1) return;
         const reordered = [...visible];
         [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
-        reorderItems(reordered);
+        reorderItems(reordered, pageOffset);
     }, [displayItems, relationInfo, reorderItems]);
 
     /**

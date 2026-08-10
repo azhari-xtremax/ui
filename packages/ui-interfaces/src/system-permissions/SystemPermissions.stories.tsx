@@ -70,7 +70,7 @@ type Story = StoryObj<typeof SystemPermissions>;
 
 /** Empty state with no permissions configured. */
 export const Default: Story = {
-  render: () => {
+  render: function Render() {
     const [value, setValue] = useState<PermissionAlterations | null>(null);
     return (
       <SystemPermissions
@@ -88,7 +88,7 @@ export const Default: Story = {
 
 /** Permissions with some collections already configured. */
 export const WithExistingPermissions: Story = {
-  render: () => {
+  render: function Render() {
     const [value, setValue] = useState<PermissionAlterations | null>({
       create: [
         { collection: 'articles', action: 'create', fields: ['*'], permissions: null, validation: null, presets: null, policy: 'test-policy-1' },
@@ -119,7 +119,7 @@ export const WithExistingPermissions: Story = {
  * injected so the detail modal works without an API.
  */
 export const WithAppAccess: Story = {
-  render: () => {
+  render: function Render() {
     const [value, setValue] = useState<PermissionAlterations | null>({
       create: [
         { collection: 'daas_users', action: 'read', fields: ['*'], permissions: null, validation: null, presets: null, policy: 'test-policy-1' },
@@ -156,7 +156,7 @@ export const AdminAccess: Story = {
 
 /** Disabled state prevents all editing. */
 export const Disabled: Story = {
-  render: () => {
+  render: function Render() {
     const [value, setValue] = useState<PermissionAlterations | null>({
       create: [
         { collection: 'articles', action: 'read', fields: ['*'], permissions: null, validation: null, presets: null, policy: 'test-policy-1' },
@@ -181,7 +181,7 @@ export const Disabled: Story = {
 
 /** Mixed regular and system collections. */
 export const MixedCollections: Story = {
-  render: () => {
+  render: function Render() {
     const [value, setValue] = useState<PermissionAlterations | null>({
       create: [
         { collection: 'articles', action: 'create', fields: ['*'], permissions: null, validation: null, presets: null, policy: 'test-policy-1' },
@@ -212,7 +212,7 @@ export const MixedCollections: Story = {
 
 /** Custom permissions (partial access). */
 export const CustomPermissions: Story = {
-  render: () => {
+  render: function Render() {
     const [value, setValue] = useState<PermissionAlterations | null>({
       create: [
         { collection: 'articles', action: 'create', fields: ['title', 'body', 'status'], permissions: null, validation: null, presets: { status: 'draft' }, policy: 'test-policy-1' },
@@ -276,7 +276,7 @@ const MOCK_FIELDS_BY_COLLECTION = {
  * modal. Field metadata is injected so no API is needed.
  */
 export const CustomEditing: Story = {
-  render: () => {
+  render: function Render() {
     const [value, setValue] = useState<PermissionAlterations | null>({
       create: [
         { collection: 'articles', action: 'create', fields: ['title', 'body', 'status'], permissions: null, validation: { title: { _nnull: true } } as any, presets: { status: 'draft' }, policy: 'test-policy-1' },

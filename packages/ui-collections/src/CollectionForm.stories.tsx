@@ -102,7 +102,7 @@ const MOCK_ITEM = {
  * Decorator that intercepts fetch calls to /api/* and returns mock data
  * so the stories work without a running DaaS backend.
  */
-const withMockApi: Decorator = (Story) => {
+const WithMockApi: Decorator = (Story) => {
   const originalFetch = window.fetch;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -177,7 +177,7 @@ const withMockApi: Decorator = (Story) => {
 const meta = {
   title: "Collections/CollectionForm",
   component: CollectionForm,
-  decorators: [withMockApi],
+  decorators: [WithMockApi],
   parameters: {
     layout: "padded",
     docs: {
@@ -274,7 +274,7 @@ export const WithIncludeFields: Story = {
  */
 export const WithCallbacks: Story = {
   args: { collection: "posts" },
-  render: () => {
+  render: function Render() {
     const [lastCallback, setLastCallback] = useState<string>("");
 
     return (
@@ -512,7 +512,7 @@ const MOCK_GROUP_FIELDS = [
 /**
  * Decorator that intercepts fetch calls and returns group-aware mock data.
  */
-const withMockGroupApi: Decorator = (Story) => {
+const WithMockGroupApi: Decorator = (Story) => {
   const originalFetch = window.fetch;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -567,7 +567,7 @@ const withMockGroupApi: Decorator = (Story) => {
  * "Flags" uses group-raw (transparent wrapper).
  */
 export const WithGroupInterfaces: Story = {
-  decorators: [withMockGroupApi],
+  decorators: [WithMockGroupApi],
   args: {
     collection: "articles",
     mode: "create",
@@ -739,7 +739,7 @@ const MOCK_ACCORDION_FIELDS = [
   },
 ];
 
-const withMockAccordionApi: Decorator = (Story) => {
+const WithMockAccordionApi: Decorator = (Story) => {
   const originalFetch = window.fetch;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -794,7 +794,7 @@ const withMockAccordionApi: Decorator = (Story) => {
  * In accordion mode, only one section can be open at a time.
  */
 export const WithGroupAccordion: Story = {
-  decorators: [withMockAccordionApi],
+  decorators: [WithMockAccordionApi],
   args: {
     collection: "contacts",
     mode: "create",
@@ -809,7 +809,7 @@ export const WithGroupAccordion: Story = {
  * Decorator that mocks read-only permissions — user can read all fields
  * but can only write to "title" and "status".
  */
-const withReadOnlyPermissions: Decorator = (Story) => {
+const WithReadOnlyPermissions: Decorator = (Story) => {
   const originalFetch = window.fetch;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -873,7 +873,7 @@ const withReadOnlyPermissions: Decorator = (Story) => {
  * Other fields appear read-only. Preset "status=draft" applied as default.
  */
 export const WithRestrictedPermissions: Story = {
-  decorators: [withReadOnlyPermissions],
+  decorators: [WithReadOnlyPermissions],
   args: {
     collection: "posts",
     mode: "create",
@@ -900,7 +900,7 @@ export const WithSaveOptions: Story = {
 /**
  * Decorator that supports DELETE requests in addition to standard CRUD mocks.
  */
-const withDeleteApi: Decorator = (Story) => {
+const WithDeleteApi: Decorator = (Story) => {
   const originalFetch = window.fetch;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -977,8 +977,8 @@ const withDeleteApi: Decorator = (Story) => {
  */
 export const WithDelete: Story = {
   args: { collection: "posts" },
-  decorators: [withDeleteApi],
-  render: () => {
+  decorators: [WithDeleteApi],
+  render: function Render() {
     const [lastAction, setLastAction] = useState<string>("");
 
     return (
@@ -1010,8 +1010,8 @@ export const WithDelete: Story = {
  */
 export const FullCrud: Story = {
   args: { collection: "posts" },
-  decorators: [withDeleteApi],
-  render: () => {
+  decorators: [WithDeleteApi],
+  render: function Render() {
     const [log, setLog] = useState<string[]>([]);
     const addLog = (msg: string) =>
       setLog((prev) => [...prev, `${new Date().toLocaleTimeString()} — ${msg}`]);
@@ -1128,7 +1128,7 @@ const MOCK_FILES_INTERFACE_ITEM = {
  * Decorator that intercepts fetch calls and returns files-interface mock data.
  * Captures the PATCH body in window.__patchBody for test assertions.
  */
-const withMockFilesApi: Decorator = (Story) => {
+const WithMockFilesApi: Decorator = (Story) => {
   const originalFetch = window.fetch;
 
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1235,7 +1235,7 @@ const withMockFilesApi: Decorator = (Story) => {
  * since the Files component manages its own junction table persistence.
  */
 export const WithFilesInterface: Story = {
-  decorators: [withMockFilesApi],
+  decorators: [WithMockFilesApi],
   args: {
     collection: "posts",
     mode: "edit",
