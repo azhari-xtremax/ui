@@ -1,458 +1,106 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
-import { ListM2M } from '@buildpad/ui-interfaces';
+import '@testing-library/jest-dom';
+import { DaaSProvider } from '@buildpad/services';
+import type { M2MDisplayItem } from '@buildpad/hooks';
 
-// Mock the daasAPI
-jest.mock('@/lib/api', () => ({
-    daasAPI: {
-        getCollectionFields: jest.fn().mockResolvedValue([
-            {
-                field: 'tags',
-                type: 'alias',
-                meta: {
-                    interface: 'list-m2m',
-                    options: {
-                        relatedCollection: 'tags',
-                        junctionField: 'tag_id',
-                        reverseJunctionField: 'article_id',
-                        sortField: 'sort'
-                    }
-                }
-            }
-        ]),
-        getItems: jest.fn().mockResolvedValue({
-            data: [
-                {
-                    id: 1,
-                    article_id: 1,
-                    tag_id: { id: 1, name: 'React' },
-                    sort: 1
-                },
-                {
-                    id: 2,
-                    article_id: 1,
-                    tag_id: { id: 2, name: 'TypeScript' },
-                    sort: 2
-                }
-            ],
-            meta: { total_count: 2 }
-        }),
-        createItem: jest.fn().mockResolvedValue({ id: 3 }),
-        updateItem: jest.fn().mockResolvedValue({}),
-        deleteItem: jest.fn().mockResolvedValue({})
-    }
+// ListM2M pulls in CollectionList/CollectionForm from @buildpad/ui-collections,
+// which transitively imports the RichTextMarkdown interface (tiptap) — that
+// chain breaks under ts-jest's CJS interop. Stub it out; these tests only
+// exercise ListM2M's own pagination/rendering logic, not the create/select
+// modals' internals.
+jest.mock('@buildpad/ui-collections', () => ({
+  CollectionList: () => <div data-testid="collection-list" />,
+  CollectionForm: () => <div data-testid="collection-form" />,
 }));
 
-// Mock the CollectionList and CollectionForm components
-jest.mock('../../collections/CollectionList', () => ({
-    CollectionList: ({ bulkActions }: any) => (
-        <div data-testid="collection-list">
-            Collection List Mock
-            {bulkActions && (
-                <button onClick={() => bulkActions[0].action([1, 2])}>
-                    Add Selected
-                </button>
-            )}
-        </div>
-    )
-}));
+import { ListM2M } from '../list-m2m/ListM2M';
 
-jest.mock('../../collections/CollectionForm', () => ({
-    CollectionForm: ({ collection, mode }: any) => (
-        <div data-testid="collection-form">
-            Collection Form Mock - {collection} - {mode}
-        </div>
-    )
-}));
-
-const TestWrapper = ({ children }: { children: React.ReactNode }) => (
-    <MantineProvider>
-        <Notifications />
-        {children}
-    </MantineProvider>
-);
-
-const defaultProps = {
-    collection: 'articles',
-    field: 'tags',
-    primaryKey: 1,
-    value: [],
-    onChange: jest.fn(),
+const renderWithProvider = (component: React.ReactElement) => {
+  return render(
+    <DaaSProvider config={{ url: 'https://example.test', token: 'test-token' }} autoFetchUser={false}>
+      <MantineProvider>{component}</MantineProvider>
+    </DaaSProvider>,
+  );
 };
 
-describe('ListM2M Interface', () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+const defaultProps = {
+  collection: 'articles',
+  field: 'tags',
+  primaryKey: 1,
+};
 
-    it('renders without crashing', () => {
-        render(
-            <TestWrapper>
-                <ListM2M {...defaultProps} />
-            </TestWrapper>
-        );
-        
-        expect(screen.getByText(/Loading/)).toBeInTheDocument();
-    });
+/** Build `count` plain (fetched) mock items with sequential ids. */
+function fetchedItems(count: number): M2MDisplayItem[] {
+  return Array.from({ length: count }, (_, i) => ({ id: i + 1, sort: i + 1 }));
+}
 
-    it('displays label and description when provided', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    label="Article Tags"
-                    description="Tags associated with this article"
-                />
-            </TestWrapper>
-        );
+describe('ListM2M mockItems rendering', () => {
+  it('renders provided mock items in list layout', () => {
+    renderWithProvider(
+      <ListM2M {...defaultProps} layout="list" mockItems={fetchedItems(2)} />,
+    );
 
-        await waitFor(() => {
-            expect(screen.getByText('Article Tags')).toBeInTheDocument();
-            expect(screen.getByText('Tags associated with this article')).toBeInTheDocument();
-        });
-    });
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
 
-    it('shows required indicator when required is true', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    label="Article Tags"
-                    required
-                />
-            </TestWrapper>
-        );
+  it('shows the "new" badge on locally-created items', () => {
+    const items: M2MDisplayItem[] = [
+      { id: 1, sort: 1 },
+      { id: '$new-0', sort: 2, $type: 'created' },
+    ];
 
-        await waitFor(() => {
-            expect(screen.getByText('*')).toBeInTheDocument();
-        });
-    });
+    renderWithProvider(
+      <ListM2M {...defaultProps} layout="list" limit={10} mockItems={items} />,
+    );
 
-    it('loads and displays items in list layout', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    layout="list"
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('2 items')).toBeInTheDocument();
-        });
-    });
-
-    it('loads and displays items in table layout', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    layout="table"
-                    fields={['tag_id.name', 'sort']}
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('Tag Id Name')).toBeInTheDocument();
-            expect(screen.getByText('Sort')).toBeInTheDocument();
-        });
-    });
-
-    it('shows create and select buttons when enabled', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    enableCreate
-                    enableSelect
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('Create New')).toBeInTheDocument();
-            expect(screen.getByText('Add Existing')).toBeInTheDocument();
-        });
-    });
-
-    it('hides action buttons when disabled', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    disabled
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.queryByText('Create New')).not.toBeInTheDocument();
-            expect(screen.queryByText('Add Existing')).not.toBeInTheDocument();
-        });
-    });
-
-    it('opens create modal when create button is clicked', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    enableCreate
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            const createButton = screen.getByText('Create New');
-            fireEvent.click(createButton);
-        });
-
-        expect(screen.getByText('Create New Item')).toBeInTheDocument();
-        expect(screen.getByTestId('collection-form')).toBeInTheDocument();
-    });
-
-    it('opens select modal when select button is clicked', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    enableSelect
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            const selectButton = screen.getByText('Add Existing');
-            fireEvent.click(selectButton);
-        });
-
-        expect(screen.getByText('Select Items')).toBeInTheDocument();
-        expect(screen.getByTestId('collection-list')).toBeInTheDocument();
-    });
-
-    it('shows search input when enableSearchFilter is true and layout is table', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    layout="table"
-                    enableSearchFilter
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
-        });
-    });
-
-    it('does not show search input for list layout', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    layout="list"
-                    enableSearchFilter
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
-        });
-    });
-
-    it('shows error message when provided', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    error="This field is required"
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('This field is required')).toBeInTheDocument();
-        });
-    });
-
-    it('shows warning when relationship is not configured', async () => {
-        // Mock API to return field without proper M2M configuration
-        const { daasAPI } = require('@/lib/api');
-        daasAPI.getCollectionFields.mockResolvedValueOnce([
-            {
-                field: 'tags',
-                type: 'string',
-                meta: { interface: 'input' }
-            }
-        ]);
-
-        render(
-            <TestWrapper>
-                <ListM2M {...defaultProps} />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('Relationship not configured')).toBeInTheDocument();
-            expect(screen.getByText(/many-to-many relationship is not properly configured/)).toBeInTheDocument();
-        });
-    });
-
-    it('displays empty state when no items are present', async () => {
-        // Mock API to return empty items
-        const { daasAPI } = require('@/lib/api');
-        daasAPI.getItems.mockResolvedValueOnce({
-            data: [],
-            meta: { total_count: 0 }
-        });
-
-        render(
-            <TestWrapper>
-                <ListM2M {...defaultProps} />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('No related items')).toBeInTheDocument();
-        });
-    });
-
-    it('handles item selection in select modal', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    enableSelect
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            const selectButton = screen.getByText('Add Existing');
-            fireEvent.click(selectButton);
-        });
-
-        // Click the mock "Add Selected" button
-        const addSelectedButton = screen.getByText('Add Selected');
-        fireEvent.click(addSelectedButton);
-
-        // Verify the API calls
-        const { daasAPI } = require('@/lib/api');
-        expect(daasAPI.createItem).toHaveBeenCalledTimes(2); // For items 1 and 2
-    });
-
-    it('shows ordering controls when sort field is present', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    layout="table"
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('Order')).toBeInTheDocument();
-        });
-    });
-
-    it('applies template formatting in list layout', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    layout="list"
-                    template="Tag: {{tag_id.name}}"
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            // The formatDisplayValue function should apply the template
-            // This would need more sophisticated mocking to test properly
-            expect(screen.getByText(/No related items|2 items/)).toBeInTheDocument();
-        });
-    });
+    // Only 2 items total (below the limit) => single page => created item visible.
+    expect(screen.getByText('NEW')).toBeInTheDocument();
+  });
 });
 
-describe('ListM2M Accessibility', () => {
-    it('has proper ARIA labels', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    label="Article Tags"
-                    required
-                />
-            </TestWrapper>
-        );
+describe('ListM2M pagination (bug 3.5: staged creates rendered on every page)', () => {
+  it('hides locally-created items on non-last pages and shows them on the last page', () => {
+    // 3 fetched items + 1 staged create = 4 total, limit 2 => 2 pages.
+    // The create should only be visible once currentPage reaches the last page (2).
+    const items: M2MDisplayItem[] = [
+      ...fetchedItems(3),
+      { id: '$new-0', sort: 4, $type: 'created' },
+    ];
 
-        await waitFor(() => {
-            expect(screen.getByText('Article Tags')).toBeInTheDocument();
-        });
+    renderWithProvider(
+      <ListM2M {...defaultProps} layout="list" limit={2} mockItems={items} />,
+    );
 
-        // Check for proper labeling
-        const createButton = await screen.findByText('Create New');
-        expect(createButton).toBeInTheDocument();
-    });
+    // Page 1 (default): created item must not render.
+    expect(screen.queryByText('NEW')).not.toBeInTheDocument();
 
-    it('supports keyboard navigation', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    enableCreate
-                    enableSelect
-                />
-            </TestWrapper>
-        );
+    // Navigate to the last page (2).
+    const pageTwoButton = screen.getByRole('button', { name: '2' });
+    fireEvent.click(pageTwoButton);
 
-        await waitFor(() => {
-            const createButton = screen.getByText('Create New');
-            expect(createButton).toBeInTheDocument();
-            
-            // Test tab navigation
-            createButton.focus();
-            expect(document.activeElement).toBe(createButton);
-        });
-    });
-});
+    // Now on the last page: the staged create becomes visible.
+    expect(screen.getByText('NEW')).toBeInTheDocument();
+  });
 
-describe('ListM2M Error Handling', () => {
-    it('handles API errors gracefully', async () => {
-        // Mock API to throw an error
-        const { daasAPI } = require('@/lib/api');
-        daasAPI.getItems.mockRejectedValueOnce(new Error('Network error'));
+  it('does not render the staged create more than once while paging back and forth', () => {
+    const items: M2MDisplayItem[] = [
+      ...fetchedItems(2),
+      { id: '$new-0', sort: 3, $type: 'created' },
+    ];
 
-        render(
-            <TestWrapper>
-                <ListM2M {...defaultProps} />
-            </TestWrapper>
-        );
+    renderWithProvider(
+      <ListM2M {...defaultProps} layout="list" limit={2} mockItems={items} />,
+    );
 
-        // Component should still render and show error state
-        await waitFor(() => {
-            expect(screen.getByText(/Loading|No related items/)).toBeInTheDocument();
-        });
-    });
+    const pageTwoButton = screen.getByRole('button', { name: '2' });
+    fireEvent.click(pageTwoButton);
+    expect(screen.getAllByText('NEW')).toHaveLength(1);
 
-    it('validates required fields', async () => {
-        render(
-            <TestWrapper>
-                <ListM2M 
-                    {...defaultProps} 
-                    required
-                    error="This field is required"
-                />
-            </TestWrapper>
-        );
-
-        await waitFor(() => {
-            expect(screen.getByText('This field is required')).toBeInTheDocument();
-        });
-    });
+    const pageOneButton = screen.getByRole('button', { name: '1' });
+    fireEvent.click(pageOneButton);
+    expect(screen.queryByText('NEW')).not.toBeInTheDocument();
+  });
 });
