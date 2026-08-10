@@ -28,7 +28,7 @@
   font-weight: 600;
   color: var(--mantine-color-text);
   background-color: var(--mantine-color-gray-0);
-  border-bottom: 2px solid var(--mantine-color-default-border);
+  border-bottom: var(--ds-table-row-border, 1px solid var(--mantine-color-gray-1));
   -webkit-user-select: none;
   user-select: none;
   position: relative;
@@ -40,7 +40,7 @@
 
 .table-header .cell.select {
   justify-content: center;
-  padding: 12px 8px;
+  padding: 12px;
 }
 
 .table-header .cell.manual {
@@ -196,7 +196,7 @@
   position: fixed;
   z-index: 1000;
   background: var(--mantine-color-body);
-  border: 1px solid var(--mantine-color-default-border);
+  border: var(--ds-table-popup-border, 1px solid var(--mantine-color-default-border));
   border-radius: var(--mantine-radius-sm);
   box-shadow: var(--mantine-shadow-md);
   min-width: 180px;

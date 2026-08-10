@@ -1,39 +1,66 @@
 /**
  * Shared Mantine theme for all Storybook previews.
  *
- * Modern neutral palette built on the Tailwind reference scales:
- * slate neutrals, orange accent (main = orange-600), Inter type.
+ * "Soft Futurism" palette — navy + amber brand, Space Grotesk display type,
+ * pill-shaped controls, large-radius cards.
  * Palette arrays map Mantine indices 0–9 to Tailwind stops 50–900.
  * Each package's .storybook/preview.tsx should import and use this theme
  * so every component renders with the same professional look in the canvas.
  */
 import { createTheme } from "@mantine/core";
 
+// Shared primitives — reused here and in storybook-enterprise-manager.ts so
+// the Storybook canvas and its surrounding chrome never drift apart.
+export const FONT_BODY =
+  '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+export const FONT_HEADING = `"Space Grotesk", ${FONT_BODY}`;
+export const FONT_MONO =
+  '"JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace';
+
+export const COLOR_BORDER = "#e8ebf1"; // card/table border — mirrors --ds-card-border
+export const COLOR_INPUT_BORDER = "#cbd5e1"; // gray-3
+export const COLOR_DIVIDER = "#e2e8f0"; // gray-2
+export const COLOR_MUTED = "#64748b"; // gray-5 — muted text
+export const COLOR_LABEL = "#334155"; // gray-7 — field labels
+export const COLOR_DIMMED = "#94a3b8"; // gray-4
+
 export const enterpriseTheme = createTheme({
   colors: {
     primary: [
-      "#fff7ed",
-      "#ffedd5",
-      "#fed7aa",
-      "#fdba74",
-      "#fb923c",
-      "#f97316",
-      "#ea580c",  // main — orange-600
-      "#c2410c",  // hover/strong — orange-700
-      "#9a3412",
-      "#7c2d12",
+      "#eef1f6",
+      "#d8dee9",
+      "#b4c0d6",
+      "#8a9cbe",
+      "#5d74a0",
+      "#3a5480",
+      "#1b2a4a",  // main — navy-600
+      "#16213c",  // hover/strong — navy-700
+      "#11192e",
+      "#0c1220",
+    ],
+    secondary: [
+      "#fff8eb",
+      "#ffebc2",
+      "#ffd98a",
+      "#ffc152",
+      "#f5a623",
+      "#ec940f",
+      "#e8890c",  // main — amber-600
+      "#c26e07",
+      "#995607",
+      "#7a4407",
     ],
     accent: [
-      "#eff6ff",
-      "#dbeafe",
-      "#bfdbfe",
-      "#93c5fd",
-      "#60a5fa",
-      "#3b82f6",
-      "#2563eb",  // main — blue-600
-      "#1d4ed8",
-      "#1e40af",
-      "#1e3a8a",
+      "#fff8eb",
+      "#ffebc2",
+      "#ffd98a",
+      "#ffc152",
+      "#f5a623",
+      "#ec940f",
+      "#e8890c",  // main — amber-600
+      "#c26e07",
+      "#995607",
+      "#7a4407",
     ],
     success: [
       "#f0fdf4",
@@ -98,18 +125,16 @@ export const enterpriseTheme = createTheme({
   },
   primaryColor: "primary",
   primaryShade: { light: 6, dark: 4 },
-  fontFamily:
-    '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
-  fontFamilyMonospace:
-    '"JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace',
+  fontFamily: FONT_BODY,
+  fontFamilyMonospace: FONT_MONO,
   headings: {
     fontWeight: "600",
-    fontFamily:
-      '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+    fontFamily: FONT_HEADING,
     sizes: {
-      h1: { lineHeight: "1.1" },
-      h2: { lineHeight: "1.15" },
-      h3: { lineHeight: "1.25" },
+      h1: { lineHeight: "1.2" },
+      h2: { lineHeight: "1.25" },
+      h3: { lineHeight: "1.3" },
+      h4: { lineHeight: "1.35" },
     },
   },
   fontSizes: {
@@ -143,10 +168,11 @@ export const enterpriseTheme = createTheme({
   defaultRadius: "sm",
   components: {
     Button: {
-      defaultProps: { radius: "sm" },
+      defaultProps: { radius: 999 },
       styles: {
         root: {
-          fontWeight: "500",
+          fontWeight: "600",
+          borderRadius: "999px",
           fontSize: "0.875rem",
           transition: "background-color 0.15s, border-color 0.15s",
         },
@@ -155,7 +181,7 @@ export const enterpriseTheme = createTheme({
     Input: {
       styles: {
         input: {
-          borderColor: "#cbd5e1",
+          borderColor: COLOR_INPUT_BORDER,
           fontSize: "0.875rem",
           borderRadius: "0.375rem",
           transition: "border-color 0.15s, box-shadow 0.15s",
@@ -163,9 +189,13 @@ export const enterpriseTheme = createTheme({
       },
     },
     Card: {
-      defaultProps: { radius: "md", shadow: "xs" },
+      defaultProps: { radius: 18, shadow: undefined },
       styles: {
-        root: { borderColor: "#e2e8f0" },
+        root: {
+          borderColor: COLOR_BORDER,
+          borderRadius: "18px",
+          background: "#ffffff",
+        },
       },
     },
     Paper: {
@@ -176,7 +206,7 @@ export const enterpriseTheme = createTheme({
     Modal: {
       styles: {
         header: {
-          borderBottom: "1px solid #e2e8f0",
+          borderBottom: `1px solid ${COLOR_DIVIDER}`,
           padding: "1rem 1.5rem",
           marginBottom: 0,
         },
@@ -187,7 +217,7 @@ export const enterpriseTheme = createTheme({
           boxShadow:
             "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
         },
-        close: { color: "#94a3b8" },
+        close: { color: COLOR_DIMMED },
       },
     },
     Popover: {
@@ -196,7 +226,7 @@ export const enterpriseTheme = createTheme({
           borderRadius: "0.5rem",
           boxShadow:
             "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-          border: "1px solid #e2e8f0",
+          border: `1px solid ${COLOR_DIVIDER}`,
         },
       },
     },
@@ -215,7 +245,7 @@ export const enterpriseTheme = createTheme({
         label: {
           fontSize: "0.8125rem",
           fontWeight: "500",
-          color: "#334155",
+          color: COLOR_LABEL,
           marginBottom: "4px",
         },
       },
@@ -225,7 +255,7 @@ export const enterpriseTheme = createTheme({
         label: {
           fontSize: "0.8125rem",
           fontWeight: "500",
-          color: "#334155",
+          color: COLOR_LABEL,
           marginBottom: "4px",
         },
       },
@@ -235,7 +265,7 @@ export const enterpriseTheme = createTheme({
         label: {
           fontSize: "0.8125rem",
           fontWeight: "500",
-          color: "#334155",
+          color: COLOR_LABEL,
           marginBottom: "4px",
         },
       },
@@ -249,7 +279,7 @@ export const enterpriseTheme = createTheme({
         th: {
           fontWeight: "500",
           fontSize: "0.75rem",
-          color: "#64748b",
+          color: COLOR_MUTED,
         },
       },
     },

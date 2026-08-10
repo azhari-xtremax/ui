@@ -6,10 +6,7 @@ import {
   Box,
   Button,
   Group,
-  LoadingOverlay,
-  Paper,
   Stack,
-  Table,
   Text,
   Title,
 } from '@mantine/core';
@@ -19,15 +16,23 @@ import { IconPlus, IconShield } from '@tabler/icons-react';
 import { usePermissions, usePolicies } from '@buildpad/hooks';
 import type { Policy } from '@buildpad/types';
 import { IconDisplay } from '@buildpad/ui-interfaces/select-icon';
+import { VTable } from '@buildpad/ui-table';
+import type { Header, HeaderRaw, Item, Sort } from '@buildpad/ui-table';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { ListEmptyState } from './ListEmptyState';
 import { ListFooter } from './ListFooter';
 import { RowActionsMenu } from './RowActionsMenu';
 import { SearchInput } from './SearchInput';
-import { SortableTh } from './SortableTh';
-import { toggleSort } from './accessUtils';
+import './ManagerTable.css';
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+const POLICY_HEADERS: HeaderRaw[] = [
+  { text: '', value: 'icon', sortable: false, width: 48 },
+  { text: 'Name', value: 'name', sortable: true, width: 260 },
+  { text: 'Users', value: 'userCount', sortable: false },
+  { text: 'Roles', value: 'roleCount', sortable: false },
+  { text: 'Description', value: 'description', sortable: false },
+];
 
 export interface PoliciesManagerProps {
   /** Called when a policy row is clicked (and the current user may update policies). */
@@ -81,8 +86,8 @@ export const PoliciesManager: React.FC<PoliciesManagerProps> = ({
 
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
-  // Server-side sort (`name` / `-name`); computed count columns are not sortable.
-  const [sort, setSort] = useState<string | null>(null);
+  // Server-side sort; computed count columns are not sortable.
+  const [sort, setSort] = useState<Sort | null>(null);
 
   const [deleteModal, setDeleteModal] = useState<{ opened: boolean; id: string }>({
     opened: false,
@@ -101,7 +106,7 @@ export const PoliciesManager: React.FC<PoliciesManagerProps> = ({
         page,
         limit,
         search: debouncedSearch || undefined,
-        sort: sort || undefined,
+        sort: sort?.by ? (sort.desc ? `-${sort.by}` : sort.by) : undefined,
       });
       setPolicies(result.policies);
       setTotalCount(result.total);
@@ -124,10 +129,6 @@ export const PoliciesManager: React.FC<PoliciesManagerProps> = ({
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, sort, limit]);
-
-  const handleSort = useCallback((field: string) => {
-    setSort((current) => toggleSort(current, field));
-  }, []);
 
   const confirmDelete = useCallback(async () => {
     setDeleting(true);
@@ -154,26 +155,74 @@ export const PoliciesManager: React.FC<PoliciesManagerProps> = ({
       </Button>
     ) : null;
 
+  const renderCell = useCallback((item: Item, header: Header): React.ReactNode => {
+    const policy = item as unknown as Policy;
+    switch (header.value) {
+      case 'icon':
+        return <IconDisplay icon={policy.icon} fallback={IconShield} />;
+      case 'name':
+        return (
+          <Group gap="xs">
+            <Text size="sm" fw={500}>
+              {policy.name}
+            </Text>
+            {policy.admin_access && (
+              <Badge color="red" size="xs">
+                Admin
+              </Badge>
+            )}
+            {policy.app_access && (
+              <Badge color="blue" size="xs">
+                App
+              </Badge>
+            )}
+          </Group>
+        );
+      case 'userCount':
+        return <Text size="sm">{policy.userCount || 0}</Text>;
+      case 'roleCount':
+        return <Text size="sm">{policy.roleCount || 0}</Text>;
+      case 'description':
+        return (
+          <Text size="sm" c="dimmed" lineClamp={1}>
+            {policy.description || '—'}
+          </Text>
+        );
+      default:
+        return null;
+    }
+  }, []);
+
+  const renderRowAppend =
+    updateAllowed || deleteAllowed
+      ? (item: Item) => {
+          const policy = item as unknown as Policy;
+          return (
+            <RowActionsMenu
+              onEdit={updateAllowed ? () => onPolicyClick?.(policy) : undefined}
+              onDelete={
+                deleteAllowed ? () => setDeleteModal({ opened: true, id: policy.id }) : undefined
+              }
+            />
+          );
+        }
+      : undefined;
+
   return (
     <Stack gap="md" data-testid="policies-manager">
-      {(!hideHeader || addButton) && (
-        <Group justify={hideHeader ? 'flex-end' : 'space-between'} align="flex-start">
-          {!hideHeader && (
-            <Box>
-              <Title order={2} mb={4}>
-                Policies
-              </Title>
-              <Text size="sm" c="dimmed">
-                Define policies that grant access and permissions to users and roles
-              </Text>
-            </Box>
-          )}
-          {addButton}
-        </Group>
+      {!hideHeader && (
+        <Box>
+          <Title order={2} mb={4}>
+            Policies
+          </Title>
+          <Text size="sm" c="dimmed">
+            Define policies that grant access and permissions to users and roles
+          </Text>
+        </Box>
       )}
 
-      <Paper p="sm" radius="md" withBorder>
-        <Group>
+      <div className="bp-manager-card">
+        <Group className="bp-manager-toolbar" wrap="wrap">
           <SearchInput
             placeholder="Search policies..."
             value={search}
@@ -181,120 +230,53 @@ export const PoliciesManager: React.FC<PoliciesManagerProps> = ({
             style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
             data-testid="policies-manager-search"
           />
-          {totalCount > 0 && (
-            <Badge variant="light" color="gray" size="lg" radius="sm" style={{ marginLeft: 'auto' }}>
-              {totalCount} {totalCount === 1 ? 'policy' : 'policies'}
-            </Badge>
-          )}
+          <Group gap="sm" style={{ marginLeft: 'auto' }}>
+            {totalCount > 0 && (
+              <Badge variant="light" color="gray" size="lg" radius="sm">
+                {totalCount} {totalCount === 1 ? 'policy' : 'policies'}
+              </Badge>
+            )}
+            {addButton}
+          </Group>
         </Group>
-      </Paper>
 
-      <Paper radius="md" withBorder style={{ overflow: 'hidden' }}>
-        <Box pos="relative">
-          <LoadingOverlay visible={loading} />
-
-          <Table highlightOnHover withTableBorder={false}>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th style={{ width: 48 }} />
-                <SortableTh label="Name" field="name" sort={sort} onSort={handleSort} data-testid="policies-manager-sort-name" />
-                <Table.Th>Users</Table.Th>
-                <Table.Th>Roles</Table.Th>
-                <Table.Th>Description</Table.Th>
-                {(updateAllowed || deleteAllowed) && <Table.Th style={{ width: 50 }} />}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {policies.length === 0 && !loading ? (
-                <Table.Tr>
-                  <Table.Td colSpan={updateAllowed || deleteAllowed ? 6 : 5}>
-                    {loadError ? (
-                      <ListEmptyState error title="Failed to load policies" hint={loadError} />
-                    ) : (
-                      <ListEmptyState
-                        title="No policies found"
-                        hint={
-                          debouncedSearch
-                            ? 'Try a different search term'
-                            : 'Create your first policy to get started'
-                        }
-                      />
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                policies.map((policy) => (
-                  <Table.Tr
-                    key={policy.id}
-                    style={{ cursor: updateAllowed ? 'pointer' : 'default' }}
-                    onClick={() => {
-                      if (updateAllowed) onPolicyClick?.(policy);
-                    }}
-                    data-testid={`policies-manager-row-${policy.id}`}
-                  >
-                    <Table.Td>
-                      <IconDisplay icon={policy.icon} fallback={IconShield} />
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <Text size="sm" fw={500}>
-                          {policy.name}
-                        </Text>
-                        {policy.admin_access && (
-                          <Badge color="red" size="xs">
-                            Admin
-                          </Badge>
-                        )}
-                        {policy.app_access && (
-                          <Badge color="blue" size="xs">
-                            App
-                          </Badge>
-                        )}
-                      </Group>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm">{policy.userCount || 0}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm">{policy.roleCount || 0}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm" c="dimmed" lineClamp={1}>
-                        {policy.description || '—'}
-                      </Text>
-                    </Table.Td>
-                    {(updateAllowed || deleteAllowed) && (
-                      <Table.Td>
-                        <RowActionsMenu
-                          onEdit={updateAllowed ? () => onPolicyClick?.(policy) : undefined}
-                          onDelete={
-                            deleteAllowed
-                              ? () => setDeleteModal({ opened: true, id: policy.id })
-                              : undefined
-                          }
-                        />
-                      </Table.Td>
-                    )}
-                  </Table.Tr>
-                ))
-              )}
-            </Table.Tbody>
-          </Table>
-        </Box>
-
-        <ListFooter
-          shown={policies.length}
-          totalCount={totalCount}
-          itemsLabel="policies"
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          limit={limit}
-          sizeOptions={sizeOptions}
-          onLimitChange={setLimit}
-          data-testid="policies-manager-page-size"
+        <VTable
+          headers={POLICY_HEADERS}
+          items={policies as unknown as Item[]}
+          itemKey="id"
+          sort={sort}
+          showSelect="none"
+          fixedHeader
+          loading={loading}
+          noItemsText={
+            loadError
+              ? `Failed to load policies — ${loadError}`
+              : debouncedSearch
+                ? 'No policies found — try a different search term'
+                : 'No policies found — create your first policy to get started'
+          }
+          clickable={updateAllowed}
+          renderCell={renderCell}
+          renderRowAppend={renderRowAppend}
+          renderFooter={() => (
+            <ListFooter
+              shown={policies.length}
+              totalCount={totalCount}
+              itemsLabel="policies"
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              limit={limit}
+              sizeOptions={sizeOptions}
+              onLimitChange={setLimit}
+              data-testid="policies-manager-page-size"
+            />
+          )}
+          onSortChange={setSort}
+          onRowClick={updateAllowed ? ({ item }) => onPolicyClick?.(item as unknown as Policy) : undefined}
+          data-testid="policies-manager-table"
         />
-      </Paper>
+      </div>
 
       <DeleteConfirmModal
         opened={deleteModal.opened}

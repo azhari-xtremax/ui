@@ -24,17 +24,32 @@ export const theme = createTheme({
       "var(--ds-primary-800, #9a3412)",
       "var(--ds-primary-900, #7c2d12)"
     ],
+    // "secondary" matches the --ds-secondary-* token naming used throughout
+    // design-tokens.css and app code; "accent" is kept as an alias since a
+    // few scaffolded (currently unused) components still reference it.
+    secondary: [
+      "var(--ds-secondary-50, #fff8eb)",
+      "var(--ds-secondary-100, #ffebc2)",
+      "var(--ds-secondary-200, #ffd98a)",
+      "var(--ds-secondary-300, #ffc152)",
+      "var(--ds-secondary-400, #f5a623)",
+      "var(--ds-secondary-500, #ec940f)",
+      "var(--ds-secondary, #e8890c)",
+      "var(--ds-secondary-700, #c26e07)",
+      "var(--ds-secondary-800, #995607)",
+      "var(--ds-secondary-900, #7a4407)"
+    ],
     accent: [
-      "var(--ds-secondary-50, #eff6ff)",
-      "var(--ds-secondary-100, #dbeafe)",
-      "var(--ds-secondary-200, #bfdbfe)",
-      "var(--ds-secondary-300, #93c5fd)",
-      "var(--ds-secondary-400, #60a5fa)",
-      "var(--ds-secondary-500, #3b82f6)",
-      "var(--ds-secondary, #2563eb)",
-      "var(--ds-secondary-700, #1d4ed8)",
-      "var(--ds-secondary-800, #1e40af)",
-      "var(--ds-secondary-900, #1e3a8a)"
+      "var(--ds-secondary-50, #fff8eb)",
+      "var(--ds-secondary-100, #ffebc2)",
+      "var(--ds-secondary-200, #ffd98a)",
+      "var(--ds-secondary-300, #ffc152)",
+      "var(--ds-secondary-400, #f5a623)",
+      "var(--ds-secondary-500, #ec940f)",
+      "var(--ds-secondary, #e8890c)",
+      "var(--ds-secondary-700, #c26e07)",
+      "var(--ds-secondary-800, #995607)",
+      "var(--ds-secondary-900, #7a4407)"
     ],
     success: [
       "var(--ds-success-50, #f0fdf4)",
@@ -103,8 +118,8 @@ export const theme = createTheme({
   fontFamilyMonospace:
     "var(--ds-font-mono, 'JetBrains Mono', SFMono-Regular, Consolas, monospace)",
   headings: {
-    fontWeight: "600",
-    fontFamily: "var(--ds-font-family)",
+    fontWeight: "var(--ds-font-weight-semibold, 600)",
+    fontFamily: "var(--ds-font-display, var(--ds-font-family))",
     sizes: {
       h1: { lineHeight: "1.2" },
       h2: { lineHeight: "1.25" },
@@ -144,11 +159,12 @@ export const theme = createTheme({
   components: {
     Button: {
       defaultProps: {
-        radius: "sm",
+        radius: "xl",
       },
       styles: {
         root: {
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-semibold, 600)",
+          borderRadius: "var(--ds-radius-xl, 1rem)",
           fontSize: "var(--mantine-font-size-md)",
           transition: "background-color var(--ds-transition-fast, 150ms ease), border-color var(--ds-transition-fast, 150ms ease)"
         }
@@ -167,11 +183,12 @@ export const theme = createTheme({
     Card: {
       defaultProps: {
         radius: "md",
-        shadow: "xs",
       },
       styles: {
         root: {
-          borderColor: "var(--ds-border-color, #e2e8f0)",
+          borderColor: "var(--ds-card-border, #e8ebf1)",
+          borderRadius: "var(--ds-radius-md, 0.5rem)",
+          background: "var(--ds-card-bg, #ffffff)",
         }
       }
     },
@@ -190,7 +207,7 @@ export const theme = createTheme({
           marginBottom: 0
         },
         title: {
-          fontWeight: 600,
+          fontWeight: "var(--ds-font-weight-semibold, 600)",
           fontSize: "var(--ds-font-size-base)"
         },
         body: {
@@ -217,9 +234,9 @@ export const theme = createTheme({
     Badge: {
       styles: {
         root: {
-          borderRadius: "999px",
+          borderRadius: "var(--ds-radius-xl, 1rem)",
           fontSize: "var(--ds-font-size-xs)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           textTransform: "none" as const
         }
       }
@@ -228,7 +245,7 @@ export const theme = createTheme({
       styles: {
         label: {
           fontSize: "var(--mantine-font-size-sm)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           color: "var(--ds-gray-700, #334155)",
           marginBottom: "4px"
         },
@@ -241,7 +258,7 @@ export const theme = createTheme({
       styles: {
         label: {
           fontSize: "var(--mantine-font-size-sm)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           color: "var(--ds-gray-700, #334155)",
           marginBottom: "4px"
         }
@@ -251,7 +268,7 @@ export const theme = createTheme({
       styles: {
         label: {
           fontSize: "var(--mantine-font-size-sm)",
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           color: "var(--ds-gray-700, #334155)",
           marginBottom: "4px"
         }
@@ -264,7 +281,7 @@ export const theme = createTheme({
           fontSize: "var(--mantine-font-size-md)"
         },
         th: {
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           fontSize: "var(--ds-font-size-xs)",
           color: "var(--ds-gray-500, #64748b)"
         }
@@ -273,7 +290,7 @@ export const theme = createTheme({
     Tabs: {
       styles: {
         tab: {
-          fontWeight: "500",
+          fontWeight: "var(--ds-font-weight-medium, 500)",
           fontSize: "var(--mantine-font-size-md)",
           borderRadius: "var(--ds-radius, 0.375rem)",
           transition: "background var(--ds-transition-fast, 150ms ease), color var(--ds-transition-fast, 150ms ease)"

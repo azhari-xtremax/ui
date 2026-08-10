@@ -197,7 +197,7 @@ describe("CollectionForm", () => {
       renderForm({ mode: "edit", id: 1 });
 
       await waitFor(() => {
-        expect(mockItemsReadOne).toHaveBeenCalledWith(1);
+        expect(mockItemsReadOne).toHaveBeenCalledWith(1, expect.any(Array));
       });
 
       await waitFor(() => {
@@ -365,5 +365,68 @@ describe("CollectionForm", () => {
       // Delete button should NOT be shown because deleteAllowed = false
       expect(screen.queryByTestId("form-delete-btn")).not.toBeInTheDocument();
     });
+  });
+});
+
+describe("edit fetch relational-field exclusion", () => {
+  it("omits O2M/M2M/M2A fields from readOne and keeps flat fields plus the PK", async () => {
+    mockFieldsReadAll.mockResolvedValue([
+      ...SAMPLE_FIELDS,
+      {
+        collection: "posts",
+        field: "blocks",
+        type: "text",
+        meta: { special: ["m2a"], interface: "list-m2a" },
+        schema: {},
+      },
+      {
+        collection: "posts",
+        field: "comments",
+        type: "text",
+        meta: { interface: "list-o2m" },
+        schema: {},
+      },
+    ]);
+    mockItemsReadOne.mockResolvedValueOnce({ id: 1, title: "Existing Title" });
+
+    renderForm({ mode: "edit", id: 1 });
+
+    await waitFor(() => expect(mockItemsReadOne).toHaveBeenCalled());
+    const [calledId, fields] = mockItemsReadOne.mock.calls.at(-1)!;
+    expect(calledId).toBe(1);
+    expect(fields).toContain("id");
+    expect(fields).toContain("title");
+    expect(fields).not.toContain("blocks");
+    expect(fields).not.toContain("comments");
+  });
+});
+
+describe("submit containment through portals", () => {
+  it("does not bubble the form's submit into an ancestor page form across a portal", async () => {
+    const { createPortal } = await import("react-dom");
+    mockItemsCreateOne.mockResolvedValueOnce({ id: 9, title: "t" });
+    const outerSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+
+    // Mirrors the real bug shape: the page form is an ancestor in the REACT
+    // tree while the CollectionForm lives elsewhere in the DOM via a portal
+    // (Mantine Modal). React bubbles synthetic submit along the React tree.
+    function Page() {
+      return (
+        <form onSubmit={outerSubmit} data-testid="outer-page-form">
+          {createPortal(
+            <CollectionForm collection="posts" mode="create" />,
+            document.body,
+          )}
+        </form>
+      );
+    }
+
+    render(<Page />, { wrapper });
+
+    await waitFor(() => screen.getByTestId("form-submit-btn"));
+    fireEvent.click(screen.getByTestId("form-submit-btn"));
+
+    await waitFor(() => expect(mockItemsCreateOne).toHaveBeenCalled());
+    expect(outerSubmit).not.toHaveBeenCalled();
   });
 });

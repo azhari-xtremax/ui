@@ -1,10 +1,11 @@
 /* ═══════════════════════════════════════════════════════════
    Enterprise Design System — Design Tokens
    ═══════════════════════════════════════════════════════════
-   A modern, professional token palette built on the Tailwind
-   reference scales.
-   - Orange accent (Tailwind orange, main = 600) for brand energy
-   - Slate neutrals on white surfaces for a crisp, polished look
+   "Soft Futurism" palette — navy + amber brand, Space Grotesk
+   display type, large-radius cards, gradient surfaces, and an
+   auto-switching light/dark scheme.
+   - Amber accent (fills + AA-safe text stops) for brand energy
+   - Slate neutrals on gradient surfaces for a crisp, modern look
    - Tailwind type, radius, and shadow scales throughout
    ═══════════════════════════════════════════════════════════ */
 
@@ -23,19 +24,19 @@
   --ds-primary-900: #7c2d12;
   --ds-primary-950: #431407;
 
-  /* ── Secondary (Blue) ──────────────────────────────────── */
-  --ds-secondary-50: #eff6ff;
-  --ds-secondary-100: #dbeafe;
-  --ds-secondary-200: #bfdbfe;
-  --ds-secondary-300: #93c5fd;
-  --ds-secondary-400: #60a5fa;
-  --ds-secondary-500: #3b82f6;
-  --ds-secondary: #2563eb;
-  --ds-secondary-600: #2563eb;
-  --ds-secondary-700: #1d4ed8;
-  --ds-secondary-800: #1e40af;
-  --ds-secondary-900: #1e3a8a;
-  --ds-secondary-950: #172554;
+  /* ── Secondary / Accent (Amber) ────────────────────────── */
+  --ds-secondary-50: #fff8eb;
+  --ds-secondary-100: #ffebc2;
+  --ds-secondary-200: #ffd98a;
+  --ds-secondary-300: #ffc152;
+  --ds-secondary-400: #f5a623;
+  --ds-secondary-500: #ec940f;
+  --ds-secondary: #e8890c;
+  --ds-secondary-600: #e8890c;
+  --ds-secondary-700: #c26e07;
+  --ds-secondary-800: #995607;
+  --ds-secondary-900: #7a4407;
+  --ds-secondary-950: #4d2b04;
 
   /* ── Success (Green) ───────────────────────────────────── */
   --ds-success-50: #f0fdf4;
@@ -121,7 +122,7 @@
   /* ── Typography ────────────────────────────────────────── */
   --ds-font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --ds-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --ds-font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --ds-font-display: var(--ds-font-sans);
   --ds-font-mono: "JetBrains Mono", "SF Mono", SFMono-Regular, Consolas, monospace;
   --ds-font-size-xs: 0.75rem;
   --ds-font-size-sm: 0.875rem;
@@ -150,6 +151,10 @@
   --ds-radius-md: 0.5rem;
   --ds-radius-lg: 0.75rem;
   --ds-radius-xl: 1rem;
+  --ds-radius-card: 18px;
+  --ds-radius-hero: 22px;
+  --ds-radius-rail: 18px;
+  --ds-radius-pill: 999px;
 
   /* ── Shadows ───────────────────────────────────────────── */
   --ds-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -159,10 +164,59 @@
   --ds-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
 
   /* ── Base ───────────────────────────────────────────────── */
-  --ds-body-bg: #ffffff;
+  /* Ink is the reading colour on the gradient page surface; the
+     gray-derived body-color is kept for components that predate it. */
+  --ds-ink: #0f1b33;
+  --ds-ink-secondary: #55606e;
+  --ds-ink-faint: #7c8698;
+  --ds-body-bg: linear-gradient(180deg, #f6f7fa 0%, #ffffff 40%);
   --ds-body-color: var(--ds-gray-900);
   --ds-body-color-rgb: 15, 23, 42;
   --ds-primary-rgb: 234, 88, 12;
+
+  /* ── Brand gradients (fixed, non-inverting) ───────────────
+     The numbered primary/secondary scale stops flip in dark mode so text
+     stays legible — correct for text/surface roles, but wrong for
+     decorative brand treatments (hero bands, brand mark, login splash)
+     that should render as deep navy / amber in both colour schemes. These
+     are deliberately NOT redefined in the dark-mode block below. */
+  --ds-brand-hero: linear-gradient(135deg, #11192e 0%, #1b2a4a 100%);
+  --ds-brand-mark: linear-gradient(135deg, #1b2a4a 0%, #11192e 100%);
+  --ds-brand-accent-mark: linear-gradient(135deg, #f5a623 0%, #c26e07 100%);
+  --ds-brand-navy-900: #0c1220;
+  --ds-brand-navy-800: #11192e;
+  --ds-brand-navy-500: #3a5480;
+
+  /* ── Icon rail ─────────────────────────────────────────── */
+  --ds-rail-bg: #0f1b33;
+  --ds-rail-shadow: 0 12px 32px rgba(15, 27, 51, 0.18);
+  --ds-rail-border: transparent;
+  --ds-rail-icon-idle: #8a9cbe;
+  --ds-rail-active-bg: rgba(255, 193, 82, 0.16);
+  --ds-rail-active-icon: #ffc152;
+  --ds-rail-active-ring: 0 0 0 1px rgba(255, 193, 82, 0.35);
+
+  /* Amber-as-text that passes AA on white — NEVER #e8890c for text. */
+  --ds-accent-text: #b45309;
+
+  /* ── CTA + hero gradients ──────────────────────────────── */
+  --ds-cta-gradient: linear-gradient(135deg, #ffc152, #e8890c);
+  --ds-cta-shadow: 0 8px 24px rgba(232, 137, 12, 0.35);
+  --ds-hero-bg: radial-gradient(circle at 88% 0%, rgba(245, 166, 35, 0.35) 0%, transparent 42%),
+    radial-gradient(circle at 10% 110%, rgba(93, 116, 160, 0.5) 0%, transparent 50%),
+    linear-gradient(120deg, #101d38 0%, #1b2a4a 100%);
+  --ds-hero-sub: #c6cede;
+
+  /* ── Chip / card / divider surfaces ────────────────────── */
+  --ds-chip-bg: #ffffff;
+  --ds-chip-border: #e3e6ec;
+  --ds-card-bg: #ffffff;
+  --ds-card-border: #e8ebf1;
+  --ds-table-border: 1px solid var(--ds-card-border);
+  --ds-table-row-border: 1px solid var(--ds-gray-100);
+  --ds-table-popup-border: 1px solid var(--ds-card-border);
+  --ds-card-shadow: 0 2px 10px rgba(15, 27, 51, 0.04);
+  --ds-divider: #eef1f5;
 
   /* ── Borders ───────────────────────────────────────────── */
   /* Cards/dividers use gray-200; inputs use gray-300 (one step stronger). */
@@ -171,8 +225,8 @@
 
   /* ── States ────────────────────────────────────────────── */
   --ds-hover-opacity: 0.85;
-  --ds-focus-ring: 0 0 0 3px rgba(234, 88, 12, 0.25);
-  --ds-focus-ring-color: rgba(234, 88, 12, 0.25);
+  --ds-focus-ring: 0 0 0 3px rgba(27, 42, 74, 0.25);
+  --ds-focus-ring-color: rgba(27, 42, 74, 0.25);
   --ds-disabled-opacity: 0.5;
 
   /* ── Transitions ───────────────────────────────────────── */
@@ -198,18 +252,18 @@
   --ds-primary-900: #ffedd5;
   --ds-primary-950: #fff7ed;
 
-  --ds-secondary: #60a5fa;
-  --ds-secondary-50: #172554;
-  --ds-secondary-100: #1e3a8a;
-  --ds-secondary-200: #1e40af;
-  --ds-secondary-300: #1d4ed8;
-  --ds-secondary-400: #2563eb;
-  --ds-secondary-500: #3b82f6;
-  --ds-secondary-600: #60a5fa;
-  --ds-secondary-700: #93c5fd;
-  --ds-secondary-800: #bfdbfe;
-  --ds-secondary-900: #dbeafe;
-  --ds-secondary-950: #eff6ff;
+  --ds-secondary: #f5a623;
+  --ds-secondary-50: #4d2b04;
+  --ds-secondary-100: #7a4407;
+  --ds-secondary-200: #995607;
+  --ds-secondary-300: #c26e07;
+  --ds-secondary-400: #e8890c;
+  --ds-secondary-500: #ec940f;
+  --ds-secondary-600: #f5a623;
+  --ds-secondary-700: #ffc152;
+  --ds-secondary-800: #ffd98a;
+  --ds-secondary-900: #ffebc2;
+  --ds-secondary-950: #fff8eb;
 
   --ds-success: #4ade80;
   --ds-success-50: #052e16;
@@ -275,16 +329,40 @@
   --ds-gray-900: #f8fafc;
   --ds-gray-950: #ffffff;
 
-  --ds-body-bg: #020617;
+  /* ── Dark surface / text overrides ───────────────────── */
+  --ds-ink: #f2f5fa;
+  --ds-ink-secondary: #a7b0c0;
+  --ds-ink-faint: #8a94a8;
+  --ds-body-bg: radial-gradient(circle at 80% -10%, rgba(58, 84, 128, 0.4) 0%, transparent 45%), #0a1120;
   --ds-body-color: #e2e8f0;
   --ds-body-color-rgb: 226, 232, 240;
   --ds-primary-rgb: 251, 146, 60;
 
+  /* Rail: translucent glass instead of solid navy. */
+  --ds-rail-bg: rgba(255, 255, 255, 0.04);
+  --ds-rail-shadow: none;
+  --ds-rail-border: rgba(255, 255, 255, 0.08);
+  --ds-rail-active-ring: 0 0 0 1px rgba(255, 193, 82, 0.35), 0 0 22px rgba(245, 166, 35, 0.3);
+
+  /* Amber reads bright on dark. */
+  --ds-accent-text: #ffc152;
+
+  /* Chips / cards / dividers go translucent. */
+  --ds-chip-bg: rgba(255, 255, 255, 0.05);
+  --ds-chip-border: rgba(255, 255, 255, 0.1);
+  --ds-card-bg: rgba(255, 255, 255, 0.04);
+  --ds-card-border: rgba(255, 255, 255, 0.09);
+  --ds-table-border: 1px solid var(--ds-card-border);
+  --ds-table-row-border: 1px solid var(--ds-gray-200);
+  --ds-table-popup-border: 1px solid var(--ds-card-border);
+  --ds-card-shadow: none;
+  --ds-divider: rgba(255, 255, 255, 0.08);
+
   --ds-border-color: var(--ds-gray-200);
   --ds-border-color-subtle: var(--ds-gray-100);
 
-  --ds-focus-ring: 0 0 0 3px rgba(251, 146, 60, 0.35);
-  --ds-focus-ring-color: rgba(251, 146, 60, 0.35);
+  --ds-focus-ring: 0 0 0 3px rgba(93, 116, 160, 0.35);
+  --ds-focus-ring-color: rgba(93, 116, 160, 0.35);
 
   --ds-shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.25);
   --ds-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.3), 0 1px 3px -1px rgba(0, 0, 0, 0.2);

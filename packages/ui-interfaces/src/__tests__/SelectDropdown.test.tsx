@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
-import { SelectDropdown, SelectOption } from '../SelectDropdown';
+import { SelectDropdown, type SelectOption } from '../select-dropdown/SelectDropdown';
 
 // Helper function to render components with Mantine provider
 const renderWithProvider = (component: React.ReactElement) => {
@@ -317,5 +317,58 @@ describe('SelectDropdown', () => {
       const select = screen.getByRole('textbox');
       expect(select).toBeInTheDocument();
     });
+  });
+});
+
+describe('SelectDropdown allowOther', () => {
+  const choices: SelectOption[] = [
+    { text: 'Alpha', value: 'alpha' },
+    { text: 'Beta', value: 'beta' },
+  ];
+
+  it('commits typed free text on Enter', () => {
+    const onChange = jest.fn();
+    renderWithProvider(<SelectDropdown choices={choices} allowOther onChange={onChange} />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Custom Value' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onChange).toHaveBeenCalledWith('Custom Value');
+  });
+
+  it('displays an already-committed custom value instead of showing blank', () => {
+    renderWithProvider(<SelectDropdown choices={choices} allowOther value="my-custom" />);
+
+    expect(screen.getByTestId('select-dropdown')).toHaveValue('my-custom');
+  });
+
+  it('does not commit text that exactly matches an existing choice as free text', () => {
+    const onChange = jest.fn();
+    renderWithProvider(<SelectDropdown choices={choices} allowOther onChange={onChange} />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Alpha' } });
+    fireEvent.blur(input);
+
+    expect(onChange).not.toHaveBeenCalledWith('Alpha');
+  });
+});
+
+describe('SelectDropdown stringify-colliding choices', () => {
+  it('renders instead of crashing when two choice values stringify identically', () => {
+    renderWithProvider(
+      <SelectDropdown
+        choices={[
+          { text: 'Number one', value: 1 },
+          { text: 'String one', value: '1' },
+          { text: 'Two', value: 2 },
+        ]}
+      />
+    );
+
+    expect(screen.getByTestId('select-dropdown')).toBeInTheDocument();
   });
 });

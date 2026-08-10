@@ -1,8 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 /* ═══════════════════════════════════════════════════════════
    Buildpad Storybook Preview — shared across all packages
-   Modern neutral palette (Tailwind slate + orange accent).
+   "Soft Futurism" palette — navy + amber, Space Grotesk display,
+   pill controls, large-radius cards.
    Import in each .storybook/preview.css.
    ═══════════════════════════════════════════════════════════ */
 
@@ -26,8 +27,12 @@
   --mantine-color-dimmed: var(--mantine-color-gray-6);
 
   /* Mantine derives default-border from gray-4 (slate-400 here) — repoint
-     to slate-200, the card/divider border convention. */
-  --mantine-color-default-border: #e2e8f0;
+     to the card border convention (--ds-card-border). */
+  --mantine-color-default-border: #e8ebf1;
+
+  /* Dedicated table/collection-list border token — mirrors --ds-card-border
+     so VTable/CollectionList match Card's border exactly. */
+  --ds-table-border: #e8ebf1;
 
   /* Mantine resolves `variant="light"` text to `--mantine-color-{name}-light-color`,
      which by default points at a light stop of each custom palette. Tailwind's
@@ -35,26 +40,27 @@
      WCAG AA for small text. Promote these to stop [7] (the 700s) so Alert titles,
      Button labels, and Badge text on tinted bg pass contrast. Filled variants and
      brand backgrounds are unaffected. */
-  --mantine-color-primary-light-color: #c2410c; /* primary[7] */
+  --mantine-color-primary-light-color: #16213c; /* primary[7] */
   --mantine-color-warning-light-color: #b45309; /* warning[7] */
   --mantine-color-success-light-color: #15803d; /* success[7] */
   --mantine-color-info-light-color: #0369a1;    /* info[7] */
   --mantine-color-danger-light-color: #b91c1c;  /* danger[7] */
-  --mantine-color-accent-light-color: #1d4ed8;  /* accent[7] */
+  --mantine-color-accent-light-color: #c26e07;  /* accent[7] */
+  --mantine-color-secondary-light-color: #c26e07; /* secondary[7] */
 }
 
 /* ── Focus Ring ───────────────────────────────────────────── */
 .sb-enterprise-wrapper :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.25);
+  box-shadow: 0 0 0 3px rgba(27, 42, 74, 0.25);
   border-radius: 0.25rem;
 }
 
 /* ── Input Focus ──────────────────────────────────────────── */
 .sb-enterprise-wrapper .mantine-Input-input:focus,
 .sb-enterprise-wrapper .mantine-Input-input:focus-within {
-  border-color: #ea580c;
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.25);
+  border-color: #1b2a4a;
+  box-shadow: 0 0 0 3px rgba(27, 42, 74, 0.25);
 }
 
 /* ── Tabs ─────────────────────────────────────────────────── */
@@ -69,8 +75,8 @@
 
 .sb-enterprise-wrapper .mantine-Tabs-tab[data-active],
 .sb-enterprise-wrapper .mantine-Tabs-tab[data-active]:hover {
-  color: #ea580c;
-  border-bottom-color: #ea580c;
+  color: #1b2a4a;
+  border-bottom-color: #1b2a4a;
   font-weight: 600;
 }
 
@@ -85,8 +91,8 @@
 
 /* ── Cards ────────────────────────────────────────────────── */
 .sb-enterprise-wrapper .mantine-Card-root {
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  border: 1px solid #e8ebf1;
+  box-shadow: 0 2px 10px rgba(15, 27, 51, 0.04);
 }
 
 /* ── Notification Accents ─────────────────────────────────── */

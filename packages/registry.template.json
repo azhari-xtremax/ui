@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/microbuild-ui/ui/refs/heads/main/packages/registry.json",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
   "license": "MIT",
@@ -165,6 +165,10 @@
           "target": "lib/buildpad/types/field-spec.ts"
         },
         {
+          "source": "types/src/module-access.ts",
+          "target": "lib/buildpad/types/module-access.ts"
+        },
+        {
           "source": "types/src/users.ts",
           "target": "lib/buildpad/types/users.ts"
         },
@@ -176,7 +180,7 @@
     },
     "services": {
       "name": "services",
-      "description": "Service classes for fields, collections, items, permissions, and DaaS API config",
+      "description": "Service classes for fields, collections, items, permissions, and DaaS API config, plus server-side guards: collection permissions (auth/enforcer) and module-level access keys (module-access/enforce).",
       "files": [
         {
           "source": "services/src/api-request.ts",
@@ -217,6 +221,10 @@
         {
           "source": "services/src/auth/filter-to-query.ts",
           "target": "lib/buildpad/services/auth/filter-to-query.ts"
+        },
+        {
+          "source": "cli/templates/lib/module-access/enforce.ts",
+          "target": "lib/module-access/enforce.ts"
         },
         {
           "source": "cli/templates/lib/services/index.ts",
@@ -528,7 +536,7 @@
     },
     "users-routes": {
       "name": "users-routes",
-      "description": "Users/roles/policies admin module pages — /users, /users/[id], /roles, /roles/[id], /policies, /policies/[id] (list + create/edit for each access-control domain). Installs under the (authenticated) route group so the pages inherit DaaSProviderWrapper and the AuthenticatedShell. Requires the users-management component.",
+      "description": "Users/roles/policies admin module pages — /users, /users/[id], /roles, /roles/[id], /policies, /policies/[id], /module-access-keys (list + create/edit for each access-control domain, plus the module-level access key registry). Installs under the (authenticated) route group so the pages inherit DaaSProviderWrapper and the AuthenticatedShell. Requires the users-management component.",
       "files": [
         {
           "source": "cli/templates/app/users/page.tsx",
@@ -553,6 +561,10 @@
         {
           "source": "cli/templates/app/policies/[id]/page.tsx",
           "target": "app/(authenticated)/policies/[id]/page.tsx"
+        },
+        {
+          "source": "cli/templates/app/module-access-keys/page.tsx",
+          "target": "app/(authenticated)/module-access-keys/page.tsx"
         }
       ],
       "internalDependencies": [
@@ -1479,10 +1491,12 @@
       ],
       "dependencies": [
         "@mantine/core",
-        "@tabler/icons-react"
+        "@tabler/icons-react",
+        "@mantine/notifications"
       ],
       "internalDependencies": [
-        "types"
+        "types",
+        "hooks"
       ],
       "registryDependencies": [
         "upload"
@@ -1517,10 +1531,12 @@
       ],
       "dependencies": [
         "@mantine/core",
-        "@tabler/icons-react"
+        "@tabler/icons-react",
+        "@mantine/notifications"
       ],
       "internalDependencies": [
-        "types"
+        "types",
+        "hooks"
       ],
       "registryDependencies": [
         "upload"
@@ -1558,7 +1574,8 @@
       ],
       "internalDependencies": [
         "types",
-        "hooks"
+        "hooks",
+        "utils"
       ],
       "registryDependencies": [
         "upload"
@@ -1596,9 +1613,14 @@
       ],
       "dependencies": [
         "@mantine/core",
-        "@mantine/dropzone"
+        "@mantine/hooks",
+        "@mantine/dropzone",
+        "@mantine/notifications",
+        "@tabler/icons-react"
       ],
-      "internalDependencies": [],
+      "internalDependencies": [
+        "types"
+      ],
       "interface": {
         "id": "upload",
         "name": "Upload",
@@ -2672,7 +2694,7 @@
       "name": "users-management",
       "title": "UsersManagement",
       "excludeFromAll": true,
-      "description": "Users, roles, and policies administration (RBAC management) — user list/detail with role assignment (M2M) and direct policy attachment, role list/detail with member management, hierarchy, and scope-assignment rules, policy list/detail with access flags and a per-collection permissions matrix (via system-permissions). Composes the useUsers/useRoles/usePolicies hooks.",
+      "description": "Users, roles, and policies administration (RBAC management) — user list/detail with role assignment (M2M) and direct policy attachment, role list/detail with member management, hierarchy, and scope-assignment rules, policy list/detail with access flags and BOTH permission dimensions: a per-collection matrix (Record-Level Access, via system-permissions) and a capability-key tree (Module-Level Access), plus the /module-access-keys registry manager. Composes the useUsers/useRoles/usePolicies/useModuleAccessKeys hooks.",
       "category": "admin",
       "files": [
         {
@@ -2682,6 +2704,10 @@
         {
           "source": "ui-users/src/UsersManager.css",
           "target": "components/ui/users-management/users-manager.css"
+        },
+        {
+          "source": "ui-users/src/ManagerTable.css",
+          "target": "components/ui/users-management/manager-table.css"
         },
         {
           "source": "ui-users/src/UserDetail.tsx",
@@ -2718,6 +2744,14 @@
         {
           "source": "ui-users/src/PolicyAttachmentManager.tsx",
           "target": "components/ui/users-management/policy-attachment-manager.tsx"
+        },
+        {
+          "source": "ui-users/src/ModuleAccessPanel.tsx",
+          "target": "components/ui/users-management/module-access-panel.tsx"
+        },
+        {
+          "source": "ui-users/src/ModuleAccessKeysManager.tsx",
+          "target": "components/ui/users-management/module-access-keys-manager.tsx"
         },
         {
           "source": "ui-users/src/PolicyPickerModal.tsx",
