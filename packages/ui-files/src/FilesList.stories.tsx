@@ -26,7 +26,7 @@ export const Default: Story = {
 
 /** Select-all + per-row download/delete actions wired up with local state. */
 export const WithRowActions: Story = {
-  render: () => {
+  render: function Render() {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const toggle = (id: string, checked: boolean) =>
       setSelectedIds((prev) => {
