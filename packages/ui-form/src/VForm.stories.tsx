@@ -1094,7 +1094,7 @@ const nonEditableFields: Field[] = [
  * Unlike "disabled" which greys out fields, nonEditable shows them clearly.
  */
 export const NonEditable: Story = {
-  render: () => {
+  render: function Render() {
     const [values, setValues] = useState<FieldValues>({
       name: 'Jane Smith',
       email: 'jane@example.com',
@@ -1163,7 +1163,7 @@ const validationSummaryFields: Field[] = [
  * including errors on hidden fields.
  */
 export const WithValidationSummary: Story = {
-  render: () => {
+  render: function Render() {
     const [values, setValues] = useState<FieldValues>({
       name: '',
       email: 'not-an-email',

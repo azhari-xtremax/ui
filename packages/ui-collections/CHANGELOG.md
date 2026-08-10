@@ -1,5 +1,16 @@
 # @buildpad/ui-collections
 
+## 1.10.0
+
+### Patch Changes
+
+- Updated dependencies [5981327]
+  - @buildpad/types@1.10.0
+  - @buildpad/services@1.10.0
+  - @buildpad/ui-table@1.10.0
+  - @buildpad/utils@1.10.0
+  - @buildpad/ui-form@1.10.0
+
 ## 1.9.3
 
 ### Patch Changes

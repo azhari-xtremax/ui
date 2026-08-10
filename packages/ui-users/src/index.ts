@@ -44,6 +44,13 @@ export type { PolicyDetailProps } from './PolicyDetail';
 export { PolicyAttachmentManager } from './PolicyAttachmentManager';
 export type { PolicyAttachmentManagerProps } from './PolicyAttachmentManager';
 
+// Module-Level Access surfaces — capability flags not tied to a collection
+export { ModuleAccessPanel } from './ModuleAccessPanel';
+export type { ModuleAccessPanelProps } from './ModuleAccessPanel';
+
+export { ModuleAccessKeysManager } from './ModuleAccessKeysManager';
+export type { ModuleAccessKeysManagerProps } from './ModuleAccessKeysManager';
+
 // Shared presentational components
 export { UserStatusBadge, USER_STATUS_COLORS } from './UserStatusBadge';
 export type { UserStatusBadgeProps } from './UserStatusBadge';
