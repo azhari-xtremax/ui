@@ -725,7 +725,17 @@ export function useRelationM2AItems(
         // 1. Map fetched items, overlaying any local updates / deletes
         const items: M2AItem[] = fetchedItems.map((item) => {
             const pk = item[junctionPKField];
-            let result: M2AItem = { ...item };
+            // Alias the real junction PK onto `.id` — every consumer of
+            // displayItems (ListM2A's React keys, DnD sortable ids,
+            // data-testids, demo-mode filtering) reads `.id` directly.
+            // Locally-created items already got this alias below; fetched
+            // items never did, so for any junction table whose PK isn't
+            // literally named "id", `.id` was undefined on every fetched
+            // row — breaking React reconciliation and drag/drop while
+            // silently doing nothing to the save path itself (removeItem/
+            // updateItem/reorder already correctly resolve the real PK via
+            // junctionPKField, never `.id`).
+            let result: M2AItem = { ...item, id: pk as string | number };
 
             // Check for local update
             const updateIdx = changes.update.findIndex(
