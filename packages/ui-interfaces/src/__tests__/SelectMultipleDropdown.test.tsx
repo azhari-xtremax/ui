@@ -122,6 +122,36 @@ describe('SelectMultipleDropdown stringify-colliding choices', () => {
 
     expect(screen.getByText(/Two|Select/)).toBeInTheDocument();
   });
+
+  it('preserves an already-selected dropped-twin\'s exact type when toggling an unrelated item (S6.6)', () => {
+    // The current value has '1' (a string) already selected — the dropped
+    // twin's own type; only { value: 1 } (number) survives the dedup and
+    // is actually rendered. Toggling the unrelated "Two" must not rebuild
+    // the whole array through choices.find and silently re-type '1' to 1.
+    const onChange = jest.fn();
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          value={['1']}
+          choices={[
+            { text: 'Number one', value: 1 },
+            { text: 'String one', value: '1' },
+            { text: 'Two', value: 2 },
+          ]}
+          onChange={onChange}
+        />
+      </TestWrapper>
+    );
+
+    fireEvent.click(screen.getByRole('textbox'));
+    fireEvent.click(screen.getByText('Two'));
+
+    expect(onChange).toHaveBeenCalled();
+    const emitted = onChange.mock.calls[0][0] as unknown[];
+    expect(emitted).toContain('1');
+    expect(emitted).not.toContain(1);
+    expect(emitted).toContain(2);
+  });
 });
 
 describe('SelectMultipleDropdown allowOther (S6.2)', () => {
