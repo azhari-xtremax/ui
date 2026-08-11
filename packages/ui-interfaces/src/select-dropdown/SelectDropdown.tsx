@@ -1,6 +1,7 @@
 import React from 'react';
 import { Select, SelectProps, Group, ColorSwatch, Text, ComboboxItem, ComboboxLikeRenderOptionInput } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
+import { IconDisplay } from '../select-icon/SelectIcon';
 
 /**
  * Interface option type matching DaaS select-dropdown interface
@@ -51,6 +52,8 @@ export interface SelectDropdownProps {
   maxDropdownHeight?: number;
   /** Additional Mantine Select props */
   selectProps?: Partial<SelectProps>;
+  /** Accessible name for the underlying Select input, since `label` is rendered separately by FormFieldLabel */
+  'aria-label'?: string;
 }
 
 /**
@@ -102,6 +105,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   searchable = false,
   maxDropdownHeight = 200,
   selectProps = {},
+  'aria-label': ariaLabel,
 }) => {
   // Check if any choice has an icon - used for global icon display logic (like DaaS)
   const applyGlobalIcon = React.useMemo(() => 
@@ -243,19 +247,15 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // Determine if we should show no data message
   const showNoData = selectData.length === 0;
 
-  // Left section icon rendering
+  // Left section icon rendering — resolved to the actual Tabler glyph via
+  // the shared ICON_MAP (select-icon's IconDisplay), not printed as the raw
+  // Material icon name string.
   const leftSection = React.useMemo(() => {
     if (!showGlobalIcon || !icon) {
       return undefined;
     }
-    
-    // For now, we'll just show the icon name as text
-    // In a real implementation, you might want to use an icon library
-    return (
-      <Text size="sm" c="dimmed">
-        {icon}
-      </Text>
-    );
+
+    return <IconDisplay icon={icon} size={16} />;
   }, [showGlobalIcon, icon]);
 
   // Custom render option component for icon/color support
@@ -267,9 +267,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
             <ColorSwatch color={option.color} size={14} />
           )}
           {option.icon && !option.color && (
-            <Text size="sm" c="dimmed">
-              {option.icon}
-            </Text>
+            <IconDisplay icon={option.icon} size={16} />
           )}
           <Text size="sm">{option.label}</Text>
           {checked && <IconCheck size={14} />}
@@ -306,6 +304,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       maxDropdownHeight={maxDropdownHeight}
       nothingFoundMessage={allowOther ? undefined : 'No options found'}
       renderOption={renderOption}
+      aria-label={ariaLabel || (!label ? placeholder : undefined)}
       data-testid="select-dropdown"
       // allowOther: Mantine v8's <Select> has no built-in "creatable" mode,
       // so free text is committed manually — track the live search text and
