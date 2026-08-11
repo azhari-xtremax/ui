@@ -176,7 +176,7 @@ describe('SelectRadio malformed choices', () => {
     expect(screen.getByLabelText('unnamed')).toBeInTheDocument();
   });
 
-  it('does not log a duplicate-key warning for choices whose values stringify identically', () => {
+  it('drops the second choice whose value stringifies identically instead of merging both onto one radio (S3.7)', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
@@ -194,8 +194,64 @@ describe('SelectRadio malformed choices', () => {
       String(args[0]).includes('same key'),
     );
     expect(dupKeyWarnings).toHaveLength(0);
+    // Radio.Group's native `value` is globally-unique per <Radio>; two
+    // choices stringifying to the same value ('1') would otherwise share
+    // one native radio, so selecting either checked both. The first
+    // occurrence renders; the second (never independently selectable
+    // anyway — handleChange resolves the first match) is dropped rather
+    // than silently sharing state with it.
     expect(screen.getByLabelText('Number one')).toBeInTheDocument();
-    expect(screen.getByLabelText('String one')).toBeInTheDocument();
+    expect(screen.queryByLabelText('String one')).not.toBeInTheDocument();
     consoleError.mockRestore();
+  });
+});
+
+describe('SelectRadio per-choice icon and color (S3.3)', () => {
+  it('renders a choice icon as a glyph and still exposes the label text', () => {
+    render(
+      <TestWrapper>
+        <SelectRadio
+          choices={[
+            { text: 'Locked', value: 'locked', icon: 'lock' },
+            { text: 'Open', value: 'open' },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Locked')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open')).toBeInTheDocument();
+    // The raw icon name is never printed as text.
+    expect(screen.queryByText('lock')).not.toBeInTheDocument();
+  });
+
+  it('renders a color swatch for a choice with color but no icon', () => {
+    render(
+      <TestWrapper>
+        <SelectRadio
+          choices={[{ text: 'Red', value: 'red', color: '#ff0000' }]}
+        />
+      </TestWrapper>
+    );
+
+    const radio = screen.getByLabelText('Red');
+    const label = radio.closest('.mantine-Radio-root');
+    expect(label?.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+  });
+
+  it('applies per-choice color to the Radio itself, overriding the group default', () => {
+    render(
+      <TestWrapper>
+        <SelectRadio
+          color="blue"
+          choices={[{ text: 'Custom', value: 'custom', color: 'red' }]}
+        />
+      </TestWrapper>
+    );
+
+    const radio = screen.getByLabelText('Custom') as HTMLInputElement;
+    // Mantine sets the resolved color as a CSS custom property on the root.
+    const root = radio.closest('.mantine-Radio-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--radio-color')).toContain('red');
   });
 });

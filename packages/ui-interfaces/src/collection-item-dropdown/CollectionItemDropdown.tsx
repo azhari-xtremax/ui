@@ -180,6 +180,15 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
     const [internalCollection, setInternalCollection] = useState<string>(selectedCollectionProp || '');
     const selectedCollection = selectedCollectionProp || internalCollection;
 
+    // Raw text of the collection TextInput while the user is typing. Kept
+    // separate from `selectedCollection` so keystrokes don't commit (and
+    // clear the item selection) until the value is either an exact match
+    // or the field blurs — see handleCollectionInputChange/Blur below.
+    const [collectionDraft, setCollectionDraft] = useState(selectedCollection);
+    useEffect(() => {
+        setCollectionDraft(selectedCollection);
+    }, [selectedCollection]);
+
     // Normalize value from primitive or other object formats to CollectionItemDropdownValue
     const normalizedValue = React.useMemo<CollectionItemDropdownValue | null>(() => {
         if (!value) return null;
@@ -325,6 +334,22 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
         // Clear item selection when collection changes
         onChange?.(null);
     }, [onCollectionChange, onChange]);
+
+    // Free-text collection input: only commit (and clear the item selection)
+    // once the typed value resolves to a real collection or the field blurs
+    // — not on every keystroke, which used to wipe the selection mid-type.
+    const handleCollectionInputChange = useCallback((raw: string) => {
+        setCollectionDraft(raw);
+        if (availableCollections.some((c) => c.collection === raw)) {
+            handleCollectionSelect(raw);
+        }
+    }, [availableCollections, handleCollectionSelect]);
+
+    const handleCollectionInputBlur = useCallback(() => {
+        if (collectionDraft !== selectedCollection) {
+            handleCollectionSelect(collectionDraft.trim());
+        }
+    }, [collectionDraft, selectedCollection, handleCollectionSelect]);
 
     // Separate user and system collections
     const { userCollections, systemCollections } = React.useMemo(() => {
@@ -533,8 +558,9 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
             {/* Collection Selection (when showCollectionSelect is true) */}
             {showCollectionSelect && (
                 <TextInput
-                    value={selectedCollection}
-                    onChange={(e) => handleCollectionSelect(e.target.value)}
+                    value={collectionDraft}
+                    onChange={(e) => handleCollectionInputChange(e.target.value)}
+                    onBlur={handleCollectionInputBlur}
                     placeholder="Select a collection..."
                     disabled={disabled || readOnly}
                     label="Collection"
@@ -644,7 +670,19 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
             <Combobox
                 store={combobox}
                 withinPortal={false}
-                onOptionSubmit={(val) => handleSelect(val)}
+                onOptionSubmit={(val) => {
+                    // `val` is Mantine's stringified option value — resolve it
+                    // back to the item's raw (possibly numeric) key so
+                    // isSelected/`===` comparisons and the stored value keep
+                    // their original type instead of collapsing to a string.
+                    const matched = availableItems.find(
+                        (item) => String(item[primaryKey] ?? item.id) === val,
+                    );
+                    const resolvedKey = matched
+                        ? (matched[primaryKey] ?? matched.id) as string | number
+                        : val;
+                    handleSelect(resolvedKey);
+                }}
                 disabled={disabled || readOnly}
             >
                 <Combobox.Target>

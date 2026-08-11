@@ -151,6 +151,20 @@ describe('SelectIcon', () => {
     renderWithMantine(<SelectIcon width="300px" />);
     expect(screen.getByTestId('select-icon-trigger')).toBeInTheDocument();
   });
+
+  it('renders every icon name exactly once, even ones listed in multiple categories (S5.2)', async () => {
+    renderWithMantine(<SelectIcon />);
+    fireEvent.click(screen.getByRole('button'));
+
+    // 'lock' (Action + Security & Identity), 'fingerprint' (Action + Security
+    // & Identity), and 'vpn_key' (Communication + Security & Identity) used
+    // to render twice, sharing one data-testid and double-highlighting.
+    for (const name of ['lock', 'fingerprint', 'vpn_key', 'star', 'refresh', 'share', 'bluetooth', 'wifi', 'public', 'explore']) {
+      await waitFor(() => {
+        expect(screen.getAllByTestId(`icon-${name}`)).toHaveLength(1);
+      });
+    }
+  });
 });
 
 describe('IconDisplay', () => {

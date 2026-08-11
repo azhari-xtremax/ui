@@ -762,9 +762,20 @@ export const ListM2M: React.FC<ListM2MProps> = ({
             valueProp === null ||
             (Array.isArray(valueProp) && valueProp.length === 0)
         ) {
-            lastSentChangesJSON.current = "";
-            resetChanges();
-            setRefreshKey((k) => k + 1);
+            // Only treat this as a reset when something was previously
+            // emitted (lastSentChangesJSON non-empty) — i.e. the parent is
+            // clearing state it actually received. On initial mount with an
+            // empty value this branch also runs, and unconditionally bumping
+            // refreshKey here re-fired the load effect with a new signature —
+            // the remaining "double initial fetch" path the signature dedupe
+            // alone can't catch. (Deliberately a ref read, not a dep: this
+            // effect must not rerun — and reset live staging — merely because
+            // changes accumulated while valueProp stayed empty.)
+            if (lastSentChangesJSON.current !== "") {
+                lastSentChangesJSON.current = "";
+                resetChanges();
+                setRefreshKey((k) => k + 1);
+            }
         }
     }, [valueProp, setLocalChanges, resetChanges]);
 
@@ -801,6 +812,12 @@ export const ListM2M: React.FC<ListM2MProps> = ({
     }, [changes]);
 
     // ── Load items when parameters change ───────────────────────────
+    // Dedupe against the actual query signature rather than dep identity —
+    // `filter`/`fields` are commonly passed as fresh literals by the parent
+    // on every render, and React 18 StrictMode double-invokes effects in
+    // dev; both fired this effect twice with an identical query ("double
+    // initial fetch"). Compare serialized params, not references.
+    const lastLoadSignatureRef = useRef<string | null>(null);
     useEffect(() => {
         if (relationInfo && isParentSaved && !mockItems) {
             // Build fields for the query — prefix with junction field for related data.
@@ -820,13 +837,22 @@ export const ListM2M: React.FC<ListM2MProps> = ({
             queryFields.push(relationInfo.junctionPrimaryKeyField.field);
             if (relationInfo.sortField) queryFields.push(relationInfo.sortField);
 
-            loadItems({
+            const params = {
                 limit: currentLimit,
                 page: currentPage,
                 fields: [...new Set(queryFields)],
                 search: enableSearchFilter ? search : undefined,
                 filter: filter as Record<string, unknown>,
-            });
+            };
+            const signature = JSON.stringify([
+                relationInfo.junctionCollection?.collection,
+                params,
+                refreshKey,
+            ]);
+            if (signature === lastLoadSignatureRef.current) return;
+            lastLoadSignatureRef.current = signature;
+
+            loadItems(params);
         }
     }, [
         relationInfo,
@@ -883,16 +909,16 @@ export const ListM2M: React.FC<ListM2MProps> = ({
 
     const handleMoveUp = useCallback(
         (index: number) => {
-            moveItemUp(index, pageOffset);
+            moveItemUp(visibleItems, index, pageOffset);
         },
-        [moveItemUp, pageOffset],
+        [moveItemUp, visibleItems, pageOffset],
     );
 
     const handleMoveDown = useCallback(
         (index: number) => {
-            moveItemDown(index, pageOffset);
+            moveItemDown(visibleItems, index, pageOffset);
         },
-        [moveItemDown, pageOffset],
+        [moveItemDown, visibleItems, pageOffset],
     );
 
     // ── DnD drag-end handler ────────────────────────────────────────
@@ -1247,7 +1273,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                             enableBatchEdit &&
                             layout === "table" &&
                             selectedIds.size > 0 && (
-                                <Tooltip label="Batch editing is not yet implemented">
+                                <Tooltip label={t.batch_edit_not_implemented}>
                                     <Button
                                         variant="light"
                                         color="warning"
