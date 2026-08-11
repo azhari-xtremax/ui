@@ -148,8 +148,19 @@ export function SelectMultipleDropdown({
       return indexA - indexB;
     });
 
-    // Convert back to original value types
+    // Convert back to original value types. Preserve the exact
+    // previously-stored value for anything already selected instead of
+    // re-resolving it through `choices.find` — this whole array gets
+    // rebuilt from Mantine's stringified selection on *every* toggle, so
+    // resolving fresh here would silently re-type an already-selected
+    // "dropped twin" (e.g. a stored string '1' becoming number 1, since
+    // dedup above only keeps the first colliding choice) whenever the user
+    // toggles any unrelated item (S6.6).
+    const currentByString = new Map(normalizedValue.map(v => [String(v), v] as const));
     const convertedValue = sortedValue.map(stringValue => {
+      if (currentByString.has(stringValue)) {
+        return currentByString.get(stringValue)!;
+      }
       const originalChoice = choices.find(choice => String(choice.value) === stringValue);
       return originalChoice ? originalChoice.value : stringValue;
     });
