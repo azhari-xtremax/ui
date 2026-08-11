@@ -196,9 +196,31 @@ describe('SelectMultipleCheckbox', () => {
         <SelectMultipleCheckbox choices={mockChoices} value={['option1', 'custom_value']} allowOther />
       </TestWrapper>
     );
-    
+
     expect(screen.getByLabelText('custom_value')).toBeInTheDocument();
     expect(screen.getByLabelText('custom_value')).toBeChecked();
+  });
+
+  it('does not render a committed custom value twice while its input row is still open (S7.3)', async () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox choices={mockChoices} value={['option1', 'custom_value']} allowOther />
+      </TestWrapper>
+    );
+
+    // Open a new "Other" row and type the SAME value that's already committed
+    // in `value` — before the fix this produced both the read-only
+    // "Selected custom value: custom_value" checkbox AND this row's own
+    // checkbox for the same string.
+    fireEvent.click(screen.getByText('Other'));
+    const input = await screen.findByPlaceholderText('Enter custom value');
+    fireEvent.change(input, { target: { value: 'custom_value' } });
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Selected custom value: custom_value')).not.toBeInTheDocument();
+    });
+    // The live row's own checkbox is still present and checked.
+    expect(screen.getByLabelText('Custom value checkbox: custom_value')).toBeChecked();
   });
 
   it('is disabled when disabled prop is true', () => {

@@ -360,3 +360,122 @@ describe('SelectMultipleCheckboxTree search edge cases', () => {
     );
   });
 });
+
+describe('SelectMultipleCheckboxTree leaf mode fully-selected parent (S4.5)', () => {
+  it('shows checked (not indeterminate) once every leaf under a parent is selected', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={sampleChoices}
+          value={['react', 'vue', 'angular']}
+          valueCombining="leaf"
+          onChange={jest.fn()}
+        />
+      </TestWrapper>
+    );
+
+    const frontendCheckbox = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    expect(frontendCheckbox.checked).toBe(true);
+    expect(frontendCheckbox.indeterminate).toBe(false);
+  });
+
+  it('shows indeterminate when only some leaves under a parent are selected', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={sampleChoices}
+          value={['react']}
+          valueCombining="leaf"
+          onChange={jest.fn()}
+        />
+      </TestWrapper>
+    );
+
+    const frontendCheckbox = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    expect(frontendCheckbox.checked).toBe(false);
+    expect(frontendCheckbox.indeterminate).toBe(true);
+  });
+});
+
+describe('SelectMultipleCheckboxTree search keeps matched-parent subtree (S4.6)', () => {
+  it('keeps unmatched children visible under a parent whose own text matched', async () => {
+    const choices: TreeChoice[] = [
+      {
+        text: 'Frontend Frameworks',
+        value: 'frontend',
+        children: [
+          { text: 'React', value: 'react' },
+          { text: 'Vue', value: 'vue' },
+        ],
+      },
+      ...Array.from({ length: 10 }, (_, i) => ({ text: `Filler ${i}`, value: `f${i}` })),
+    ];
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={choices} value={[]} onChange={jest.fn()} />
+      </TestWrapper>
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search...');
+    fireEvent.change(searchInput, { target: { value: 'Frontend' } });
+
+    await waitFor(() => expect(screen.queryByText('Filler 0')).not.toBeInTheDocument(), { timeout: 1500 });
+    // React/Vue don't match "Frontend" themselves but must still render
+    // since their parent's own text matched.
+    expect(screen.getByText('React')).toBeInTheDocument();
+    expect(screen.getByText('Vue')).toBeInTheDocument();
+  });
+});
+
+describe('SelectMultipleCheckboxTree cascade toggle skips disabled descendants (S4.7)', () => {
+  it('does not select a disabled child when checking its parent in "all" mode', () => {
+    const handleChange = jest.fn();
+    const choices: TreeChoice[] = [
+      {
+        text: 'Frontend',
+        value: 'frontend',
+        children: [
+          { text: 'React', value: 'react' },
+          { text: 'Vue (locked)', value: 'vue', disabled: true },
+        ],
+      },
+    ];
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={choices}
+          value={[]}
+          valueCombining="all"
+          onChange={handleChange}
+        />
+      </TestWrapper>
+    );
+
+    fireEvent.click(screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement);
+
+    expect(handleChange).toHaveBeenCalledWith(expect.arrayContaining(['frontend', 'react']));
+    const emitted = handleChange.mock.calls[0][0] as string[];
+    expect(emitted).not.toContain('vue');
+  });
+});
+
+describe('SelectMultipleCheckboxTree custom color normalization (S4.11)', () => {
+  it('applies a var(--mantine-color-X-6)-wrapped color instead of dropping it', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={[{ text: 'Alpha', value: 'a' }]}
+          value={[]}
+          color="var(--mantine-color-teal-6)"
+          onChange={jest.fn()}
+        />
+      </TestWrapper>
+    );
+
+    const input = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    const root = input.closest('.mantine-Checkbox-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--checkbox-color')).toContain('teal');
+  });
+});
