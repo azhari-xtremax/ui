@@ -531,25 +531,33 @@ export function useRelationMultipleM2M(
         });
     }, [relationInfo, junctionPKField]);
 
-    /** Move item up in the visible list (`pageOffset`: see reorderItems) */
-    const moveItemUp = useCallback((index: number, pageOffset = 0): void => {
+    /**
+     * Move item up within a caller-supplied page-local list (`pageOffset`:
+     * see reorderItems).
+     *
+     * `index` must be resolved against the exact same array the caller
+     * renders (its page-local `visibleItems`), not recomputed here from
+     * `displayItems` — `displayItems` is unfiltered by page and includes
+     * every staged create globally-sorted in, so on a non-last page (where
+     * the caller hides staged creates) the two arrays disagree and `index`
+     * pointed at the wrong item.
+     */
+    const moveItemUp = useCallback((pageItems: M2MDisplayItem[], index: number, pageOffset = 0): void => {
         if (index <= 0 || !relationInfo?.sortField) return;
-        const visible = displayItems.filter(i => i.$type !== 'deleted');
-        if (index >= visible.length) return;
-        const reordered = [...visible];
+        if (index >= pageItems.length) return;
+        const reordered = [...pageItems];
         [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
         reorderItems(reordered, pageOffset);
-    }, [displayItems, relationInfo, reorderItems]);
+    }, [relationInfo, reorderItems]);
 
-    /** Move item down in the visible list (`pageOffset`: see reorderItems) */
-    const moveItemDown = useCallback((index: number, pageOffset = 0): void => {
+    /** Move item down within a caller-supplied page-local list (see moveItemUp) */
+    const moveItemDown = useCallback((pageItems: M2MDisplayItem[], index: number, pageOffset = 0): void => {
         if (!relationInfo?.sortField) return;
-        const visible = displayItems.filter(i => i.$type !== 'deleted');
-        if (index >= visible.length - 1) return;
-        const reordered = [...visible];
+        if (index >= pageItems.length - 1) return;
+        const reordered = [...pageItems];
         [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
         reorderItems(reordered, pageOffset);
-    }, [displayItems, relationInfo, reorderItems]);
+    }, [relationInfo, reorderItems]);
 
     /**
      * Get IDs of currently-linked related items (for filtering selection modal).

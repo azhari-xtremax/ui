@@ -146,3 +146,46 @@ describe("useRelationM2AItems reorder", () => {
         );
     });
 });
+
+describe("useRelationM2AItems displayItems .id alias (R6.1/R6.2/R6.5)", () => {
+    // ListM2A's React keys, DnD sortable ids, data-testids, and
+    // JunctionItemForm's junctionPrimaryKey all read `.id` directly off
+    // displayItems. Locally-created items already got `.id` aliased from
+    // the real junction PK; fetched items never did — so for any junction
+    // table whose PK isn't literally a column named "id" (like this one,
+    // "uuid"), every fetched row's `.id` was undefined.
+    const NON_ID_PK_RELATION_INFO = {
+        ...RELATION_INFO,
+        junctionPrimaryKeyField: { field: "uuid", type: "uuid" },
+    } as unknown as M2ARelationInfo;
+
+    const NON_ID_PK_JUNCTION_ROWS = [
+        { uuid: "j1", page_id: "p1", collection: "heading_blocks", item: "h1", sort: 1 },
+        { uuid: "j2", page_id: "p1", collection: "text_blocks", item: "t1", sort: 2 },
+    ];
+
+    it("aliases the real junction PK onto .id for fetched items, not just locally-created ones", async () => {
+        (apiRequest as jest.Mock).mockImplementation((path: string) => {
+            if (path.startsWith("/api/items/pages_blocks")) {
+                return Promise.resolve({ data: NON_ID_PK_JUNCTION_ROWS, meta: { total_count: 2 } });
+            }
+            if (path.startsWith("/api/items/heading_blocks")) {
+                return Promise.resolve({ data: [{ id: "h1" }] });
+            }
+            if (path.startsWith("/api/items/text_blocks")) {
+                return Promise.resolve({ data: [{ id: "t1" }] });
+            }
+            return Promise.resolve({ data: [] });
+        });
+
+        const hook = renderHook(() => useRelationM2AItems(NON_ID_PK_RELATION_INFO, "p1"));
+        await act(async () => {
+            await hook.result.current.loadItems();
+        });
+
+        await waitFor(() => expect(hook.result.current.displayItems).toHaveLength(2));
+        const ids = hook.result.current.displayItems.map((i) => i.id);
+        expect(ids).toEqual(["j1", "j2"]);
+        expect(ids.every((id) => id !== undefined)).toBe(true);
+    });
+});

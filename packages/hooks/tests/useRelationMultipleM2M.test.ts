@@ -86,7 +86,7 @@ describe('useRelationMultipleM2M reorder pageOffset', () => {
     const pageOffset = 2; // (currentPage - 1) * currentLimit for page 2, limit 2
 
     act(() => {
-      result.current.moveItemDown(0, pageOffset);
+      result.current.moveItemDown(result.current.displayItems, 0, pageOffset);
     });
 
     const changes = result.current.getChanges();
@@ -128,6 +128,45 @@ describe('useRelationMultipleM2M reorder pageOffset', () => {
     });
 
     expect(result.current.getChanges()).toEqual({ create: [], update: [], delete: [] });
+  });
+
+  it('moveItemDown reorders exactly the caller-supplied array, ignoring an out-of-sync staged create in displayItems', async () => {
+    // Regression for the page/staged-create index mismatch: the caller
+    // (ListM2M) hides staged creates from a non-last page's visible list,
+    // so `displayItems` (which always includes every staged create) can
+    // disagree with what the caller actually passes in. moveItemUp/Down
+    // must resolve `index` against the array the caller supplies, not
+    // recompute their own view from `displayItems` — otherwise the same
+    // `index` picks a different item in each array.
+    const relationInfo = makeRelationInfo();
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    apiRequestMock.mockResolvedValueOnce({ data: pageOfItems(1, 2), meta: { total_count: 2 } });
+    await act(async () => {
+      await result.current.loadItems({ limit: 2, page: 1, fields: [] });
+    });
+    await waitFor(() => expect(result.current.fetchedItems).toHaveLength(2));
+
+    // Stage a create — displayItems now has 3 entries (2 fetched + 1
+    // created), but a caller hiding staged creates on this page would still
+    // pass only the 2 fetched items.
+    act(() => {
+      result.current.createItem({ id: 99 });
+    });
+    expect(result.current.displayItems).toHaveLength(3);
+
+    const pageLocalItems = result.current.displayItems.filter((i) => i.$type !== 'created');
+    expect(pageLocalItems).toHaveLength(2);
+
+    act(() => {
+      result.current.moveItemDown(pageLocalItems, 0);
+    });
+
+    const changes = result.current.getChanges();
+    // Only the two page-local (fetched) items should have staged sort
+    // updates — the created item's own sort must be untouched.
+    expect(changes.update).toHaveLength(2);
+    expect(changes.create[0].sort).toBe(3); // unchanged from createItem's auto-assignment
   });
 });
 
