@@ -126,8 +126,14 @@ export const SelectDropdownM2OInterface: React.FC<SelectDropdownM2OInterfaceProp
     }
   };
 
-  // Determine the current value ID
-  const currentId = typeof value === 'object' && value !== null ? (value as M2OItem).id : value;
+  // Determine the current value ID. The related collection's PK isn't
+  // necessarily `id` — resolve via relationInfo the same way the full
+  // SelectDropdownM2O component does, instead of hardcoding `.id`.
+  const pkField = relationInfo?.relatedPrimaryKeyField?.field || 'id';
+  const currentId =
+    typeof value === 'object' && value !== null
+      ? ((value as M2OItem)[pkField] as string | number | undefined)
+      : value;
 
   return (
     <Stack gap="xs" data-testid={testId}>
@@ -174,7 +180,15 @@ export const SelectDropdownM2OInterface: React.FC<SelectDropdownM2OInterfaceProp
             )}
           </Group>
         ) : renderSelectedItem ? (
-          renderSelectedItem(value as M2OItem, handleClear)
+          // `value` may be a bare primitive key (not yet resolved to the full
+          // related item) — wrap it under the resolved PK field so consumers
+          // of the render prop always receive an item-shaped object.
+          renderSelectedItem(
+            typeof value === 'object' && value !== null
+              ? (value as M2OItem)
+              : ({ [pkField]: value } as unknown as M2OItem),
+            handleClear,
+          )
         ) : (
           <Group justify="space-between">
             <Text size="sm">

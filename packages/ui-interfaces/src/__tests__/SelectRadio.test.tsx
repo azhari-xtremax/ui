@@ -205,3 +205,53 @@ describe('SelectRadio malformed choices', () => {
     consoleError.mockRestore();
   });
 });
+
+describe('SelectRadio per-choice icon and color (S3.3)', () => {
+  it('renders a choice icon as a glyph and still exposes the label text', () => {
+    render(
+      <TestWrapper>
+        <SelectRadio
+          choices={[
+            { text: 'Locked', value: 'locked', icon: 'lock' },
+            { text: 'Open', value: 'open' },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Locked')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open')).toBeInTheDocument();
+    // The raw icon name is never printed as text.
+    expect(screen.queryByText('lock')).not.toBeInTheDocument();
+  });
+
+  it('renders a color swatch for a choice with color but no icon', () => {
+    render(
+      <TestWrapper>
+        <SelectRadio
+          choices={[{ text: 'Red', value: 'red', color: '#ff0000' }]}
+        />
+      </TestWrapper>
+    );
+
+    const radio = screen.getByLabelText('Red');
+    const label = radio.closest('.mantine-Radio-root');
+    expect(label?.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+  });
+
+  it('applies per-choice color to the Radio itself, overriding the group default', () => {
+    render(
+      <TestWrapper>
+        <SelectRadio
+          color="blue"
+          choices={[{ text: 'Custom', value: 'custom', color: 'red' }]}
+        />
+      </TestWrapper>
+    );
+
+    const radio = screen.getByLabelText('Custom') as HTMLInputElement;
+    // Mantine sets the resolved color as a CSS custom property on the root.
+    const root = radio.closest('.mantine-Radio-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--radio-color')).toContain('red');
+  });
+});

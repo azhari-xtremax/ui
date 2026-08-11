@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { SelectDropdown, type SelectOption } from '../select-dropdown/SelectDropdown';
 
@@ -265,16 +265,16 @@ describe('SelectDropdown', () => {
   });
 
   describe('Icon Support', () => {
-    it('displays icon in left section when provided', () => {
+    it('renders the icon as a glyph, not the raw Material name string (S2.2)', () => {
       renderWithProvider(
         <SelectDropdown
           choices={mockChoices}
-          icon="arrow_drop_down_circle"
+          icon="home"
           onChange={mockOnChange}
         />
       );
 
-      expect(screen.getByText('arrow_drop_down_circle')).toBeInTheDocument();
+      expect(screen.queryByText('home')).not.toBeInTheDocument();
     });
   });
 
@@ -318,6 +318,46 @@ describe('SelectDropdown', () => {
       expect(select).toBeInTheDocument();
     });
   });
+
+  describe('Icon rendering (S2.2)', () => {
+    it('renders a mapped glyph for a choice icon instead of the raw name string', () => {
+      renderWithProvider(
+        <SelectDropdown
+          choices={[{ text: 'React', value: 'react', icon: 'code' }]}
+          onChange={mockOnChange}
+        />
+      );
+
+      // The raw Material icon name should never appear as visible text.
+      expect(screen.queryByText('code')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Accessible name (S2.3)', () => {
+    it('forwards aria-label to the underlying Select', () => {
+      renderWithProvider(
+        <SelectDropdown
+          choices={mockChoices}
+          onChange={mockOnChange}
+          aria-label="Favorite framework"
+        />
+      );
+
+      expect(screen.getByRole('textbox', { name: 'Favorite framework' })).toBeInTheDocument();
+    });
+
+    it('falls back to the placeholder as an accessible name when no visible label is set', () => {
+      renderWithProvider(
+        <SelectDropdown
+          choices={mockChoices}
+          placeholder="Choose a framework"
+          onChange={mockOnChange}
+        />
+      );
+
+      expect(screen.getByRole('textbox', { name: 'Choose a framework' })).toBeInTheDocument();
+    });
+  });
 });
 
 describe('SelectDropdown allowOther', () => {
@@ -355,6 +395,54 @@ describe('SelectDropdown allowOther', () => {
 
     expect(onChange).not.toHaveBeenCalledWith('Alpha');
   });
+
+  it('does not re-commit the same value on a second blur with unchanged text', () => {
+    const onChange = jest.fn();
+    renderWithProvider(<SelectDropdown choices={choices} allowOther onChange={onChange} />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Custom Value' } });
+    fireEvent.blur(input);
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not commit typed text when Escape is pressed', () => {
+    const onChange = jest.fn();
+    renderWithProvider(<SelectDropdown choices={choices} allowOther onChange={onChange} />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Discarded text' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    fireEvent.blur(input);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('chains a consumer-supplied selectProps.onBlur instead of replacing the commit wiring', () => {
+    const onChange = jest.fn();
+    const consumerOnBlur = jest.fn();
+    renderWithProvider(
+      <SelectDropdown
+        choices={choices}
+        allowOther
+        onChange={onChange}
+        selectProps={{ onBlur: consumerOnBlur }}
+      />
+    );
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Custom Value' } });
+    fireEvent.blur(input);
+
+    expect(consumerOnBlur).toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('Custom Value');
+  });
 });
 
 describe('SelectDropdown stringify-colliding choices', () => {
@@ -370,5 +458,49 @@ describe('SelectDropdown stringify-colliding choices', () => {
     );
 
     expect(screen.getByTestId('select-dropdown')).toBeInTheDocument();
+  });
+});
+
+describe('SelectDropdown icon + color', () => {
+  const iconAndColorChoices: SelectOption[] = [
+    { text: 'React', value: 'react', icon: 'code', color: '#61dafb' },
+    { text: 'Plain', value: 'plain' },
+  ];
+
+  it('shows both the icon glyph and the color swatch for an option that has both', async () => {
+    renderWithProvider(<SelectDropdown choices={iconAndColorChoices} onChange={jest.fn()} />);
+
+    fireEvent.click(screen.getByTestId('select-dropdown'));
+    const option = await screen.findByRole('option', { name: /React/ });
+
+    // Icons render as Tabler glyphs (never the raw Material name — see the
+    // Icon rendering (S2.2) suite above); the swatch renders alongside.
+    // The dropdown portals outside the render container, so scope to the
+    // option row itself.
+    expect(screen.queryByText('code')).not.toBeInTheDocument();
+    expect(option.querySelector('.tabler-icon-code')).toBeInTheDocument();
+    expect(option.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+  });
+
+  it("shows the selected choice's own icon and swatch in the closed input instead of going blank", () => {
+    renderWithProvider(
+      <SelectDropdown value="react" choices={iconAndColorChoices} onChange={jest.fn()} />
+    );
+
+    const wrapper = screen.getByTestId('select-dropdown').closest('.mantine-Input-wrapper') as HTMLElement;
+    expect(wrapper.querySelector('.tabler-icon-code')).toBeInTheDocument();
+    expect(wrapper.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+  });
+
+  it("shows the selected choice's own icon instead of the global icon prop", () => {
+    renderWithProvider(
+      <SelectDropdown value="react" icon="home" choices={iconAndColorChoices} onChange={jest.fn()} />
+    );
+
+    // The input's immediate wrapper only contains leftSection + input +
+    // chevron (no hidden option markup), so scoping there is reliable.
+    const wrapper = screen.getByTestId('select-dropdown').closest('.mantine-Input-wrapper') as HTMLElement;
+    expect(wrapper.querySelector('.tabler-icon-code')).toBeInTheDocument();
+    expect(wrapper.querySelector('.tabler-icon-home')).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Select, SelectProps, Group, ColorSwatch, Text, ComboboxItem, ComboboxLikeRenderOptionInput } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
+import { IconDisplay } from '../select-icon/SelectIcon';
 
 /**
  * Interface option type matching DaaS select-dropdown interface
@@ -51,6 +52,8 @@ export interface SelectDropdownProps {
   maxDropdownHeight?: number;
   /** Additional Mantine Select props */
   selectProps?: Partial<SelectProps>;
+  /** Accessible name for the underlying Select input, since `label` is rendered separately by FormFieldLabel */
+  'aria-label'?: string;
 }
 
 /**
@@ -102,6 +105,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   searchable = false,
   maxDropdownHeight = 200,
   selectProps = {},
+  'aria-label': ariaLabel,
 }) => {
   // Check if any choice has an icon - used for global icon display logic (like DaaS)
   const applyGlobalIcon = React.useMemo(() => 
@@ -188,20 +192,46 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // has no built-in "creatable" mode, so this is done manually.
   const [otherSearchValue, setOtherSearchValue] = React.useState('');
 
+  // Set synchronously by handleChange whenever Mantine resolves a real
+  // option selection (including via Enter on a highlighted option) — read
+  // by the Enter-key commit below to avoid double-emitting: Mantine's own
+  // onChange already fired with the correct value, so the manual commit
+  // must be skipped rather than re-emitting the raw (possibly different)
+  // search text.
+  const justSelectedRef = React.useRef(false);
+
+  // Tracks the last value we committed via commitOtherValue so repeated
+  // blur/Enter events with unchanged text (e.g. tabbing away and back
+  // without editing) don't re-fire onChange with the same value.
+  const lastCommittedRef = React.useRef<string | null>(null);
+
   const commitOtherValue = React.useCallback(() => {
     if (!allowOther || !onChange) return;
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
     const trimmed = otherSearchValue.trim();
     if (!trimmed) return;
+    if (trimmed === lastCommittedRef.current) return;
     // Only commit free text — an exact match to an existing choice's label
     // was already handled by onChange via the normal option-select path.
     const matchesExistingChoice = choices.some(
       (choice) => choice.text === trimmed || String(choice.value) === trimmed,
     );
     if (!matchesExistingChoice) {
+      lastCommittedRef.current = trimmed;
       onChange(trimmed);
     }
   }, [allowOther, onChange, otherSearchValue, choices]);
 
+  // Escape: restore the search text to the current committed value instead
+  // of leaving typed-but-uncommitted text in place, which the subsequent
+  // blur would otherwise commit.
+  const cancelOtherEdit = React.useCallback(() => {
+    justSelectedRef.current = true; // suppress the blur that follows Escape
+    setOtherSearchValue(value !== null && value !== undefined ? String(value) : '');
+  }, [value]);
 
   // Handle value changes
   const handleChange = React.useCallback(
@@ -209,6 +239,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       if (!onChange) {
         return;
       }
+      justSelectedRef.current = true;
 
       if (selectedValue === null) {
         onChange(null);
@@ -243,20 +274,42 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // Determine if we should show no data message
   const showNoData = selectData.length === 0;
 
-  // Left section icon rendering
+  // The currently selected choice, if any — used so the closed input can
+  // show *that* choice's own icon/color once something is selected, instead
+  // of going blank (showGlobalIcon deliberately turns off the global
+  // fallback icon once a value is picked, but nothing filled that gap with
+  // the selection's own icon).
+  const selectedChoice = React.useMemo(() => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const strValue = String(value);
+    return choices.find((choice) => String(choice.value) === strValue) ?? null;
+  }, [choices, value]);
+
+
+  // Left section icon rendering — the selected choice's own icon/color when
+  // set, otherwise the global fallback; icons resolved to the actual Tabler
+  // glyph via the shared ICON_MAP (select-icon's IconDisplay), never printed
+  // as the raw Material icon name string.
   const leftSection = React.useMemo(() => {
+    // Mirror renderOption below: show both when the choice has both, not
+    // just the color (a bare ColorSwatch previously won a choice's icon
+    // entirely out of the closed input whenever a color was also set).
+    if (selectedChoice?.color || selectedChoice?.icon) {
+      return (
+        <Group gap={4} wrap="nowrap">
+          {selectedChoice.color && <ColorSwatch color={selectedChoice.color} size={14} />}
+          {selectedChoice.icon && <IconDisplay icon={selectedChoice.icon} size={16} />}
+        </Group>
+      );
+    }
     if (!showGlobalIcon || !icon) {
       return undefined;
     }
-    
-    // For now, we'll just show the icon name as text
-    // In a real implementation, you might want to use an icon library
-    return (
-      <Text size="sm" c="dimmed">
-        {icon}
-      </Text>
-    );
-  }, [showGlobalIcon, icon]);
+
+    return <IconDisplay icon={icon} size={16} />;
+  }, [selectedChoice, showGlobalIcon, icon]);
 
   // Custom render option component for icon/color support
   const renderOption = React.useCallback(
@@ -266,10 +319,8 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
           {option.color && (
             <ColorSwatch color={option.color} size={14} />
           )}
-          {option.icon && !option.color && (
-            <Text size="sm" c="dimmed">
-              {option.icon}
-            </Text>
+          {option.icon && (
+            <IconDisplay icon={option.icon} size={16} />
           )}
           <Text size="sm">{option.label}</Text>
           {checked && <IconCheck size={14} />}
@@ -306,24 +357,33 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       maxDropdownHeight={maxDropdownHeight}
       nothingFoundMessage={allowOther ? undefined : 'No options found'}
       renderOption={renderOption}
+      aria-label={ariaLabel || (!label ? placeholder : undefined)}
       data-testid="select-dropdown"
+      {...selectProps}
       // allowOther: Mantine v8's <Select> has no built-in "creatable" mode,
       // so free text is committed manually — track the live search text and
       // emit it as the value on Enter or on blur when it matches no choice.
-      // Removed the old dead `else if (allowOther)` branch in handleChange:
-      // Mantine's onChange only ever fires with an existing option's value
-      // (or null), so typed-but-uncommitted text never reached it.
+      // Spread after `selectProps` and chained (not overwritten) so a
+      // consumer-supplied onBlur/onKeyDown/onSearchChange doesn't silently
+      // disable the commit wiring.
       {...(allowOther
         ? {
             searchValue: otherSearchValue,
-            onSearchChange: setOtherSearchValue,
-            onBlur: commitOtherValue,
+            onSearchChange: (val: string) => {
+              selectProps.onSearchChange?.(val);
+              setOtherSearchValue(val);
+            },
+            onBlur: (event: React.FocusEvent<HTMLInputElement>) => {
+              selectProps.onBlur?.(event);
+              commitOtherValue();
+            },
             onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+              selectProps.onKeyDown?.(event);
               if (event.key === 'Enter') commitOtherValue();
+              else if (event.key === 'Escape') cancelOtherEdit();
             },
           }
         : {})}
-      {...selectProps}
     />
   );
 };

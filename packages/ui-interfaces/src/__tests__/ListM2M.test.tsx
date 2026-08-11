@@ -232,3 +232,54 @@ describe('ListM2M fields= query PK resolution', () => {
         expect(fields).not.toContain('tag_id.id');
     });
 });
+
+describe('ListM2M load-items dedupe', () => {
+    it('does not refire an identical query when the parent passes fresh filter/fields literals', async () => {
+        const { rerender } = render(
+            <MantineProvider>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    filter={{ status: 'published' }}
+                    fields={['id', 'name']}
+                />
+            </MantineProvider>
+        );
+
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(1));
+
+        // Same values, fresh object/array identities — the pre-fix effect
+        // refired on dep identity and issued the identical query again.
+        rerender(
+            <MantineProvider>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    filter={{ status: 'published' }}
+                    fields={['id', 'name']}
+                />
+            </MantineProvider>
+        );
+
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(1));
+        expect(mockLoadItems).toHaveBeenCalledTimes(1);
+    });
+
+    it('still refires when the query genuinely changes', async () => {
+        const { rerender } = render(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={1} filter={{ status: 'published' }} />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(1));
+
+        rerender(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={1} filter={{ status: 'draft' }} />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(2));
+    });
+});
