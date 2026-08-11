@@ -274,16 +274,42 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // Determine if we should show no data message
   const showNoData = selectData.length === 0;
 
-  // Left section icon rendering — resolved to the actual Tabler glyph via
-  // the shared ICON_MAP (select-icon's IconDisplay), not printed as the raw
-  // Material icon name string.
+  // The currently selected choice, if any — used so the closed input can
+  // show *that* choice's own icon/color once something is selected, instead
+  // of going blank (showGlobalIcon deliberately turns off the global
+  // fallback icon once a value is picked, but nothing filled that gap with
+  // the selection's own icon).
+  const selectedChoice = React.useMemo(() => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const strValue = String(value);
+    return choices.find((choice) => String(choice.value) === strValue) ?? null;
+  }, [choices, value]);
+
+
+  // Left section icon rendering — the selected choice's own icon/color when
+  // set, otherwise the global fallback; icons resolved to the actual Tabler
+  // glyph via the shared ICON_MAP (select-icon's IconDisplay), never printed
+  // as the raw Material icon name string.
   const leftSection = React.useMemo(() => {
+    // Mirror renderOption below: show both when the choice has both, not
+    // just the color (a bare ColorSwatch previously won a choice's icon
+    // entirely out of the closed input whenever a color was also set).
+    if (selectedChoice?.color || selectedChoice?.icon) {
+      return (
+        <Group gap={4} wrap="nowrap">
+          {selectedChoice.color && <ColorSwatch color={selectedChoice.color} size={14} />}
+          {selectedChoice.icon && <IconDisplay icon={selectedChoice.icon} size={16} />}
+        </Group>
+      );
+    }
     if (!showGlobalIcon || !icon) {
       return undefined;
     }
 
     return <IconDisplay icon={icon} size={16} />;
-  }, [showGlobalIcon, icon]);
+  }, [selectedChoice, showGlobalIcon, icon]);
 
   // Custom render option component for icon/color support
   const renderOption = React.useCallback(
@@ -293,7 +319,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
           {option.color && (
             <ColorSwatch color={option.color} size={14} />
           )}
-          {option.icon && !option.color && (
+          {option.icon && (
             <IconDisplay icon={option.icon} size={16} />
           )}
           <Text size="sm">{option.label}</Text>

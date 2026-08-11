@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { SelectDropdown, type SelectOption } from '../select-dropdown/SelectDropdown';
 
@@ -458,5 +458,49 @@ describe('SelectDropdown stringify-colliding choices', () => {
     );
 
     expect(screen.getByTestId('select-dropdown')).toBeInTheDocument();
+  });
+});
+
+describe('SelectDropdown icon + color', () => {
+  const iconAndColorChoices: SelectOption[] = [
+    { text: 'React', value: 'react', icon: 'code', color: '#61dafb' },
+    { text: 'Plain', value: 'plain' },
+  ];
+
+  it('shows both the icon glyph and the color swatch for an option that has both', async () => {
+    renderWithProvider(<SelectDropdown choices={iconAndColorChoices} onChange={jest.fn()} />);
+
+    fireEvent.click(screen.getByTestId('select-dropdown'));
+    const option = await screen.findByRole('option', { name: /React/ });
+
+    // Icons render as Tabler glyphs (never the raw Material name — see the
+    // Icon rendering (S2.2) suite above); the swatch renders alongside.
+    // The dropdown portals outside the render container, so scope to the
+    // option row itself.
+    expect(screen.queryByText('code')).not.toBeInTheDocument();
+    expect(option.querySelector('.tabler-icon-code')).toBeInTheDocument();
+    expect(option.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+  });
+
+  it("shows the selected choice's own icon and swatch in the closed input instead of going blank", () => {
+    renderWithProvider(
+      <SelectDropdown value="react" choices={iconAndColorChoices} onChange={jest.fn()} />
+    );
+
+    const wrapper = screen.getByTestId('select-dropdown').closest('.mantine-Input-wrapper') as HTMLElement;
+    expect(wrapper.querySelector('.tabler-icon-code')).toBeInTheDocument();
+    expect(wrapper.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+  });
+
+  it("shows the selected choice's own icon instead of the global icon prop", () => {
+    renderWithProvider(
+      <SelectDropdown value="react" icon="home" choices={iconAndColorChoices} onChange={jest.fn()} />
+    );
+
+    // The input's immediate wrapper only contains leftSection + input +
+    // chevron (no hidden option markup), so scoping there is reliable.
+    const wrapper = screen.getByTestId('select-dropdown').closest('.mantine-Input-wrapper') as HTMLElement;
+    expect(wrapper.querySelector('.tabler-icon-code')).toBeInTheDocument();
+    expect(wrapper.querySelector('.tabler-icon-home')).not.toBeInTheDocument();
   });
 });
