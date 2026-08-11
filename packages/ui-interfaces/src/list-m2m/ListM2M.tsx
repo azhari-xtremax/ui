@@ -762,9 +762,20 @@ export const ListM2M: React.FC<ListM2MProps> = ({
             valueProp === null ||
             (Array.isArray(valueProp) && valueProp.length === 0)
         ) {
-            lastSentChangesJSON.current = "";
-            resetChanges();
-            setRefreshKey((k) => k + 1);
+            // Only treat this as a reset when something was previously
+            // emitted (lastSentChangesJSON non-empty) — i.e. the parent is
+            // clearing state it actually received. On initial mount with an
+            // empty value this branch also runs, and unconditionally bumping
+            // refreshKey here re-fired the load effect with a new signature —
+            // the remaining "double initial fetch" path the signature dedupe
+            // alone can't catch. (Deliberately a ref read, not a dep: this
+            // effect must not rerun — and reset live staging — merely because
+            // changes accumulated while valueProp stayed empty.)
+            if (lastSentChangesJSON.current !== "") {
+                lastSentChangesJSON.current = "";
+                resetChanges();
+                setRefreshKey((k) => k + 1);
+            }
         }
     }, [valueProp, setLocalChanges, resetChanges]);
 
