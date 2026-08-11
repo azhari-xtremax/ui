@@ -355,6 +355,54 @@ describe('SelectDropdown allowOther', () => {
 
     expect(onChange).not.toHaveBeenCalledWith('Alpha');
   });
+
+  it('does not re-commit the same value on a second blur with unchanged text', () => {
+    const onChange = jest.fn();
+    renderWithProvider(<SelectDropdown choices={choices} allowOther onChange={onChange} />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Custom Value' } });
+    fireEvent.blur(input);
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not commit typed text when Escape is pressed', () => {
+    const onChange = jest.fn();
+    renderWithProvider(<SelectDropdown choices={choices} allowOther onChange={onChange} />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Discarded text' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    fireEvent.blur(input);
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('chains a consumer-supplied selectProps.onBlur instead of replacing the commit wiring', () => {
+    const onChange = jest.fn();
+    const consumerOnBlur = jest.fn();
+    renderWithProvider(
+      <SelectDropdown
+        choices={choices}
+        allowOther
+        onChange={onChange}
+        selectProps={{ onBlur: consumerOnBlur }}
+      />
+    );
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Custom Value' } });
+    fireEvent.blur(input);
+
+    expect(consumerOnBlur).toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('Custom Value');
+  });
 });
 
 describe('SelectDropdown stringify-colliding choices', () => {

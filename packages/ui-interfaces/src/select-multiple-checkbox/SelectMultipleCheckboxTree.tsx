@@ -31,6 +31,17 @@ export interface TreeChoice {
   disabled?: boolean;
 }
 
+// Internal: TreeChoice annotated with a key derived from its position in the
+// *unfiltered* `choices` tree. Search/showSelectionOnly filtering changes
+// which siblings appear (and therefore their index within the filtered
+// array) without changing each node's identity — keying on the filtered
+// index remounted every node whenever the filtered set changed size,
+// resetting each TreeNode's local `expanded` state back to its default.
+interface KeyedTreeChoice extends Omit<TreeChoice, 'children'> {
+  __key: string;
+  children?: KeyedTreeChoice[];
+}
+
 export interface SelectMultipleCheckboxTreeProps {
   value?: (string | number | boolean)[];
   onChange?: (value: (string | number | boolean)[] | null) => void;
@@ -45,7 +56,7 @@ export interface SelectMultipleCheckboxTreeProps {
 }
 
 interface TreeNodeProps {
-  choice: TreeChoice;
+  choice: KeyedTreeChoice;
   selectedValues: (string | number | boolean)[];
   onToggle: (value: string | number | boolean, checked: boolean) => void;
   valueCombining: 'all' | 'branch' | 'leaf' | 'indeterminate' | 'exclusive';
@@ -186,20 +197,28 @@ export function SelectMultipleCheckboxTree({
     return false;
   }, [value]);
 
-  // Filter choices based on search and show selection only
+  // Filter choices based on search and show selection only. Keys are
+  // derived from each node's index in the *unfiltered* `choices`/`children`
+  // array (via `origIndex`, computed before the `.filter()` below), so they
+  // stay stable across search/showSelectionOnly changes even though the
+  // filtered array's own indices shift (see KeyedTreeChoice above).
   const filteredChoices = useMemo(() => {
-    const filterTree = (nodes: TreeChoice[]): TreeChoice[] => {
-      return nodes.filter(choice => {
-        if (showSelectionOnly) {
-          return value.includes(choice.value) || hasSelectedDescendants(choice);
-        }
-        return matchesSearch(choice, debouncedSearch);
-      }).map(choice => ({
-        ...choice,
-        children: choice.children ? filterTree(choice.children) : undefined,
-      }));
+    const filterTree = (nodes: TreeChoice[]): KeyedTreeChoice[] => {
+      return nodes
+        .map((choice, origIndex) => ({ choice, origIndex }))
+        .filter(({ choice }) => {
+          if (showSelectionOnly) {
+            return value.includes(choice.value) || hasSelectedDescendants(choice);
+          }
+          return matchesSearch(choice, debouncedSearch);
+        })
+        .map(({ choice, origIndex }) => ({
+          ...choice,
+          __key: `${origIndex}-${String(choice.value)}`,
+          children: choice.children ? filterTree(choice.children) : undefined,
+        }));
     };
-    
+
     return filterTree(choices);
   }, [choices, debouncedSearch, showSelectionOnly, value, hasSelectedDescendants, matchesSearch]);
 
@@ -372,12 +391,9 @@ export function SelectMultipleCheckboxTree({
         {/* Tree content */}
         <ScrollArea h="200px" p="sm">
           <Stack gap="xs">
-            {filteredChoices.map((choice, index) => (
-              // Index-qualified: see the matching comment at the recursive
-              // children.map below — choices whose values stringify
-              // identically would otherwise collide on key={String(value)}.
+            {filteredChoices.map((choice) => (
               <TreeNode
-                key={`${index}-${String(choice.value)}`}
+                key={choice.__key}
                 choice={choice}
                 selectedValues={value}
                 onToggle={handleToggle}
@@ -556,13 +572,9 @@ function TreeNode({
       {hasChildren && (
         <Collapse in={expanded}>
           <Stack gap="xs" ml="md" mt="xs">
-            {choice.children!.map((child, childIndex) => (
-              // Index-qualified for the same reason as the top-level
-              // filteredChoices.map above — colliding stringified values
-              // (e.g. 1 vs '1') within the same children array would
-              // otherwise produce a React duplicate-key warning.
+            {choice.children!.map((child) => (
               <TreeNode
-                key={`${childIndex}-${String(child.value)}`}
+                key={child.__key}
                 choice={child}
                 selectedValues={selectedValues}
                 onToggle={onToggle}

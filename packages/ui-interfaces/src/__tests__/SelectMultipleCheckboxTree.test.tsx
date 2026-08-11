@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { SelectMultipleCheckboxTree, TreeChoice } from '../select-multiple-checkbox/SelectMultipleCheckboxTree';
 
@@ -358,5 +358,53 @@ describe('SelectMultipleCheckboxTree search edge cases', () => {
       () => expect(screen.queryByText('Beta')).not.toBeInTheDocument(),
       { timeout: 1500 },
     );
+  });
+
+  it('preserves a manually collapsed node across a search that shifts its filtered index', async () => {
+    // "Group" sits last (unfiltered index 12) behind 12 fillers that don't
+    // match the search term below, but survives the search itself via its
+    // child's text — so it never unmounts, it just moves from filtered
+    // index 12 down to filtered index 0. Under the old filtered-index key,
+    // that move alone was enough to remount it and reset `expanded`.
+    const choices: TreeChoice[] = [
+      ...Array.from({ length: 12 }, (_, i) => ({
+        text: `Filler ${i}`,
+        value: `f${i}`,
+      })),
+      {
+        text: 'Group',
+        value: 'group',
+        children: [{ text: 'Uniquematch', value: 'group-child' }],
+      },
+    ];
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={choices} value={[]} onChange={jest.fn()} />
+      </TestWrapper>
+    );
+
+    // Collapse "Group" (expanded by default), reflected in its own
+    // treeitem's `aria-expanded` — checked directly rather than via content
+    // visibility, since Mantine's <Collapse> animates rather than unmounting.
+    // The toggle is rendered (visually hidden) on every node, including the
+    // childless "Uniquematch" nested inside Group's own treeitem, so take
+    // Group's own toggle specifically: the first one within Group's treeitem.
+    const groupItem = screen.getByText('Group').closest('[role="treeitem"]') as HTMLElement;
+    fireEvent.click(within(groupItem).getAllByLabelText('Collapse')[0]);
+    expect(groupItem.getAttribute('aria-expanded')).toBe('false');
+
+    // Search for a term only Group's child matches — every filler is
+    // filtered out, Group survives (it still renders, just collapsed) and
+    // moves from filtered index 12 to filtered index 0.
+    const searchInput = screen.getByPlaceholderText('Search...');
+    fireEvent.change(searchInput, { target: { value: 'Uniquematch' } });
+    await waitFor(
+      () => expect(screen.queryByText('Filler 0')).not.toBeInTheDocument(),
+      { timeout: 1500 },
+    );
+
+    const groupItemDuringSearch = screen.getByText('Group').closest('[role="treeitem"]') as HTMLElement;
+    expect(groupItemDuringSearch.getAttribute('aria-expanded')).toBe('false');
   });
 });
