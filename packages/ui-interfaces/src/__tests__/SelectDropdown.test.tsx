@@ -265,16 +265,16 @@ describe('SelectDropdown', () => {
   });
 
   describe('Icon Support', () => {
-    it('displays icon in left section when provided', () => {
+    it('renders the icon as a glyph, not the raw Material name string (S2.2)', () => {
       renderWithProvider(
         <SelectDropdown
           choices={mockChoices}
-          icon="arrow_drop_down_circle"
+          icon="home"
           onChange={mockOnChange}
         />
       );
 
-      expect(screen.getByText('arrow_drop_down_circle')).toBeInTheDocument();
+      expect(screen.queryByText('home')).not.toBeInTheDocument();
     });
   });
 
@@ -316,6 +316,46 @@ describe('SelectDropdown', () => {
 
       const select = screen.getByRole('textbox');
       expect(select).toBeInTheDocument();
+    });
+  });
+
+  describe('Icon rendering (S2.2)', () => {
+    it('renders a mapped glyph for a choice icon instead of the raw name string', () => {
+      renderWithProvider(
+        <SelectDropdown
+          choices={[{ text: 'React', value: 'react', icon: 'code' }]}
+          onChange={mockOnChange}
+        />
+      );
+
+      // The raw Material icon name should never appear as visible text.
+      expect(screen.queryByText('code')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Accessible name (S2.3)', () => {
+    it('forwards aria-label to the underlying Select', () => {
+      renderWithProvider(
+        <SelectDropdown
+          choices={mockChoices}
+          onChange={mockOnChange}
+          aria-label="Favorite framework"
+        />
+      );
+
+      expect(screen.getByRole('textbox', { name: 'Favorite framework' })).toBeInTheDocument();
+    });
+
+    it('falls back to the placeholder as an accessible name when no visible label is set', () => {
+      renderWithProvider(
+        <SelectDropdown
+          choices={mockChoices}
+          placeholder="Choose a framework"
+          onChange={mockOnChange}
+        />
+      );
+
+      expect(screen.getByRole('textbox', { name: 'Choose a framework' })).toBeInTheDocument();
     });
   });
 });

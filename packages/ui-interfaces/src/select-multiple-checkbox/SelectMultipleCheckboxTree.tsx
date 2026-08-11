@@ -24,6 +24,12 @@ import {
 import { IconChevronRight, IconChevronDown, IconSearch, IconX } from '@tabler/icons-react';
 import { useDebouncedValue } from '@mantine/hooks';
 
+// Depth cap for the recursive tree walkers (S4.10). `choices` is normally
+// plain JSON, which can't encode a cycle — but a programmatic consumer could
+// still hand this component a cyclic in-memory structure, which would
+// otherwise overflow the stack in every recursive helper below.
+const MAX_TREE_DEPTH = 100;
+
 export interface TreeChoice {
   text: string;
   value: string | number | boolean;
@@ -65,6 +71,10 @@ interface TreeNodeProps {
   disabled: boolean;
   level: number;
   color: string;
+  /** Values whose subtree contains a search/selection match — force-expanded regardless of prior manual collapse (S4.9) */
+  autoExpandValues: Set<string | number | boolean> | null;
+  /** Index path from the root (e.g. "0-2-1") — scopes data-testid so stringify-colliding sibling values don't share one testid (S4.8) */
+  nodePath: string;
 }
 
 // Inline SearchInput component to avoid external dependency
@@ -132,70 +142,93 @@ export function SelectMultipleCheckboxTree({
   const [debouncedSearch] = useDebouncedValue(search, 250);
   const labelId = useId();
 
-  // Get children values for a specific parent
+  // Strip a `var(--mantine-color-X-6)` wrapper down to the bare palette name
+  // before handing it to Mantine's `color` prop (S4.11) — mirrors the
+  // normalization SelectMultipleCheckbox already does. Forwarding the raw
+  // `var(...)` string as-is silently drops the color in Mantine v8.
+  const normalizedColor = useMemo(() => {
+    if (color.startsWith('var(--mantine-color-')) {
+      return color.replace('var(--mantine-color-', '').replace(')', '').replace('-6', '');
+    }
+    return color;
+  }, [color]);
+
+  // Get children values for a specific parent. Disabled nodes are excluded
+  // from cascade toggles (S4.7) — a disabled node should stay untouched
+  // when its ancestor is checked/unchecked, though its own (enabled)
+  // children are still collected.
   const getChildrenValues = useCallback((choice: TreeChoice): (string | number | boolean)[] => {
     if (!choice.children) {
       return [];
     }
-    const collectChildValues = (nodes: TreeChoice[]): (string | number | boolean)[] => {
+    const collectChildValues = (nodes: TreeChoice[], depth: number): (string | number | boolean)[] => {
+      if (depth > MAX_TREE_DEPTH) return [];
       const values: (string | number | boolean)[] = [];
       for (const node of nodes) {
-        values.push(node.value);
+        if (!node.disabled) values.push(node.value);
         if (node.children) {
-          values.push(...collectChildValues(node.children));
+          values.push(...collectChildValues(node.children, depth + 1));
         }
       }
       return values;
     };
-    return collectChildValues(choice.children);
+    return collectChildValues(choice.children, 0);
   }, []);
 
-  // Get leaf values from a choice
-  const getLeafValues = useCallback((choice: TreeChoice): (string | number | boolean)[] => {
+  // Get leaf values from a choice, excluding disabled leaves (S4.7).
+  const getLeafValues = useCallback((choice: TreeChoice, depth = 0): (string | number | boolean)[] => {
+    if (depth > MAX_TREE_DEPTH) return [];
     if (!choice.children || choice.children.length === 0) {
-      return [choice.value];
+      return choice.disabled ? [] : [choice.value];
     }
-    
+
     const leafValues: (string | number | boolean)[] = [];
     for (const child of choice.children) {
-      leafValues.push(...getLeafValues(child));
+      leafValues.push(...getLeafValues(child, depth + 1));
     }
     return leafValues;
   }, []);
 
   // Check if node matches search
-  const matchesSearch = useCallback((choice: TreeChoice, query: string): boolean => {
+  const matchesSearch = useCallback((choice: TreeChoice, query: string, depth = 0): boolean => {
     if (!query) {
       return true;
     }
+    if (depth > MAX_TREE_DEPTH) return false;
     const lowerQuery = query.toLowerCase();
-    
+
     // Check current node
     if (choice.text.toLowerCase().includes(lowerQuery)) {
       return true;
     }
-    
+
     // Check children recursively
     if (choice.children) {
-      return choice.children.some(child => matchesSearch(child, query));
+      return choice.children.some(child => matchesSearch(child, query, depth + 1));
     }
-    
+
     return false;
   }, []);
 
   // Check if node has any selected descendants
-  const hasSelectedDescendants = useCallback((choice: TreeChoice): boolean => {
-    if (!choice.children) {
+  const hasSelectedDescendants = useCallback((choice: TreeChoice, depth = 0): boolean => {
+    if (!choice.children || depth > MAX_TREE_DEPTH) {
       return false;
     }
-    
+
     for (const child of choice.children) {
-      if (value.includes(child.value) || hasSelectedDescendants(child)) {
+      if (value.includes(child.value) || hasSelectedDescendants(child, depth + 1)) {
         return true;
       }
     }
     return false;
   }, [value]);
+
+  // Check if a node's own text (not descendants) matches the query
+  const matchesOwnText = useCallback((choice: TreeChoice, query: string): boolean => {
+    if (!query) return false;
+    return choice.text.toLowerCase().includes(query.toLowerCase());
+  }, []);
 
   // Filter choices based on search and show selection only. Keys are
   // derived from each node's index in the *unfiltered* `choices`/`children`
@@ -203,7 +236,20 @@ export function SelectMultipleCheckboxTree({
   // stay stable across search/showSelectionOnly changes even though the
   // filtered array's own indices shift (see KeyedTreeChoice above).
   const filteredChoices = useMemo(() => {
-    const filterTree = (nodes: TreeChoice[]): KeyedTreeChoice[] => {
+    // Recursively annotate an unfiltered subtree with stable keys — used by
+    // the own-text-match branch below, which keeps ALL children rather than
+    // re-filtering them.
+    const annotateKeys = (node: TreeChoice, origIndex: number, depth: number): KeyedTreeChoice => ({
+      ...node,
+      __key: `${origIndex}-${String(node.value)}`,
+      children:
+        depth > MAX_TREE_DEPTH
+          ? undefined
+          : node.children?.map((child, childIndex) => annotateKeys(child, childIndex, depth + 1)),
+    });
+
+    const filterTree = (nodes: TreeChoice[], depth: number): KeyedTreeChoice[] => {
+      if (depth > MAX_TREE_DEPTH) return [];
       return nodes
         .map((choice, origIndex) => ({ choice, origIndex }))
         .filter(({ choice }) => {
@@ -212,15 +258,49 @@ export function SelectMultipleCheckboxTree({
           }
           return matchesSearch(choice, debouncedSearch);
         })
-        .map(({ choice, origIndex }) => ({
-          ...choice,
-          __key: `${origIndex}-${String(choice.value)}`,
-          children: choice.children ? filterTree(choice.children) : undefined,
-        }));
+        .map(({ choice, origIndex }) => {
+          // A node whose own text matched keeps ALL its children unfiltered —
+          // re-filtering them with the same predicate would otherwise drop
+          // every child that doesn't itself match, hiding the whole subtree
+          // under a parent the user was actually searching for.
+          if (!showSelectionOnly && debouncedSearch && matchesOwnText(choice, debouncedSearch)) {
+            return annotateKeys(choice, origIndex, depth);
+          }
+          return {
+            ...choice,
+            __key: `${origIndex}-${String(choice.value)}`,
+            children: choice.children ? filterTree(choice.children, depth + 1) : undefined,
+          };
+        });
     };
 
-    return filterTree(choices);
-  }, [choices, debouncedSearch, showSelectionOnly, value, hasSelectedDescendants, matchesSearch]);
+    return filterTree(choices, 0);
+  }, [choices, debouncedSearch, showSelectionOnly, value, hasSelectedDescendants, matchesSearch, matchesOwnText]);
+
+  // Nodes to force-expand: those on the path to a search match or a
+  // showSelectionOnly match, so per-node collapsed state (which persists
+  // across searches) can't hide a result under a collapsed ancestor (S4.9).
+  const autoExpandValues = useMemo(() => {
+    if (!debouncedSearch && !showSelectionOnly) return null;
+    const expand = new Set<string | number | boolean>();
+    const walk = (nodes: TreeChoice[], depth: number): boolean => {
+      if (depth > MAX_TREE_DEPTH) return false;
+      let anyMatch = false;
+      for (const node of nodes) {
+        const ownMatch = showSelectionOnly
+          ? value.includes(node.value)
+          : matchesSearch(node, debouncedSearch);
+        const childMatch = node.children ? walk(node.children, depth + 1) : false;
+        if (ownMatch || childMatch) {
+          anyMatch = true;
+          if (childMatch) expand.add(node.value);
+        }
+      }
+      return anyMatch;
+    };
+    walk(choices, 0);
+    return expand;
+  }, [choices, debouncedSearch, showSelectionOnly, value, matchesSearch]);
 
   // Handle checkbox toggle
   const handleToggle = useCallback((toggleValue: string | number | boolean, checked: boolean) => {
@@ -402,7 +482,9 @@ export function SelectMultipleCheckboxTree({
                 showSelectionOnly={showSelectionOnly}
                 disabled={disabled}
                 level={0}
-                color={color}
+                color={normalizedColor}
+                autoExpandValues={autoExpandValues}
+                nodePath={String(index)}
               />
             ))}
           </Stack>
@@ -458,9 +540,15 @@ function TreeNode({
   disabled,
   level,
   color,
+  autoExpandValues,
+  nodePath,
 }: TreeNodeProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [manuallyExpanded, setManuallyExpanded] = useState(true);
   const hasChildren = choice.children && choice.children.length > 0;
+  // Force-expanded while this node's subtree holds a search/selection match,
+  // regardless of a prior manual collapse — otherwise the match stays hidden
+  // under a collapsed ancestor (S4.9).
+  const expanded = autoExpandValues?.has(choice.value) || manuallyExpanded;
 
   // Calculate checkbox state based on selection and children
   const { checked, indeterminate } = useMemo(() => {
@@ -472,18 +560,19 @@ function TreeNode({
 
     // For parent nodes, check children state
     const allChildValues: (string | number | boolean)[] = [];
-    const collectChildValues = (nodes: TreeChoice[]) => {
+    const collectChildValues = (nodes: TreeChoice[], depth: number) => {
+      if (depth > MAX_TREE_DEPTH) return;
       for (const node of nodes) {
         allChildValues.push(node.value);
         if (node.children) {
-          collectChildValues(node.children);
+          collectChildValues(node.children, depth + 1);
         }
       }
     };
-    collectChildValues(choice.children!);
+    collectChildValues(choice.children!, 0);
 
     const selectedChildrenCount = allChildValues.filter(val => selectedValues.includes(val)).length;
-    
+
     if (valueCombining === 'all') {
       if (selectedChildrenCount === 0) {
         return { checked: isSelected, indeterminate: false };
@@ -492,7 +581,39 @@ function TreeNode({
       }
       return { checked: false, indeterminate: true };
     }
-    
+
+    if (valueCombining === 'leaf') {
+      // In leaf mode a parent's own value is never stored (only leaves are
+      // toggled), so `isSelected` is always false and this fell through to
+      // indeterminate even when every descendant leaf was selected (S4.5).
+      // Derive checked/indeterminate from leaf selection instead.
+      const leafValues: (string | number | boolean)[] = [];
+      const collectLeafValues = (nodes: TreeChoice[], depth: number) => {
+        if (depth > MAX_TREE_DEPTH) return;
+        for (const node of nodes) {
+          if (!node.children || node.children.length === 0) {
+            // Count only leaves the user can actually affect: enabled ones,
+            // plus disabled ones that are already selected (stored data).
+            // The cascade toggle skips disabled leaves (S4.7), so counting
+            // an unselected disabled leaf in the denominator would make
+            // "all leaves selected" unreachable — an indeterminate state no
+            // interaction can ever resolve, the same stuck-state class S4.5
+            // fixed for the plain case.
+            if (!node.disabled || selectedValues.includes(node.value)) {
+              leafValues.push(node.value);
+            }
+          } else {
+            collectLeafValues(node.children, depth + 1);
+          }
+        }
+      };
+      collectLeafValues(choice.children!, 0);
+      const selectedLeafCount = leafValues.filter(val => selectedValues.includes(val)).length;
+      if (selectedLeafCount === 0) return { checked: false, indeterminate: false };
+      if (selectedLeafCount === leafValues.length) return { checked: true, indeterminate: false };
+      return { checked: false, indeterminate: true };
+    }
+
     return { checked: isSelected, indeterminate: selectedChildrenCount > 0 && !isSelected };
   }, [selectedValues, choice, hasChildren, valueCombining]);
 
@@ -525,7 +646,7 @@ function TreeNode({
 
   const toggleExpanded = () => {
     if (hasChildren) {
-      setExpanded(!expanded);
+      setManuallyExpanded(!expanded);
     }
   };
 
@@ -558,7 +679,7 @@ function TreeNode({
           label={highlightedText}
           aria-label={choice.text}
           wrapperProps={{
-            'data-testid': `checkbox-${String(choice.value)}`,
+            'data-testid': `checkbox-${nodePath}`,
           }}
           styles={{
             label: {
@@ -584,6 +705,8 @@ function TreeNode({
                 disabled={disabled}
                 level={level + 1}
                 color={color}
+                autoExpandValues={autoExpandValues}
+                nodePath={`${nodePath}-${childIndex}`}
               />
             ))}
           </Stack>

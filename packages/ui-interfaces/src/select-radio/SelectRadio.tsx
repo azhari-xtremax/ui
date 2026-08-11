@@ -1,13 +1,18 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Radio, Text, Stack, Group, TextInput, ActionIcon } from '@mantine/core';
+import { Radio, Text, Stack, Group, TextInput, ActionIcon, ColorSwatch } from '@mantine/core';
 import { IconX } from '@tabler/icons-react';
+import { IconDisplay } from '../select-icon/SelectIcon';
 
 export interface RadioChoice {
   text: string;
   value: string | number | boolean;
   disabled?: boolean;
+  /** Icon name (Material Design name, resolved via the shared ICON_MAP), shown before the label */
+  icon?: string | null;
+  /** Theme color name or CSS color, applied to the checked state and an optional swatch */
+  color?: string | null;
 }
 
 export interface SelectRadioProps {
@@ -196,16 +201,27 @@ export function SelectRadio({
             <Radio
               key={`${index}-${String(choice.value)}`}
               value={String(choice.value)}
-              label={choice.text ?? String(choice.value)}
+              // Mantine v8's `styles` prop is applied as an inline DOM style
+              // attribute and doesn't support nested selectors like
+              // `&[data-checked]` — the old approach silently did nothing for
+              // every color. Radio's native `color` prop is the real checked
+              // state here, resolved per-choice so choice.color can override
+              // the group default.
+              color={choice.color ?? color}
+              label={
+                <Group gap={6} wrap="nowrap">
+                  {choice.icon && <IconDisplay icon={choice.icon} size={14} />}
+                  {choice.color && !choice.icon && (
+                    <ColorSwatch color={choice.color} size={12} />
+                  )}
+                  <Text size="sm" span>{choice.text ?? String(choice.value)}</Text>
+                </Group>
+              }
               disabled={disabled || choice.disabled}
               size="sm"
               styles={{
                 radio: {
                   cursor: disabled || choice.disabled ? 'not-allowed' : 'pointer',
-                  '&[data-checked]': {
-                    borderColor: `var(--mantine-color-${color}-6)`,
-                    backgroundColor: `var(--mantine-color-${color}-6)`,
-                  },
                 },
                 label: {
                   cursor: disabled || choice.disabled ? 'not-allowed' : 'pointer',
@@ -221,15 +237,12 @@ export function SelectRadio({
               <Radio
                 value="__other__"
                 label="Other"
+                color={color}
                 disabled={disabled}
                 size="sm"
                 styles={{
                   radio: {
                     cursor: disabled ? 'not-allowed' : 'pointer',
-                    '&[data-checked]': {
-                      borderColor: `var(--mantine-color-${color}-6)`,
-                      backgroundColor: `var(--mantine-color-${color}-6)`,
-                    },
                   },
                   label: {
                     cursor: disabled ? 'not-allowed' : 'pointer',
