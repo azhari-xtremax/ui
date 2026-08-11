@@ -883,16 +883,16 @@ export const ListM2M: React.FC<ListM2MProps> = ({
 
     const handleMoveUp = useCallback(
         (index: number) => {
-            moveItemUp(index, pageOffset);
+            moveItemUp(visibleItems, index, pageOffset);
         },
-        [moveItemUp, pageOffset],
+        [moveItemUp, visibleItems, pageOffset],
     );
 
     const handleMoveDown = useCallback(
         (index: number) => {
-            moveItemDown(index, pageOffset);
+            moveItemDown(visibleItems, index, pageOffset);
         },
-        [moveItemDown, pageOffset],
+        [moveItemDown, visibleItems, pageOffset],
     );
 
     // ── DnD drag-end handler ────────────────────────────────────────
