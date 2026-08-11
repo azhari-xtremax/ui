@@ -235,7 +235,7 @@ import {
  * Icon categories based on Material Design icon categories
  * Adapted from DaaS icons.json structure
  */
-const ICON_CATEGORIES = [
+const ICON_CATEGORIES_RAW = [
   {
     name: 'Action',
     icons: [
@@ -358,6 +358,28 @@ const ICON_CATEGORIES = [
     ],
   },
 ];
+
+/**
+ * Several Material icon names legitimately fit more than one category (e.g.
+ * "lock" reads as both an Action and a Security & Identity icon), so
+ * ICON_CATEGORIES_RAW lists a handful of names twice. Rendered as-is, each
+ * duplicate produces two options sharing one `data-testid`, both
+ * independently highlighting on selection (S5.2). Keep every name in only
+ * its first category so the picker has a single entry per icon.
+ */
+function dedupeIconCategories(categories: typeof ICON_CATEGORIES_RAW) {
+  const seen = new Set<string>();
+  return categories.map((category) => ({
+    ...category,
+    icons: category.icons.filter((iconName) => {
+      if (seen.has(iconName)) return false;
+      seen.add(iconName);
+      return true;
+    }),
+  }));
+}
+
+const ICON_CATEGORIES = dedupeIconCategories(ICON_CATEGORIES_RAW);
 
 /**
  * Format icon name to display title (matching DaaS format-title behavior)
