@@ -192,20 +192,46 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // has no built-in "creatable" mode, so this is done manually.
   const [otherSearchValue, setOtherSearchValue] = React.useState('');
 
+  // Set synchronously by handleChange whenever Mantine resolves a real
+  // option selection (including via Enter on a highlighted option) — read
+  // by the Enter-key commit below to avoid double-emitting: Mantine's own
+  // onChange already fired with the correct value, so the manual commit
+  // must be skipped rather than re-emitting the raw (possibly different)
+  // search text.
+  const justSelectedRef = React.useRef(false);
+
+  // Tracks the last value we committed via commitOtherValue so repeated
+  // blur/Enter events with unchanged text (e.g. tabbing away and back
+  // without editing) don't re-fire onChange with the same value.
+  const lastCommittedRef = React.useRef<string | null>(null);
+
   const commitOtherValue = React.useCallback(() => {
     if (!allowOther || !onChange) return;
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
     const trimmed = otherSearchValue.trim();
     if (!trimmed) return;
+    if (trimmed === lastCommittedRef.current) return;
     // Only commit free text — an exact match to an existing choice's label
     // was already handled by onChange via the normal option-select path.
     const matchesExistingChoice = choices.some(
       (choice) => choice.text === trimmed || String(choice.value) === trimmed,
     );
     if (!matchesExistingChoice) {
+      lastCommittedRef.current = trimmed;
       onChange(trimmed);
     }
   }, [allowOther, onChange, otherSearchValue, choices]);
 
+  // Escape: restore the search text to the current committed value instead
+  // of leaving typed-but-uncommitted text in place, which the subsequent
+  // blur would otherwise commit.
+  const cancelOtherEdit = React.useCallback(() => {
+    justSelectedRef.current = true; // suppress the blur that follows Escape
+    setOtherSearchValue(value !== null && value !== undefined ? String(value) : '');
+  }, [value]);
 
   // Handle value changes
   const handleChange = React.useCallback(
@@ -213,6 +239,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       if (!onChange) {
         return;
       }
+      justSelectedRef.current = true;
 
       if (selectedValue === null) {
         onChange(null);
@@ -306,23 +333,31 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       renderOption={renderOption}
       aria-label={ariaLabel || (!label ? placeholder : undefined)}
       data-testid="select-dropdown"
+      {...selectProps}
       // allowOther: Mantine v8's <Select> has no built-in "creatable" mode,
       // so free text is committed manually — track the live search text and
       // emit it as the value on Enter or on blur when it matches no choice.
-      // Removed the old dead `else if (allowOther)` branch in handleChange:
-      // Mantine's onChange only ever fires with an existing option's value
-      // (or null), so typed-but-uncommitted text never reached it.
+      // Spread after `selectProps` and chained (not overwritten) so a
+      // consumer-supplied onBlur/onKeyDown/onSearchChange doesn't silently
+      // disable the commit wiring.
       {...(allowOther
         ? {
             searchValue: otherSearchValue,
-            onSearchChange: setOtherSearchValue,
-            onBlur: commitOtherValue,
+            onSearchChange: (val: string) => {
+              selectProps.onSearchChange?.(val);
+              setOtherSearchValue(val);
+            },
+            onBlur: (event: React.FocusEvent<HTMLInputElement>) => {
+              selectProps.onBlur?.(event);
+              commitOtherValue();
+            },
             onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+              selectProps.onKeyDown?.(event);
               if (event.key === 'Enter') commitOtherValue();
+              else if (event.key === 'Escape') cancelOtherEdit();
             },
           }
         : {})}
-      {...selectProps}
     />
   );
 };
