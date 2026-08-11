@@ -801,6 +801,12 @@ export const ListM2M: React.FC<ListM2MProps> = ({
     }, [changes]);
 
     // ── Load items when parameters change ───────────────────────────
+    // Dedupe against the actual query signature rather than dep identity —
+    // `filter`/`fields` are commonly passed as fresh literals by the parent
+    // on every render, and React 18 StrictMode double-invokes effects in
+    // dev; both fired this effect twice with an identical query ("double
+    // initial fetch"). Compare serialized params, not references.
+    const lastLoadSignatureRef = useRef<string | null>(null);
     useEffect(() => {
         if (relationInfo && isParentSaved && !mockItems) {
             // Build fields for the query — prefix with junction field for related data.
@@ -820,13 +826,22 @@ export const ListM2M: React.FC<ListM2MProps> = ({
             queryFields.push(relationInfo.junctionPrimaryKeyField.field);
             if (relationInfo.sortField) queryFields.push(relationInfo.sortField);
 
-            loadItems({
+            const params = {
                 limit: currentLimit,
                 page: currentPage,
                 fields: [...new Set(queryFields)],
                 search: enableSearchFilter ? search : undefined,
                 filter: filter as Record<string, unknown>,
-            });
+            };
+            const signature = JSON.stringify([
+                relationInfo.junctionCollection?.collection,
+                params,
+                refreshKey,
+            ]);
+            if (signature === lastLoadSignatureRef.current) return;
+            lastLoadSignatureRef.current = signature;
+
+            loadItems(params);
         }
     }, [
         relationInfo,
@@ -1247,7 +1262,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                             enableBatchEdit &&
                             layout === "table" &&
                             selectedIds.size > 0 && (
-                                <Tooltip label="Batch editing is not yet implemented">
+                                <Tooltip label={t.batch_edit_not_implemented}>
                                     <Button
                                         variant="light"
                                         color="warning"

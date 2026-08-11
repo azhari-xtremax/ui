@@ -18,6 +18,8 @@ export interface M2MTranslations {
     add_existing: string;
     /** Batch edit tooltip */
     batch_edit: string;
+    /** Tooltip shown on the disabled batch-edit button (feature not built yet) */
+    batch_edit_not_implemented: string;
     /** Tooltip when action is not allowed */
     not_allowed: string;
 
@@ -120,6 +122,7 @@ export const defaultTranslations: M2MTranslations = {
     create_new: 'Create New',
     add_existing: 'Add Existing',
     batch_edit: 'Edit Selected',
+    batch_edit_not_implemented: 'Batch editing is not yet implemented',
     not_allowed: 'Not allowed',
 
     // States
