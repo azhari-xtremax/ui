@@ -176,7 +176,7 @@ describe('SelectRadio malformed choices', () => {
     expect(screen.getByLabelText('unnamed')).toBeInTheDocument();
   });
 
-  it('does not log a duplicate-key warning for choices whose values stringify identically', () => {
+  it('drops the second choice whose value stringifies identically instead of merging both onto one radio (S3.7)', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
@@ -194,8 +194,14 @@ describe('SelectRadio malformed choices', () => {
       String(args[0]).includes('same key'),
     );
     expect(dupKeyWarnings).toHaveLength(0);
+    // Radio.Group's native `value` is globally-unique per <Radio>; two
+    // choices stringifying to the same value ('1') would otherwise share
+    // one native radio, so selecting either checked both. The first
+    // occurrence renders; the second (never independently selectable
+    // anyway — handleChange resolves the first match) is dropped rather
+    // than silently sharing state with it.
     expect(screen.getByLabelText('Number one')).toBeInTheDocument();
-    expect(screen.getByLabelText('String one')).toBeInTheDocument();
+    expect(screen.queryByLabelText('String one')).not.toBeInTheDocument();
     consoleError.mockRestore();
   });
 });
