@@ -243,12 +243,40 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // Determine if we should show no data message
   const showNoData = selectData.length === 0;
 
+  // The currently selected choice, if any — used so the closed input can
+  // show *that* choice's own icon/color once something is selected, instead
+  // of going blank (showGlobalIcon deliberately turns off the global
+  // fallback icon once a value is picked, but nothing filled that gap with
+  // the selection's own icon).
+  const selectedChoice = React.useMemo(() => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const strValue = String(value);
+    return choices.find((choice) => String(choice.value) === strValue) ?? null;
+  }, [choices, value]);
+
   // Left section icon rendering
   const leftSection = React.useMemo(() => {
+    // Mirror renderOption below: show both when the choice has both, not
+    // just the color (a bare ColorSwatch previously won a choice's icon
+    // entirely out of the closed input whenever a color was also set).
+    if (selectedChoice?.color || selectedChoice?.icon) {
+      return (
+        <Group gap={4} wrap="nowrap">
+          {selectedChoice.color && <ColorSwatch color={selectedChoice.color} size={14} />}
+          {selectedChoice.icon && (
+            <Text size="sm" c="dimmed">
+              {selectedChoice.icon}
+            </Text>
+          )}
+        </Group>
+      );
+    }
     if (!showGlobalIcon || !icon) {
       return undefined;
     }
-    
+
     // For now, we'll just show the icon name as text
     // In a real implementation, you might want to use an icon library
     return (
@@ -256,7 +284,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
         {icon}
       </Text>
     );
-  }, [showGlobalIcon, icon]);
+  }, [selectedChoice, showGlobalIcon, icon]);
 
   // Custom render option component for icon/color support
   const renderOption = React.useCallback(
@@ -266,7 +294,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
           {option.color && (
             <ColorSwatch color={option.color} size={14} />
           )}
-          {option.icon && !option.color && (
+          {option.icon && (
             <Text size="sm" c="dimmed">
               {option.icon}
             </Text>

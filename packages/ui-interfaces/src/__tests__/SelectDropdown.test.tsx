@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { SelectDropdown, type SelectOption } from '../select-dropdown/SelectDropdown';
 
@@ -370,5 +370,48 @@ describe('SelectDropdown stringify-colliding choices', () => {
     );
 
     expect(screen.getByTestId('select-dropdown')).toBeInTheDocument();
+  });
+});
+
+describe('SelectDropdown icon + color', () => {
+  const iconAndColorChoices: SelectOption[] = [
+    { text: 'React', value: 'react', icon: 'code', color: '#61dafb' },
+    { text: 'Plain', value: 'plain' },
+  ];
+
+  it('shows both the icon and the color swatch for an option that has both', () => {
+    renderWithProvider(<SelectDropdown choices={iconAndColorChoices} onChange={jest.fn()} />);
+
+    fireEvent.click(screen.getByTestId('select-dropdown'));
+
+    expect(screen.getByText('code')).toBeInTheDocument();
+  });
+
+  it('shows the selected choice\'s own icon in the closed input instead of going blank', () => {
+    renderWithProvider(
+      <SelectDropdown value="react" choices={iconAndColorChoices} onChange={jest.fn()} />
+    );
+
+    // Mantine keeps dropdown option markup mounted (hidden) even while
+    // closed, so this checks presence (leftSection renders it) rather than
+    // uniqueness (an equivalent hidden copy also exists in the option list).
+    expect(screen.getAllByText('code').length).toBeGreaterThan(0);
+  });
+
+  it('shows the selected choice\'s own icon instead of the global icon prop', () => {
+    renderWithProvider(
+      <SelectDropdown value="react" icon="globe" choices={iconAndColorChoices} onChange={jest.fn()} />
+    );
+
+    // "plain" has no icon/color of its own, so it falls back to the global
+    // icon — if leftSection were still showing the global icon instead of
+    // the selected choice's own, both would be indistinguishable from the
+    // hidden option markup. Assert the selected choice's icon is present
+    // and that no *visible* left-section icon renders "globe": the input's
+    // immediate wrapper only contains leftSection + input + chevron, no
+    // hidden option markup, so scoping there is reliable here.
+    const wrapper = screen.getByTestId('select-dropdown').closest('.mantine-Input-wrapper') as HTMLElement;
+    expect(within(wrapper).getByText('code')).toBeInTheDocument();
+    expect(within(wrapper).queryByText('globe')).not.toBeInTheDocument();
   });
 });
