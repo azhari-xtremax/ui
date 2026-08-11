@@ -479,3 +479,57 @@ describe('SelectMultipleCheckboxTree custom color normalization (S4.11)', () => 
     expect(root.style.getPropertyValue('--checkbox-color')).toContain('teal');
   });
 });
+
+describe('SelectMultipleCheckboxTree leaf mode with disabled leaves (S4.5 × S4.7)', () => {
+  it('shows checked when every selectable leaf is selected, ignoring unselected disabled leaves', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          valueCombining="leaf"
+          value={['a']}
+          choices={[
+            {
+              text: 'Parent',
+              value: 'p',
+              children: [
+                { text: 'A', value: 'a' },
+                // The cascade toggle can never select this one (S4.7), so it
+                // must not hold the parent at indeterminate forever.
+                { text: 'B', value: 'b', disabled: true },
+              ],
+            },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    const parent = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    expect(parent.checked).toBe(true);
+    expect(parent.indeterminate).toBe(false);
+  });
+
+  it('still counts an already-selected disabled leaf toward the parent state', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          valueCombining="leaf"
+          value={['b']}
+          choices={[
+            {
+              text: 'Parent',
+              value: 'p',
+              children: [
+                { text: 'A', value: 'a' },
+                { text: 'B', value: 'b', disabled: true },
+              ],
+            },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    const parent = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    expect(parent.checked).toBe(false);
+    expect(parent.indeterminate).toBe(true);
+  });
+});

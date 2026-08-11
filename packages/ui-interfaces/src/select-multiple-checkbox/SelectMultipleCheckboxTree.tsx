@@ -564,7 +564,16 @@ function TreeNode({
         if (depth > MAX_TREE_DEPTH) return;
         for (const node of nodes) {
           if (!node.children || node.children.length === 0) {
-            leafValues.push(node.value);
+            // Count only leaves the user can actually affect: enabled ones,
+            // plus disabled ones that are already selected (stored data).
+            // The cascade toggle skips disabled leaves (S4.7), so counting
+            // an unselected disabled leaf in the denominator would make
+            // "all leaves selected" unreachable — an indeterminate state no
+            // interaction can ever resolve, the same stuck-state class S4.5
+            // fixed for the plain case.
+            if (!node.disabled || selectedValues.includes(node.value)) {
+              leafValues.push(node.value);
+            }
           } else {
             collectLeafValues(node.children, depth + 1);
           }
