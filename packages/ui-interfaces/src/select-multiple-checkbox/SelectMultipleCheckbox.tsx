@@ -205,15 +205,20 @@ export function SelectMultipleCheckbox({
     setOtherValues(prev => prev.filter(item => item.key !== key));
   };
 
-  // Get other values that are in the current selection
+  // Get other values that are in the current selection. Excludes any value
+  // already backed by a live `otherValues` input row (S7.3) — without this,
+  // committing a custom value via that row made it match here too, so it
+  // rendered a second time as a separate read-only checked checkbox above
+  // the row that still owned it.
   const otherValuesInSelection = useMemo(() => {
     if (!allowOther) {
       return [];
     }
 
     const choiceValues = choices.map(c => c.value);
-    return normalizedValue.filter(v => !choiceValues.includes(v));
-  }, [normalizedValue, choices, allowOther]);
+    const rowValues = new Set(otherValues.map(item => item.value));
+    return normalizedValue.filter(v => !choiceValues.includes(v) && !rowValues.has(String(v)));
+  }, [normalizedValue, choices, allowOther, otherValues]);
 
   // Show choices validation message
   if (!choices || choices.length === 0) {
