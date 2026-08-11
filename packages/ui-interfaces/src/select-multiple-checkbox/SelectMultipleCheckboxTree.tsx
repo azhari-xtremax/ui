@@ -471,7 +471,7 @@ export function SelectMultipleCheckboxTree({
         {/* Tree content */}
         <ScrollArea h="200px" p="sm">
           <Stack gap="xs">
-            {filteredChoices.map((choice) => (
+            {filteredChoices.map((choice, index) => (
               <TreeNode
                 key={choice.__key}
                 choice={choice}
@@ -693,7 +693,7 @@ function TreeNode({
       {hasChildren && (
         <Collapse in={expanded}>
           <Stack gap="xs" ml="md" mt="xs">
-            {choice.children!.map((child) => (
+            {choice.children!.map((child, childIndex) => (
               <TreeNode
                 key={child.__key}
                 choice={child}
