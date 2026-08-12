@@ -844,10 +844,20 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 search: enableSearchFilter ? search : undefined,
                 filter: filter as Record<string, unknown>,
             };
+            // V3-5: primaryKey/isParentSaved must be part of the signature,
+            // not just gate the effect. Without them, a mounted ListM2M
+            // whose `primaryKey` switches to a different saved record
+            // (without a remount — e.g. navigating between records in a
+            // single-page detail view) keeps `params` and `refreshKey`
+            // identical, so the signature dedupe skips the refetch and the
+            // previous record's rows stay on screen until page/limit/search
+            // changes for some other reason.
             const signature = JSON.stringify([
                 relationInfo.junctionCollection?.collection,
                 params,
                 refreshKey,
+                primaryKey ?? null,
+                isParentSaved,
             ]);
             if (signature === lastLoadSignatureRef.current) return;
             lastLoadSignatureRef.current = signature;
@@ -857,6 +867,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
     }, [
         relationInfo,
         isParentSaved,
+        primaryKey,
         currentPage,
         currentLimit,
         search,

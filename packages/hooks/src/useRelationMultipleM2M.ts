@@ -216,7 +216,14 @@ export function useRelationMultipleM2M(
         // 1. Map fetched items, overlaying any local updates / deletes
         const items: M2MDisplayItem[] = fetchedItems.map((item) => {
             const pk = item[junctionPKField];
-            let result: M2MDisplayItem = { ...item };
+            // R6.2: alias the real junction PK onto `.id`, matching the M2A
+            // fix. Locally-created items already get this alias (below);
+            // fetched items didn't, so any junction table whose PK isn't
+            // literally named "id" left `.id` undefined for every
+            // fetched row — React keys, DnD sortable ids, data-testids,
+            // and drag-end matching in the ListM2M component all read
+            // `item.id` directly.
+            let result: M2MDisplayItem = { ...item, id: pk as string | number };
 
             // Check for local update
             const updateIdx = changes.update.findIndex(

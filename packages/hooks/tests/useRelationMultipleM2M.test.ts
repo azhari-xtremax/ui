@@ -226,3 +226,31 @@ describe('useRelationMultipleM2M out-of-order responses', () => {
     expect(result.current.loading).toBe(false);
   });
 });
+
+describe('useRelationMultipleM2M displayItems .id alias (R6.2)', () => {
+  it('aliases the real junction PK onto .id for fetched items, not just locally-created ones', async () => {
+    // Junction PK deliberately not named "id" — matches the M2A fix
+    // (useRelationM2A.ts's `{...item, id: pk}`) so a table whose junction
+    // PK column isn't literally "id" doesn't leave `.id` undefined for
+    // every fetched row (React keys, DnD sortable ids, data-testids, and
+    // drag-end matching in ListM2M all read `item.id` directly).
+    const relationInfo = {
+      ...makeRelationInfo(),
+      junctionPrimaryKeyField: { field: 'uuid', type: 'uuid' },
+    } as M2MRelationInfo;
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    apiRequestMock.mockResolvedValueOnce({
+      data: [{ uuid: 'j-1', article_id: 1, tag_id: { id: 9 }, sort: 1 }],
+      meta: { total_count: 1 },
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+
+    await waitFor(() => expect(result.current.displayItems).toHaveLength(1));
+    expect(result.current.displayItems[0].id).toBe('j-1');
+    // the real junction PK field itself is untouched
+    expect(result.current.displayItems[0].uuid).toBe('j-1');
+  });
+});

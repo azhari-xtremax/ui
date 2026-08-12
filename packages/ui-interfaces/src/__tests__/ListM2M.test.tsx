@@ -282,4 +282,25 @@ describe('ListM2M load-items dedupe', () => {
         );
         await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(2));
     });
+
+    // V3-5: the signature used to omit primaryKey/isParentSaved, so a
+    // mounted ListM2M whose primaryKey switches to a different saved record
+    // without a remount (e.g. navigating between records in a single-page
+    // detail view) kept the same params/refreshKey and skipped the refetch
+    // — the previous record's rows stayed on screen.
+    it('refires when primaryKey switches to a different record with no other param change', async () => {
+        const { rerender } = render(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={1} filter={{ status: 'published' }} />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(1));
+
+        rerender(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={2} filter={{ status: 'published' }} />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(2));
+    });
 });
