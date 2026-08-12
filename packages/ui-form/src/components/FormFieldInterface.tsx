@@ -312,7 +312,13 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
   const interfaceProps: any = {
     value: isMultiSelectInterface ? normalizedMultiSelectValue : effectiveValue,
     onChange: nonEditable ? undefined : (isMultiSelectInterface ? handleMultiSelectChange : onChange),
-    disabled: disabled || isEffectivelyReadonly,
+    // S2.6: a merely-readonly field (readonly=true, nonEditable=false) must
+    // NOT also set disabled=true — the two are visually and semantically
+    // distinct (readonly: value visible, not editable; disabled: greyed
+    // out, inert), and every leaf already receives `readOnly` separately.
+    // nonEditable is stronger — no interaction at all, including focus —
+    // so it keeps the disabled styling on top of readOnly.
+    disabled: disabled || nonEditable,
     readOnly: isEffectivelyReadonly,
     required: nonEditable ? false : required,
     error,
