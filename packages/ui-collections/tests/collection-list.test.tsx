@@ -671,6 +671,117 @@ describe("CollectionList", () => {
       expect(rawCell.querySelector('[data-component="Text"]')).toBeInTheDocument();
     });
   });
+
+  // S8.3: a select/radio/multi-select field's raw stored value must resolve
+  // to its configured choice label instead of showing the raw value (scalar)
+  // or a content-less "JSON" badge (array/csv multi-select).
+  describe("choice-label resolution (S8.3)", () => {
+    it("resolves a scalar select-dropdown value to its choice label, not the raw stored value", async () => {
+      const choiceFields = [
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "status",
+          type: "string",
+          meta: {
+            interface: "select-dropdown",
+            sort: 1,
+            hidden: false,
+            options: {
+              choices: [
+                { text: "Draft", value: "draft" },
+                { text: "Published", value: "published" },
+              ],
+            },
+          },
+        },
+      ];
+      const choiceItems = {
+        data: [{ id: 1, status: "draft" }],
+        meta: { page: 1, limit: 25, total: 1 },
+      };
+
+      mockFieldsReadAll.mockResolvedValue(choiceFields);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve(choiceItems);
+      });
+
+      renderList();
+
+      const statusCell = await screen.findByTestId("cell-0-status");
+      expect(statusCell).toHaveTextContent("Draft");
+      expect(statusCell).not.toHaveTextContent("draft");
+    });
+
+    it("resolves each entry of an array-stored multi-select value to its choice label instead of a bare JSON badge", async () => {
+      const choiceFields = [
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "tags",
+          type: "json",
+          meta: {
+            interface: "select-multiple-checkbox",
+            sort: 1,
+            hidden: false,
+            options: {
+              choices: [
+                { text: "Urgent", value: "urgent" },
+                { text: "Blocked", value: "blocked" },
+              ],
+            },
+          },
+        },
+      ];
+      const choiceItems = {
+        data: [{ id: 1, tags: ["urgent", "blocked"] }],
+        meta: { page: 1, limit: 25, total: 1 },
+      };
+
+      mockFieldsReadAll.mockResolvedValue(choiceFields);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve(choiceItems);
+      });
+
+      renderList();
+
+      const tagsCell = await screen.findByTestId("cell-0-tags");
+      expect(tagsCell).toHaveTextContent("Urgent");
+      expect(tagsCell).toHaveTextContent("Blocked");
+      expect(tagsCell).not.toHaveTextContent("JSON");
+    });
+
+    it("falls back to the raw value when no configured choice matches", async () => {
+      const choiceFields = [
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "status",
+          type: "string",
+          meta: {
+            interface: "select-dropdown",
+            sort: 1,
+            hidden: false,
+            options: { choices: [{ text: "Draft", value: "draft" }] },
+          },
+        },
+      ];
+      const choiceItems = {
+        data: [{ id: 1, status: "archived" }],
+        meta: { page: 1, limit: 25, total: 1 },
+      };
+
+      mockFieldsReadAll.mockResolvedValue(choiceFields);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve(choiceItems);
+      });
+
+      renderList();
+
+      const statusCell = await screen.findByTestId("cell-0-status");
+      expect(statusCell).toHaveTextContent("archived");
+    });
+  });
 });
 
 describe("relational-field exclusion in the items query", () => {

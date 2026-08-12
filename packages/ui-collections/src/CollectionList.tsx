@@ -842,6 +842,51 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         return null;
       }
 
+      // ---------- Choice-authoring interfaces (resolve to label, not raw value) ----------
+      // A select-dropdown/radio/multi-select field's `meta.options.choices` is the
+      // same `{text, value}` shape authored via the choices editor. Without this,
+      // the list showed the raw stored value (e.g. "draft") instead of the label
+      // an admin configured (e.g. "Draft"), and a multi-select's array value fell
+      // through to the generic "JSON" badge below with no content at all (S8.3).
+      const choices = fieldMeta.meta?.options?.choices as
+        | Array<{ text: string; value: string | number | boolean }>
+        | undefined;
+      if (choices && choices.length > 0) {
+        const resolveLabel = (raw: unknown): string => {
+          const match = choices.find((c) => c.value === raw || String(c.value) === String(raw));
+          return match ? match.text : String(raw);
+        };
+        // csv-typed multi-select fields deliver a raw comma-string, not an
+        // array — split it the same way the multi-select leaves themselves do.
+        const arrayValue = Array.isArray(value)
+          ? value
+          : fieldType === "csv" && typeof value === "string"
+            ? value.split(",").map((s) => s.trim()).filter(Boolean)
+            : null;
+        if (arrayValue) {
+          if (arrayValue.length === 0) return null;
+          return (
+            <Group gap={4} wrap="nowrap">
+              {arrayValue.slice(0, 3).map((v, i) => (
+                <Badge key={i} variant="light" size="sm" color="gray" style={{ textTransform: "none" }}>
+                  {resolveLabel(v)}
+                </Badge>
+              ))}
+              {arrayValue.length > 3 && (
+                <Text size="xs" c="dimmed">
+                  +{arrayValue.length - 3}
+                </Text>
+              )}
+            </Group>
+          );
+        }
+        return (
+          <Text size="sm" truncate="end">
+            {resolveLabel(value)}
+          </Text>
+        );
+      }
+
       // ---------- JSON (display as badge) ----------
       if (fieldType === "json") {
         return (
