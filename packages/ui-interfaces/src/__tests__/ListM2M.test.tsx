@@ -212,8 +212,28 @@ describe('ListM2M "Create New" junction linking', () => {
         // handleEditFormSuccess must call selectItems([data.id]) to stage a
         // junction row linking the newly created item — not silently drop it.
         await waitFor(() => {
-            expect(mockSelectItems).toHaveBeenCalledWith(['new-tag-id'], undefined);
+            expect(mockSelectItems).toHaveBeenCalledWith(
+                ['new-tag-id'],
+                { 'new-tag-id': { id: 'new-tag-id', name: 'Brand new tag' } },
+            );
         });
+    });
+
+    // Only `data.id` was ever forwarded to selectItems — the rest of the
+    // just-created record (e.g. `name`) was discarded, so a display template
+    // had nothing to resolve against and rendered blank until the parent
+    // form was saved and the list reloaded from the server.
+    it('renders the display template immediately using the just-created record, without a reload', async () => {
+        render(
+            <TestWrapper>
+                <ListM2M {...defaultProps} template="{{tag_id.name}}" />
+            </TestWrapper>,
+        );
+
+        fireEvent.click(await screen.findByText('Create New'));
+        fireEvent.click(await screen.findByText('Save Form'));
+
+        expect(await screen.findByText('Brand new tag')).toBeInTheDocument();
     });
 });
 

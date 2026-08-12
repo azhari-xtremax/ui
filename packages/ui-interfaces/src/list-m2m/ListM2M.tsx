@@ -1153,7 +1153,11 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         // via selectItems rather than createItem (which would deep-create a
         // second related item).
         if (isCreatingNew && data?.id != null) {
-            selectItems([data.id as string | number]);
+            const newId = data.id as string | number;
+            // `data` is the full created record CollectionForm just returned —
+            // pass it straight through as the related-item data so the display
+            // template resolves immediately, without another round-trip fetch.
+            selectItems([newId], { [newId]: data });
         }
 
         // After editing a related item, reload to show updated data
