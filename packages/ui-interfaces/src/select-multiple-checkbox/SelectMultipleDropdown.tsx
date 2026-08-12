@@ -141,6 +141,9 @@ export function SelectMultipleDropdown({
 
   // Handle value changes with proper sorting
   const handleChange = (newValue: string[]) => {
+    justToggledRef.current = true;
+    clearJustToggledSoon();
+
     if (!newValue || newValue.length === 0) {
       emit(allowNone ? null : []);
       return;
@@ -199,15 +202,41 @@ export function SelectMultipleDropdown({
   // mirroring SelectDropdown's manual creatable pattern (S6.2).
   const [otherSearchValue, setOtherSearchValue] = useState('');
 
+  // V3-6: mirrors SelectDropdown's justSelectedRef — set whenever Mantine
+  // resolves a real toggle (handleChange), self-clears on a microtask.
+  // Without it, blur/Enter right after clicking an option in the dropdown
+  // (which doesn't always clear the leftover search text synchronously)
+  // re-commits whatever text is still sitting in the search box as an
+  // unrelated extra custom pill.
+  const justToggledRef = React.useRef(false);
+  const clearJustToggledSoon = () => {
+    queueMicrotask(() => {
+      justToggledRef.current = false;
+    });
+  };
+
   const commitOtherValue = () => {
     if (!allowOther) return;
+    if (justToggledRef.current) {
+      justToggledRef.current = false;
+      return;
+    }
     const trimmed = otherSearchValue.trim();
     if (!trimmed) return;
+    // V3-6: case-insensitive match — "Alpha" typed against a choice text of
+    // "alpha" used to be treated as a brand-new custom value (a
+    // near-duplicate of an existing choice) instead of being recognized as
+    // matching it.
+    const lowerTrimmed = trimmed.toLowerCase();
     const matchesExistingChoice = choices.some(
-      (choice) => choice.text === trimmed || String(choice.value) === trimmed,
+      (choice) =>
+        choice.text.toLowerCase() === lowerTrimmed || String(choice.value).toLowerCase() === lowerTrimmed,
     );
-    const alreadySelected = normalizedValue.some((v) => String(v) === trimmed);
-    if (!matchesExistingChoice && !alreadySelected) {
+    const alreadySelected = normalizedValue.some((v) => String(v).toLowerCase() === lowerTrimmed);
+    // V3-6: commitOtherValue bypassed maxValues entirely — a manually
+    // committed custom pill could push the selection past the configured cap.
+    const atMax = typeof maxValues === 'number' && normalizedValue.length >= maxValues;
+    if (!matchesExistingChoice && !alreadySelected && !atMax) {
       emit([...normalizedValue, trimmed]);
     }
     setOtherSearchValue('');
@@ -272,6 +301,12 @@ export function SelectMultipleDropdown({
         }}
         rightSection={<IconChevronDown size={16} />}
         aria-label={ariaLabel || label || 'Multiple select dropdown'}
+        // V3-6: a custom renderOption doesn't suppress Mantine's own
+        // built-in check icon, so the manual ' ✓' below rendered alongside
+        // it as a second, redundant check mark on every selected option.
+        // Disable Mantine's, keep the manual one (icon/color rendering
+        // already needs the custom renderOption regardless).
+        withCheckIcon={false}
         renderOption={({ option, checked }) => {
           const choice = data.find((d) => d.value === option.value);
           return (
@@ -304,7 +339,13 @@ export function SelectMultipleDropdown({
               onSearchChange: setOtherSearchValue,
               onBlur: commitOtherValue,
               onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
-                if (event.key === 'Enter') commitOtherValue();
+                // V3-6: Enter with a highlighted dropdown option double-
+                // emitted — once via the manual commitOtherValue (raw
+                // search text), once via Mantine's own selection
+                // (handleChange). Mantine calls preventDefault() when it's
+                // about to handle the Enter itself; only run the manual
+                // commit when it hasn't.
+                if (event.key === 'Enter' && !event.defaultPrevented) commitOtherValue();
               },
             }
           : {})}

@@ -212,6 +212,110 @@ describe('SelectMultipleDropdown allowOther (S6.2)', () => {
     // 'React' matches an existing choice's text — not committed as free text
     expect(handleChange).not.toHaveBeenCalledWith(['React']);
   });
+
+  // V3-6: case-insensitive match — a case-different typo of an existing
+  // choice used to commit as a brand-new near-duplicate custom value.
+  it('does not commit text that matches an existing choice case-insensitively', () => {
+    const handleChange = jest.fn();
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          value={[]}
+          onChange={handleChange}
+          choices={sampleChoices}
+          allowOther
+        />
+      </TestWrapper>
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'REACT' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(handleChange).not.toHaveBeenCalledWith(['REACT']);
+  });
+
+  // V3-6: commitOtherValue bypassed maxValues — a manually committed custom
+  // pill could push the selection past the configured cap.
+  it('does not commit free text past maxValues', () => {
+    const handleChange = jest.fn();
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          value={['react', 'vue']}
+          onChange={handleChange}
+          choices={sampleChoices}
+          allowOther
+          maxValues={2}
+        />
+      </TestWrapper>
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Ember' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(handleChange).not.toHaveBeenCalled();
+  });
+
+  // V3-6: Enter with a highlighted dropdown option used to double-emit —
+  // once via the manual commit, once via Mantine's own selection.
+  it('skips the manual Enter commit when the keydown was already handled elsewhere', () => {
+    const handleChange = jest.fn();
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          value={[]}
+          onChange={handleChange}
+          choices={sampleChoices}
+          allowOther
+        />
+      </TestWrapper>
+    );
+
+    const input = screen.getByRole('textbox');
+    // A capture-phase native listener runs before React's bubble-phase
+    // handler, so this reliably simulates Mantine having already called
+    // preventDefault() on the Enter itself (React's synthetic `defaultPrevented`
+    // reflects the underlying native event).
+    input.addEventListener('keydown', (e) => e.preventDefault(), { capture: true });
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Ember' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(handleChange).not.toHaveBeenCalled();
+  });
+
+  // V3-6: blur right after selecting an option via click used to re-commit
+  // whatever text was still sitting in the search box as an unrelated extra
+  // custom pill.
+  it('does not commit leftover search text on blur immediately after a real selection', async () => {
+    const handleChange = jest.fn();
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          value={[]}
+          onChange={handleChange}
+          choices={sampleChoices}
+          allowOther
+        />
+      </TestWrapper>
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Ang' } });
+    fireEvent.click(screen.getByText('Angular'));
+    expect(handleChange).toHaveBeenLastCalledWith(['angular']);
+    handleChange.mockClear();
+
+    await Promise.resolve();
+    fireEvent.blur(input);
+
+    expect(handleChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('SelectMultipleDropdown per-choice icon/color (S6.3)', () => {
