@@ -247,7 +247,17 @@ describe('CollectionItemDropdown', () => {
       expect(handleCollectionChange).not.toHaveBeenCalled();
     });
 
-    it('commits (and clears the selection) on blur', async () => {
+    it('commits (and clears the selection) on blur when the typed text resolves to a real collection', async () => {
+      // V3-7: blur only commits a value that actually resolves to a known
+      // collection now — it needs /api/collections to have loaded 'orders'
+      // as a real option, unlike the old unvalidated-commit behavior this
+      // test used to (incorrectly) exercise.
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ collection: 'users' }, { collection: 'orders' }] }),
+      });
+      global.fetch = mockFetch;
+
       const mockItems = [{ id: 'user-1', name: 'Alice' }];
       const handleChange = jest.fn();
       const handleCollectionChange = jest.fn();
@@ -264,12 +274,133 @@ describe('CollectionItemDropdown', () => {
         />
       );
 
+      await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/collections'));
+
       const input = screen.getByTestId('collection-select-input');
       fireEvent.change(input, { target: { value: 'orders' } });
       fireEvent.blur(input);
 
       expect(handleCollectionChange).toHaveBeenCalledWith('orders');
       expect(handleChange).toHaveBeenCalledWith(null);
+    });
+
+    // V3-7: an unvalidated partial string used to commit as-is on blur,
+    // wiping the item selection and leaving selectedCollection pointed at a
+    // collection that doesn't exist.
+    it('does not commit an unvalidated partial collection name on blur', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ collection: 'users' }, { collection: 'orders' }] }),
+      });
+      global.fetch = mockFetch;
+
+      const mockItems = [{ id: 'user-1', name: 'Alice' }];
+      const handleChange = jest.fn();
+      const handleCollectionChange = jest.fn();
+
+      renderWithProvider(
+        <CollectionItemDropdown
+          value={{ key: 'user-1', collection: 'users' }}
+          mockItems={mockItems}
+          showCollectionSelect
+          selectedCollection="users"
+          template="{{name}}"
+          onChange={handleChange}
+          onCollectionChange={handleCollectionChange}
+        />
+      );
+
+      await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/collections'));
+
+      const input = screen.getByTestId('collection-select-input');
+      fireEvent.change(input, { target: { value: 'ord' } });
+      fireEvent.blur(input);
+
+      expect(handleCollectionChange).not.toHaveBeenCalled();
+      expect(handleChange).not.toHaveBeenCalled();
+      // the draft reverts to the last real collection instead of leaving
+      // the partial text in place
+      expect(input).toHaveValue('users');
+    });
+
+    // V3-7: a menu-item click fires its onClick AFTER the input's blur (the
+    // browser dispatches blur first when focus moves to the clicked item).
+    // Committing on blur while the menu was still open meant blur committed
+    // whatever partial/stale text was typed, immediately followed by the
+    // click's own (correct) commit — a double-commit.
+    it('does not double-commit when a menu item is clicked while the menu is open', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ collection: 'users' }, { collection: 'orders' }] }),
+      });
+      global.fetch = mockFetch;
+
+      const mockItems = [{ id: 'user-1', name: 'Alice' }];
+      const handleChange = jest.fn();
+      const handleCollectionChange = jest.fn();
+
+      renderWithProvider(
+        <CollectionItemDropdown
+          value={{ key: 'user-1', collection: 'users' }}
+          mockItems={mockItems}
+          showCollectionSelect
+          selectedCollection="users"
+          template="{{name}}"
+          onChange={handleChange}
+          onCollectionChange={handleCollectionChange}
+        />
+      );
+
+      await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/collections'));
+
+      fireEvent.click(screen.getByTestId('collection-select-menu-trigger'));
+      const input = screen.getByTestId('collection-select-input');
+      fireEvent.change(input, { target: { value: 'ord' } });
+
+      // Simulate the real browser ordering: blur fires before the menu
+      // item's click as focus moves away from the input.
+      fireEvent.blur(input);
+      fireEvent.click(await screen.findByTestId('collection-option-orders'));
+
+      expect(handleCollectionChange).toHaveBeenCalledTimes(1);
+      expect(handleCollectionChange).toHaveBeenCalledWith('orders');
+      expect(handleChange).toHaveBeenCalledTimes(1);
+    });
+
+    // V3-7: retyping the CURRENT collection unconditionally cleared the item
+    // selection, even though the collection itself never actually changed.
+    it('does not clear the item selection when retyping the current collection', async () => {
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ collection: 'users' }, { collection: 'orders' }] }),
+      });
+      global.fetch = mockFetch;
+
+      const mockItems = [{ id: 'user-1', name: 'Alice' }];
+      const handleChange = jest.fn();
+      const handleCollectionChange = jest.fn();
+
+      renderWithProvider(
+        <CollectionItemDropdown
+          value={{ key: 'user-1', collection: 'users' }}
+          mockItems={mockItems}
+          showCollectionSelect
+          selectedCollection="users"
+          template="{{name}}"
+          onChange={handleChange}
+          onCollectionChange={handleCollectionChange}
+        />
+      );
+
+      await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/collections'));
+
+      const input = screen.getByTestId('collection-select-input');
+      // Backspace the last character and retype it — ends up back at "users".
+      fireEvent.change(input, { target: { value: 'user' } });
+      fireEvent.change(input, { target: { value: 'users' } });
+
+      expect(handleChange).not.toHaveBeenCalled();
+      expect(handleCollectionChange).not.toHaveBeenCalled();
     });
   });
 });

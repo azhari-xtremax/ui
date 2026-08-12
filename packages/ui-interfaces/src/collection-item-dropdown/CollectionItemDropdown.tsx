@@ -328,12 +328,31 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
 
     // Handle collection selection
     const handleCollectionSelect = useCallback((collection: string) => {
+        // V3-7: retyping the CURRENT collection character-by-character
+        // (backspace + retype the same value) re-matched `availableCollections`
+        // and ran through here again, unconditionally clearing the item
+        // selection even though the collection never actually changed. A
+        // real no-op for the collection itself must not wipe anything.
+        if (collection === selectedCollection) {
+            setCollectionDraft(collection);
+            setCollectionMenuOpened(false);
+            return;
+        }
         setInternalCollection(collection);
+        // Keep the draft in sync synchronously (not only via the
+        // selectedCollection-driven effect below) — a menu-item click fires
+        // its onClick AFTER the input's blur (browser dispatches blur first
+        // when focus moves to the clicked item), so by the time blur's own
+        // handler runs, the draft is still whatever partial text was last
+        // typed. Resolving it here doesn't help that ordering directly (see
+        // the collectionMenuOpened guard in handleCollectionInputBlur for
+        // the actual fix), but keeps the draft consistent for any other caller.
+        setCollectionDraft(collection);
         onCollectionChange?.(collection);
         setCollectionMenuOpened(false);
         // Clear item selection when collection changes
         onChange?.(null);
-    }, [onCollectionChange, onChange]);
+    }, [selectedCollection, onCollectionChange, onChange]);
 
     // Free-text collection input: only commit (and clear the item selection)
     // once the typed value resolves to a real collection or the field blurs
@@ -346,10 +365,27 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
     }, [availableCollections, handleCollectionSelect]);
 
     const handleCollectionInputBlur = useCallback(() => {
-        if (collectionDraft !== selectedCollection) {
-            handleCollectionSelect(collectionDraft.trim());
+        // V3-7: a menu-item click fires its onClick AFTER the input's blur
+        // (the browser dispatches blur first when focus moves to the
+        // clicked item) — committing here while the menu is still open let
+        // blur commit whatever partial/stale text was typed, immediately
+        // followed by the click's own (correct) commit: a double-commit
+        // where the first one could briefly land on a wrong or invalid
+        // collection. Defer entirely to the menu click while it's open.
+        if (collectionMenuOpened) return;
+        const trimmed = collectionDraft.trim();
+        if (trimmed === selectedCollection) return;
+        // V3-7: commit only a value that actually resolves to a real
+        // collection — an unvalidated partial string (the user typed
+        // something and clicked away without picking from the menu) used to
+        // commit as-is, wiping the item selection and leaving selectedCollection
+        // set to a collection that doesn't exist. Revert the draft instead.
+        if (availableCollections.some((c) => c.collection === trimmed)) {
+            handleCollectionSelect(trimmed);
+        } else {
+            setCollectionDraft(selectedCollection);
         }
-    }, [collectionDraft, selectedCollection, handleCollectionSelect]);
+    }, [collectionDraft, selectedCollection, handleCollectionSelect, availableCollections, collectionMenuOpened]);
 
     // Separate user and system collections
     const { userCollections, systemCollections } = React.useMemo(() => {

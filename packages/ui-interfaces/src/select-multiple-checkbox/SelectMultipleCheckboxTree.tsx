@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useCallback, useId } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useId } from 'react';
 import {
   Stack,
   Text,
@@ -471,7 +471,7 @@ export function SelectMultipleCheckboxTree({
         {/* Tree content */}
         <ScrollArea h="200px" p="sm">
           <Stack gap="xs">
-            {filteredChoices.map((choice, index) => (
+            {filteredChoices.map((choice) => (
               <TreeNode
                 key={choice.__key}
                 choice={choice}
@@ -484,7 +484,12 @@ export function SelectMultipleCheckboxTree({
                 level={0}
                 color={normalizedColor}
                 autoExpandValues={autoExpandValues}
-                nodePath={String(index)}
+                // V3-7: derived from the stable __key (origIndex-in-the-
+                // unfiltered-array + value), not the filtered position —
+                // testids used to shift under search/showSelectionOnly
+                // filtering even though __key itself (the React key) was
+                // already stable.
+                nodePath={choice.__key}
               />
             ))}
           </Stack>
@@ -545,10 +550,22 @@ function TreeNode({
 }: TreeNodeProps) {
   const [manuallyExpanded, setManuallyExpanded] = useState(true);
   const hasChildren = choice.children && choice.children.length > 0;
+  // V3-7: an explicit chevron click must always visibly toggle, even on an
+  // auto-expanded ancestor. Previously toggleExpanded only flipped
+  // `manuallyExpanded`, so clicking to collapse an auto-expanded node
+  // (autoExpandValues still has it) recomputed `expanded` back to true via
+  // the OR below — a silent no-op. `userOverride` wins whenever set, and is
+  // cleared on a new search so the next query's own auto-expand isn't
+  // permanently suppressed by a stale collapse.
+  const [userOverride, setUserOverride] = useState<boolean | null>(null);
+  useEffect(() => {
+    setUserOverride(null);
+  }, [searchQuery]);
   // Force-expanded while this node's subtree holds a search/selection match,
   // regardless of a prior manual collapse — otherwise the match stays hidden
   // under a collapsed ancestor (S4.9).
-  const expanded = autoExpandValues?.has(choice.value) || manuallyExpanded;
+  const expanded =
+    userOverride !== null ? userOverride : autoExpandValues?.has(choice.value) || manuallyExpanded;
 
   // Calculate checkbox state based on selection and children
   const { checked, indeterminate } = useMemo(() => {
@@ -646,6 +663,7 @@ function TreeNode({
 
   const toggleExpanded = () => {
     if (hasChildren) {
+      setUserOverride(!expanded);
       setManuallyExpanded(!expanded);
     }
   };
@@ -693,7 +711,7 @@ function TreeNode({
       {hasChildren && (
         <Collapse in={expanded}>
           <Stack gap="xs" ml="md" mt="xs">
-            {choice.children!.map((child, childIndex) => (
+            {choice.children!.map((child) => (
               <TreeNode
                 key={child.__key}
                 choice={child}
@@ -706,7 +724,9 @@ function TreeNode({
                 level={level + 1}
                 color={color}
                 autoExpandValues={autoExpandValues}
-                nodePath={`${nodePath}-${childIndex}`}
+                // V3-7: same stable child.__key used for the React key, not
+                // the filtered-position childIndex.
+                nodePath={`${nodePath}-${child.__key}`}
               />
             ))}
           </Stack>

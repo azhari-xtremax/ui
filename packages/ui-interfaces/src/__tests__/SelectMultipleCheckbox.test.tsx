@@ -223,6 +223,30 @@ describe('SelectMultipleCheckbox', () => {
     expect(screen.getByLabelText('Custom value checkbox: custom_value')).toBeChecked();
   });
 
+  // V3-7: the S7.3 exclusion matched a row against a stored value by
+  // stringified digits (`rowValues.has(String(v))`), not by actual value
+  // identity. A stored NUMBER 5 was hidden entirely whenever an unrelated
+  // new row's in-progress (unchecked) text happened to be the STRING "5" —
+  // neither the row itself (checked via strict equality, so "5" !== 5 never
+  // matched) nor the read-only fallback (wrongly excluded) rendered it.
+  it('does not hide a stored numeric custom value when an unrelated row is mid-typing the same digits', async () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox choices={mockChoices} value={[5]} allowOther />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Selected custom value: 5')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Other'));
+    const input = await screen.findByPlaceholderText('Enter custom value');
+    fireEvent.change(input, { target: { value: '5' } });
+
+    // The stored number 5 must still render — the new row is a different,
+    // unchecked, string-typed entry, not the thing backing it.
+    expect(screen.getByLabelText('Selected custom value: 5')).toBeInTheDocument();
+  });
+
   it('is disabled when disabled prop is true', () => {
     render(
       <TestWrapper>
