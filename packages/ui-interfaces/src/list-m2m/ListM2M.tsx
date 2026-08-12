@@ -1107,6 +1107,13 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 const resolved = f === "id" && relatedPkField !== "id" ? relatedPkField : f;
                 return `${relationInfo.junctionField.field}.${resolved}`;
             });
+            // See the matching comment in the load-items effect above —
+            // the display template references fields via a junction-relative
+            // path already, and must be fetched too or a reload after
+            // editing a related item reverts the row back to a blank label.
+            for (const templateField of extractFieldsFromTemplate(resolvedTemplate)) {
+                if (!queryFields.includes(templateField)) queryFields.push(templateField);
+            }
             queryFields.push(relationInfo.junctionPrimaryKeyField.field);
             if (relationInfo.sortField) queryFields.push(relationInfo.sortField);
 
@@ -1132,6 +1139,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         enableSearchFilter,
         filter,
         loadItems,
+        resolvedTemplate,
     ]);
 
     // ── Render: Error states ────────────────────────────────────────
