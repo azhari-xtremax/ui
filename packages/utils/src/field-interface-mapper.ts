@@ -978,7 +978,7 @@ export function getFieldDefault(field: Field): unknown {
     return undefined;
   }
 
-  const defaultValue = String(schema.default_value);
+  let defaultValue = String(schema.default_value);
 
   // Handle function-generated defaults (don't use them as form defaults)
   if (
@@ -988,6 +988,16 @@ export function getFieldDefault(field: Field): unknown {
     defaultValue.includes("CURRENT_TIMESTAMP")
   ) {
     return undefined;
+  }
+
+  // Postgres reports a typed literal default as `'active'::character varying`
+  // (or `::text`, `::uuid`, etc.) — strip the cast suffix before the
+  // quote/number checks below, or a string default never matches
+  // startsWith/endsWith "'" (the trailing quote is followed by the cast)
+  // and numeric defaults with a cast never parse as a number.
+  const castMatch = defaultValue.match(/^(.*)::[\w\s]+$/);
+  if (castMatch) {
+    defaultValue = castMatch[1];
   }
 
   // Handle boolean defaults

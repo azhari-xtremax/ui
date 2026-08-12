@@ -34,7 +34,7 @@ import {
 import { FieldsService, ItemsService, PermissionsService, apiRequest } from "@buildpad/services";
 import type { CollectionActionAccess, CollectionAccess } from "@buildpad/services";
 import type { Field, FormDefinition } from "@buildpad/types";
-import { buildFieldsFromDefinition } from "@buildpad/utils";
+import { buildFieldsFromDefinition, getFieldDefault } from "@buildpad/utils";
 import { VForm } from "@buildpad/ui-form";
 import { IconAlertCircle, IconCheck, IconTrash, IconX } from "@tabler/icons-react";
 import React, {
@@ -416,6 +416,16 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
 
         // Apply permission presets as defaults on create
         if (mode === "create") {
+          // Seed each field's own schema-level default (e.g. a column's
+          // `DEFAULT 'active'`) first — explicit permission presets and the
+          // `defaultValues` prop both take precedence over it below.
+          const schemaDefaults: Record<string, unknown> = {};
+          for (const f of editableFields) {
+            const value = getFieldDefault(f);
+            if (value !== undefined) schemaDefaults[f.field] = value;
+          }
+          initialData = { ...schemaDefaults, ...initialData };
+
           const presets = actionAccess?.presets;
           if (presets && typeof presets === "object") {
             initialData = { ...presets, ...initialData };

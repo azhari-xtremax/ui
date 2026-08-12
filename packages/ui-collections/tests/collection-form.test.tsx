@@ -244,6 +244,39 @@ describe("CollectionForm", () => {
       });
     });
 
+    it("seeds create-mode form data from each field's own schema default_value", async () => {
+      // Postgres reports a typed literal default with a `::type` cast suffix
+      // (e.g. `'active'::character varying`) — getFieldDefault handles the
+      // parsing; this covers CollectionForm actually calling it for create
+      // mode, which it previously never did (only the defaultValues prop
+      // and permission presets seeded initial form data).
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 1 } },
+        { field: "theme", type: "string", schema: { default_value: "auto" }, meta: { interface: "input", sort: 2 } },
+        { field: "title", type: "string", schema: { default_value: null }, meta: { interface: "input", sort: 3 } },
+      ]);
+
+      renderForm({ mode: "create" });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-status")).toHaveValue("active");
+      });
+      expect(screen.getByTestId("field-theme")).toHaveValue("auto");
+      expect(screen.getByTestId("field-title")).toHaveValue("");
+    });
+
+    it("lets an explicit defaultValues prop override a field's schema default", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 1 } },
+      ]);
+
+      renderForm({ mode: "create", defaultValues: { status: "draft" } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-status")).toHaveValue("draft");
+      });
+    });
+
     it("does not show delete button in create mode", async () => {
       renderForm({ mode: "create" });
 
