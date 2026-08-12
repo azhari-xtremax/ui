@@ -11,6 +11,8 @@ import type { Field } from '@buildpad/types';
 import {
   PROVISIONABLE_INTERFACES,
   provisionableInterfacesForType,
+  CHOICE_INTERFACES,
+  interfaceRequiresChoices,
 } from '../src/interface-catalog';
 import { getFieldInterface } from '../src/field-interface-mapper';
 
@@ -36,6 +38,7 @@ describe('provisionableInterfacesForType', () => {
         'input-code',
         'tags',
         'select-multiple-checkbox',
+        'select-multiple-checkbox-tree',
         'select-multiple-dropdown',
       ]),
     );
@@ -86,5 +89,20 @@ describe('PROVISIONABLE_INTERFACES integrity', () => {
   it('has no duplicate interface ids', () => {
     const values = PROVISIONABLE_INTERFACES.map((i) => i.value);
     expect(new Set(values).size).toBe(values.length);
+  });
+});
+
+describe('CHOICE_INTERFACES / interfaceRequiresChoices (S4.4/S8.4)', () => {
+  // The live picker already lists select-multiple-checkbox-tree as
+  // provisionable (see the json/csv test above); the catalog's own
+  // choice-requiring set had no entry for it, so the choices editor and the
+  // zero-choices save guard silently skipped a tree field.
+  it('includes select-multiple-checkbox-tree alongside the other choice-authoring interfaces', () => {
+    expect(CHOICE_INTERFACES.has('select-multiple-checkbox-tree')).toBe(true);
+    expect(interfaceRequiresChoices('select-multiple-checkbox-tree')).toBe(true);
+  });
+
+  it('does not flag a non-choice interface as requiring choices', () => {
+    expect(interfaceRequiresChoices('input')).toBe(false);
   });
 });

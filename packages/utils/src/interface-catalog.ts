@@ -74,6 +74,7 @@ export const PROVISIONABLE_INTERFACES: ProvisionableInterface[] = [
   { value: 'select-dropdown', label: 'Dropdown (choices)', group: 'Selection', types: ['string', 'integer', 'bigInteger', 'float', 'decimal'] },
   { value: 'select-radio', label: 'Radio (choices)', group: 'Selection', types: ['string', 'integer'] },
   { value: 'select-multiple-checkbox', label: 'Checkboxes (multiple)', group: 'Selection', types: ['json', 'csv'] },
+  { value: 'select-multiple-checkbox-tree', label: 'Checkboxes (tree)', group: 'Selection', types: ['json', 'csv'] },
   { value: 'select-multiple-dropdown', label: 'Multi-select dropdown', group: 'Selection', types: ['json', 'csv'] },
   { value: 'select-icon', label: 'Icon picker', group: 'Selection', types: ['string'] },
   { value: 'select-color', label: 'Color picker', group: 'Selection', types: ['string'] },
@@ -108,6 +109,7 @@ export const CHOICE_INTERFACES: ReadonlySet<string> = new Set([
   'select-dropdown',
   'select-radio',
   'select-multiple-checkbox',
+  'select-multiple-checkbox-tree',
   'select-multiple-dropdown',
 ]);
 
