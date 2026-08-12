@@ -291,6 +291,53 @@ describe("ListO2M — Add Existing on an already-saved parent", () => {
   });
 });
 
+describe("ListO2M — saved parent stage→unstage→save revert hole (V3)", () => {
+  // Regression: staging a link on a saved parent and then un-staging it
+  // again (change of mind) used to emit `[]` once an emit had already
+  // happened, because the preserve-fetch was gated on
+  // `changeset.link.length > 0` alone. `[]` reaches the relation writer's
+  // empty-array branch, which unlinks/deletes every other child. The revert
+  // must instead re-preserve the full current id set (a no-op re-link).
+  it("re-preserves the full current id set instead of emitting [] on revert", async () => {
+    setHookItems([{ id: "p1", name: "Existing post" }], 1);
+    (apiRequest as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes("category_id")) {
+        // preserve-fetch: everything currently linked server-side
+        return Promise.resolve({ data: [{ id: "p1" }] });
+      }
+      // the "Add Existing" pick fetch
+      return Promise.resolve({ data: [{ id: "p9", name: "Picked post" }] });
+    });
+
+    const onChange = jest.fn();
+    render(
+      wrap(
+        <ListO2M
+          {...BASE_PROPS}
+          primaryKey="cat-1"
+          value={[{ id: "p1", name: "Existing post" }]}
+          onChange={onChange}
+        />,
+      ),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(screen.getByTestId("o2m-remove-p9")).toBeInTheDocument());
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByTestId("o2m-remove-p9"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("o2m-remove-p9")).not.toBeInTheDocument(),
+    );
+    await flush();
+
+    const lastPayload = onChange.mock.calls.at(-1)![0];
+    expect(lastPayload).not.toEqual([]);
+    expect(lastPayload).toEqual(["p1"]);
+  });
+});
+
 describe("ListO2M — staged creates on an unsaved parent", () => {
   /** create → open edit (re-memoizes handleFormSuccess) → create */
   async function stageTwoCreatesAroundAnEdit() {

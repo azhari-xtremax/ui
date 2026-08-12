@@ -469,52 +469,128 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     // parent form keeps the last payload and saves items the user removed.
     if (!hasChanges && !hasEmittedRef.current) return;
 
-    const fkField = relationInfo?.reverseJunctionField?.field;
-    const payload: Record<string, unknown>[] = [];
+    let cancelled = false;
 
-    // Creates: emit the item data with FK pointing to parent
-    for (const item of changeset.create) {
-      const { $type, $index, ...data } = item;
-      payload.push({
-        ...data,
-        ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
-      });
-    }
+    const buildAndEmit = async () => {
+      const fkField = relationInfo?.reverseJunctionField?.field;
+      const payload: (string | number | Record<string, unknown>)[] = [];
 
-    // Links: existing items picked while the parent is unsaved. Emit the
-    // reference only (id + FK) — DaaS links by id and fills in the real parent
-    // key. The staged entry also carries the fetched display fields so the row
-    // can render, but those must NOT be echoed back: when the display template
-    // references a nested path (e.g. `{{author_id.name}}`) the fetched row
-    // contains a nested object, and DaaS then silently drops the whole entry
-    // from the save (201, `posts: []`) instead of linking it.
-    for (const item of changeset.link) {
-      // KNOWN LIMIT: link/update/delete payload entries still key the item by
-      // the literal "id" property (item.id holds the real PK *value* via
-      // getPk). For related collections whose PK column isn't named "id",
-      // whether DaaS accepts this shape is unverified — resolving it needs a
-      // backend-contract check, not just a client change.
-      payload.push({
-        id: item.id,
-        ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
-      });
-    }
+      // Creates: emit the item data with FK pointing to parent
+      for (const item of changeset.create) {
+        const { $type, $index, ...data } = item;
+        payload.push({
+          ...data,
+          ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
+        });
+      }
 
-    // Updates: emit id + changed fields
-    for (const item of changeset.update) {
-      const { $type, ...data } = item;
-      payload.push(data);
-    }
+      // Links: existing items picked while the parent is unsaved. Emit the
+      // reference only (id + FK) — DaaS links by id and fills in the real parent
+      // key. The staged entry also carries the fetched display fields so the row
+      // can render, but those must NOT be echoed back: when the display template
+      // references a nested path (e.g. `{{author_id.name}}`) the fetched row
+      // contains a nested object, and DaaS then silently drops the whole entry
+      // from the save (201, `posts: []`) instead of linking it.
+      const stagedLinkIds = new Set(changeset.link.map((item) => item.id));
+      for (const item of changeset.link) {
+        // KNOWN LIMIT: link/update/delete payload entries still key the item by
+        // the literal "id" property (item.id holds the real PK *value* via
+        // getPk). For related collections whose PK column isn't named "id",
+        // whether DaaS accepts this shape is unverified — resolving it needs a
+        // backend-contract check, not just a client change.
+        payload.push({
+          id: item.id,
+          ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
+        });
+      }
 
-    // Deletes: emit id with $delete marker (DaaS convention)
-    for (const item of changeset.delete) {
-      payload.push({ id: item.id, $delete: true });
-    }
+      // N1 fix: a saved parent with staged links needs every other
+      // already-linked child preserved in the payload too, or the relation
+      // writer deselects them. Bare primitive entries match its
+      // string/number shorthand (`recordsToUpdate` keyed by the real PK
+      // column, no "id" property assumed) — safe for any PK name, unlike
+      // the object-shaped entries above.
+      //
+      // Must NOT be gated on `changeset.link.length > 0` ALONE, or a revert
+      // hole opens up: stage a link (preserve-fetch runs, hasEmittedRef
+      // becomes true) → un-stage it again (change of mind) → changeset is
+      // entirely empty, so `changeset.link.length > 0` is false, but the
+      // effect still runs (see the bail-out above) and would emit `[]` —
+      // the relation writer's empty-array branch then unlinks/deletes every
+      // child. `hasEmittedRef.current` is added as an OR so any run after
+      // the first real emit also re-preserves, turning the revert into a
+      // no-op re-link of the full current id set instead. Dropping the
+      // original `changeset.link.length > 0` arm instead of OR-ing would
+      // skip the preserve-fetch on the very first stage (hasEmittedRef is
+      // still false then), reopening the original N1 bug.
+      let preserveFetchFailed = false;
+      if (
+        isParentSaved &&
+        (changeset.link.length > 0 || hasEmittedRef.current) &&
+        relationInfo?.relatedCollection?.collection &&
+        relationInfo?.reverseJunctionField?.field &&
+        primaryKey
+      ) {
+        try {
+          const { apiRequest } = await import("@buildpad/services");
+          const col = relationInfo.relatedCollection.collection;
+          const relatedPk = relationInfo.relatedPrimaryKeyField?.field || "id";
+          const qp = new URLSearchParams();
+          qp.set(
+            "filter",
+            JSON.stringify({ [relationInfo.reverseJunctionField.field]: { _eq: primaryKey } }),
+          );
+          qp.set("fields", relatedPk);
+          // `limit=-1` alone is NOT "no limit" here: the route defaults
+          // `page` to 1 regardless, and the range branch then computes a
+          // broken range for limit=-1. `page=0` is falsy so that branch is
+          // skipped entirely, same as passing no page at all.
+          qp.set("limit", "-1"); // fetch every linked child, not just the current page
+          qp.set("page", "0");
+          const resp = await apiRequest<{ data: Record<string, unknown>[] }>(
+            `/api/items/${col}?${qp.toString()}`,
+          );
+          for (const row of resp.data || []) {
+            const pk = row[relatedPk] as string | number;
+            if (!stagedLinkIds.has(pk)) {
+              payload.push(pk);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch existing children to preserve on save:", err);
+          // An incomplete/aborted preserve-fetch must NOT proceed to emit —
+          // a links-only payload here is a destructive one (the relation
+          // writer treats a saved parent's payload as authoritative and
+          // deselects everything missing from it). Aborting the emit only
+          // fails to save the newly staged change; emitting anyway would
+          // silently unlink every other child.
+          preserveFetchFailed = true;
+        }
+      }
 
-    hasEmittedRef.current = true;
-    onChange(payload);
+      if (cancelled || preserveFetchFailed) return;
+
+      // Updates: emit id + changed fields
+      for (const item of changeset.update) {
+        const { $type, ...data } = item;
+        payload.push(data);
+      }
+
+      // Deletes: emit id with $delete marker (DaaS convention)
+      for (const item of changeset.delete) {
+        payload.push({ id: item.id, $delete: true });
+      }
+
+      hasEmittedRef.current = true;
+      onChange(payload);
+    };
+
+    buildAndEmit();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeset]);
+  }, [changeset, isParentSaved, primaryKey, relationInfo]);
 
   // ── Priority #4: Unique FK guard ────────────────────────────────────────
   // In demo mode, use mockRelationInfo; otherwise use hookRelationInfo
