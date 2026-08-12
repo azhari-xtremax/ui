@@ -92,6 +92,17 @@ export const FormField: React.FC<FormFieldProps> = ({
   const effectiveValue = useMemo(() => {
     if (value !== undefined) return value;
     if (field.schema?.default_value !== undefined) return field.schema.default_value;
+    // Hash/conceal fields are often genuinely omitted from the fetched item
+    // (write-only columns, e.g. a password never round-tripped on read) —
+    // coercing that straight to `null` here would look identical to an
+    // explicit "no value" and permanently skip FormFieldInterface's
+    // undefined-only mask synthesis, which needs the true "omitted" signal
+    // to distinguish "never fetched" from "field explicitly cleared".
+    const isConcealable =
+      field.type === 'hash' ||
+      field.meta?.special?.includes?.('hash') ||
+      field.meta?.special?.includes?.('conceal');
+    if (isConcealable) return undefined;
     return null;
   }, [value, field]);
 

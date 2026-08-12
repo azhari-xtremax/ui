@@ -28,6 +28,8 @@ export interface InputHashProps {
   autocomplete?: string;
   /** data-testid for testing */
   'data-testid'?: string;
+  /** Accessible name, used when no visible `label` is rendered */
+  'aria-label'?: string;
 }
 
 export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
@@ -43,6 +45,7 @@ export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
   description,
   autocomplete,
   'data-testid': testId,
+  'aria-label': ariaLabel,
 }, ref) => {
   const isHashed = !!(value && value.length > 0);
   const [localValue, setLocalValue] = useState<string>('');
@@ -83,6 +86,11 @@ export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
   const isShowingHashedState = isHashed && !localValue;
   const commonProps = {
     label,
+    // Only needed as the accessible name when no visible label is rendered
+    // (FormField hides the label and relies on this) — an explicit `label`
+    // already gives Mantine's input its accessible name via the linked
+    // <label for>, so setting both would just be redundant.
+    'aria-label': label ? undefined : ariaLabel,
     placeholder: internalPlaceholder,
     required,
     disabled,
