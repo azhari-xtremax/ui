@@ -205,6 +205,33 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // without editing) don't re-fire onChange with the same value.
   const lastCommittedRef = React.useRef<string | null>(null);
 
+  // V3-2: keep lastCommittedRef in sync with the actual current `value`
+  // instead of only ever being written by commitOtherValue itself.
+  // Otherwise: commit "bar" (lastCommittedRef = "bar") → select a different
+  // option or have the value reset externally → type "bar" again → the
+  // dedupe check still sees "bar" === lastCommittedRef and silently drops
+  // the commit for the rest of the mount's lifetime, even though "bar"
+  // isn't the current value anymore.
+  React.useEffect(() => {
+    lastCommittedRef.current = value !== null && value !== undefined ? String(value) : null;
+  }, [value]);
+
+  // V3-3: `justSelectedRef` must self-expire instead of relying solely on
+  // commitOtherValue to consume it. Previously it stayed `true` until the
+  // *next* commitOtherValue call, however far in the future that was — so
+  // click "Foo" (sets it true) → type "bar" → Enter did nothing (consumed
+  // as if it were the suppressed post-select blur) and only the *second*
+  // Enter actually committed "bar". Queuing the reset on a microtask lets
+  // it still suppress Mantine's own synchronous post-select/post-Escape
+  // follow-up (which runs before the stack unwinds), while any real typing
+  // — which can only happen on a later browser event — sees it already
+  // cleared.
+  const clearJustSelectedSoon = React.useCallback(() => {
+    queueMicrotask(() => {
+      justSelectedRef.current = false;
+    });
+  }, []);
+
   const commitOtherValue = React.useCallback(() => {
     if (!allowOther || !onChange) return;
     if (justSelectedRef.current) {
@@ -230,8 +257,9 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // blur would otherwise commit.
   const cancelOtherEdit = React.useCallback(() => {
     justSelectedRef.current = true; // suppress the blur that follows Escape
+    clearJustSelectedSoon();
     setOtherSearchValue(value !== null && value !== undefined ? String(value) : '');
-  }, [value]);
+  }, [value, clearJustSelectedSoon]);
 
   // Handle value changes
   const handleChange = React.useCallback(
@@ -240,6 +268,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
         return;
       }
       justSelectedRef.current = true;
+      clearJustSelectedSoon();
 
       if (selectedValue === null) {
         onChange(null);
@@ -260,7 +289,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
         onChange(selectedValue);
       }
     },
-    [onChange, choices, allowOther]
+    [onChange, choices, allowOther, clearJustSelectedSoon]
   );
 
   // Convert current value to string for Mantine Select
@@ -379,8 +408,17 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
             },
             onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
               selectProps.onKeyDown?.(event);
-              if (event.key === 'Enter') commitOtherValue();
-              else if (event.key === 'Escape') cancelOtherEdit();
+              if (event.key === 'Enter') {
+                // N3-b: Mantine calls preventDefault() on Enter when it's
+                // about to select a highlighted dropdown option itself
+                // (handleChange fires right after). Committing here too in
+                // that case double-emits onChange — once with the raw
+                // search text via commitOtherValue, once with the correctly
+                // typed originalChoice.value via handleChange. Only run the
+                // manual commit when Mantine has declined to handle this
+                // Enter itself (free text matching no option).
+                if (!event.defaultPrevented) commitOtherValue();
+              } else if (event.key === 'Escape') cancelOtherEdit();
             },
           }
         : {})}

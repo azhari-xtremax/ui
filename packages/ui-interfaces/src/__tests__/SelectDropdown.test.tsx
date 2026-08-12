@@ -443,6 +443,95 @@ describe('SelectDropdown allowOther', () => {
     expect(consumerOnBlur).toHaveBeenCalled();
     expect(onChange).toHaveBeenCalledWith('Custom Value');
   });
+
+  // V3-2: lastCommittedRef used to only ever be written by commitOtherValue
+  // itself, so a value already committed once stayed permanently "sticky"
+  // even after the value moved on to something else.
+  it('re-commits the same free text after the value has since changed to something else (V3-2)', async () => {
+    const onEmit = jest.fn();
+    function Controlled() {
+      const [val, setVal] = React.useState<string | number | null>(null);
+      return (
+        <SelectDropdown
+          choices={choices}
+          allowOther
+          value={val}
+          onChange={(v) => {
+            setVal(v);
+            onEmit(v);
+          }}
+        />
+      );
+    }
+    renderWithProvider(<Controlled />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'bar' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onEmit).toHaveBeenLastCalledWith('bar');
+    await Promise.resolve();
+
+    fireEvent.click(input);
+    fireEvent.click(screen.getByText('Alpha'));
+    expect(onEmit).toHaveBeenLastCalledWith('alpha');
+    await Promise.resolve();
+
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'bar' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onEmit).toHaveBeenLastCalledWith('bar');
+  });
+
+  // V3-3: justSelectedRef used to stay `true` until the *next*
+  // commitOtherValue call however far in the future that was, so it also
+  // swallowed a completely unrelated free-text commit typed sometime later.
+  it('commits free text typed immediately after selecting an option, on the first Enter (V3-3)', async () => {
+    const onChange = jest.fn();
+    renderWithProvider(<SelectDropdown choices={choices} allowOther onChange={onChange} />);
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.click(screen.getByText('Alpha'));
+    expect(onChange).toHaveBeenLastCalledWith('alpha');
+    onChange.mockClear();
+
+    // let the post-select microtask clear justSelectedRef, same as a real
+    // browser would before the next physical keystroke arrives
+    await Promise.resolve();
+
+    fireEvent.change(input, { target: { value: 'bar' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onChange).toHaveBeenCalledWith('bar');
+  });
+
+  // N3-b: Mantine calls preventDefault() on Enter when it's about to select
+  // a highlighted dropdown option itself (handleChange fires right after).
+  // The manual commit must not also fire in that case, or onChange
+  // double-emits.
+  it('skips the manual Enter commit when the keydown was already handled elsewhere (N3-b)', () => {
+    const onChange = jest.fn();
+    renderWithProvider(
+      <SelectDropdown
+        choices={choices}
+        allowOther
+        onChange={onChange}
+        selectProps={{
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') e.preventDefault();
+          },
+        }}
+      />
+    );
+
+    const input = screen.getByTestId('select-dropdown');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'Custom Value' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 describe('SelectDropdown stringify-colliding choices', () => {
