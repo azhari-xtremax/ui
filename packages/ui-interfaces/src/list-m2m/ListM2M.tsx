@@ -1015,7 +1015,17 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 | undefined;
 
             if (resolvedTemplate && relatedData && typeof relatedData === "object") {
-                return renderTemplate(resolvedTemplate, relatedData);
+                // An explicit, author-configured template uses junction-
+                // relative paths (e.g. "{{role_id.name}}", matching how the
+                // field's own options.template is written) — those resolve
+                // against the full junction item. The bootstrap fallback
+                // template from resolveDisplayTemplate's last rung
+                // ("{{ id }}") instead means "the related item's own PK",
+                // relative to relatedData, not the junction row's id.
+                // Merge relatedData's own fields onto item (item's real
+                // keys win on collision) so a single renderTemplate() call
+                // resolves either convention correctly.
+                return renderTemplate(resolvedTemplate, { ...relatedData, ...item });
             }
 
             // Fallback: show first available field value

@@ -262,6 +262,30 @@ describe('ListM2M fields= query PK resolution', () => {
     });
 });
 
+describe('ListM2M row-label rendering with a junction-relative template', () => {
+    it('resolves "{{tag_id.name}}" against the nested related item, not a blank label', () => {
+        // formatDisplayValue used to render the template against `relatedData`
+        // (already item.tag_id — just {id, name}), so "{{tag_id.name}}" tried
+        // to resolve relatedData.tag_id.name, which doesn't exist — blank label.
+        render(
+            <MantineProvider>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    template="{{tag_id.name}}"
+                    mockRelationInfo={RELATION_INFO as any}
+                    mockItems={[
+                        { id: 'junction-1', tag_id: { id: 'tag-1', name: 'Announcement' } } as any,
+                    ]}
+                />
+            </MantineProvider>
+        );
+
+        expect(screen.getByText('Announcement')).toBeInTheDocument();
+    });
+});
+
 describe('ListM2M load-items dedupe', () => {
     it('does not refire an identical query when the parent passes fresh filter/fields literals', async () => {
         const { rerender } = render(
