@@ -88,6 +88,7 @@ import { CollectionList, CollectionForm } from "@buildpad/ui-collections";
 import { renderTemplate, resolveDisplayTemplate, extractFieldsFromTemplate, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
 import { useRelationMultipleM2M, type M2MDisplayItem, type M2MChangesItem } from "@buildpad/hooks";
 import { useRelationPermissionsM2M } from "@buildpad/hooks";
+import { apiRequest } from "@buildpad/hooks";
 import { mergeTranslations, interpolate, formatItemCount, type M2MTranslations } from "./translations";
 
 // ── Props ──────────────────────────────────────────────────────────
@@ -897,12 +898,60 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         [openEditDrawer, isEffectivelyNonEditable],
     );
 
+    // Fields to request when fetching selected related items directly (see
+    // handleSelectExisting below) — same fields the display template needs,
+    // but relative to the related item itself rather than junction-relative
+    // (a template path's leading segment matching the junction field name is
+    // stripped, e.g. "role_id.name" -> "name").
+    const relatedItemFields = useMemo(() => {
+        if (!relationInfo) return fields;
+        const junctionFieldName = relationInfo.junctionField.field;
+        const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
+        const result = new Set<string>(fields.map((f) => (f === "id" ? relatedPkField : f)));
+        for (const templateField of extractFieldsFromTemplate(resolvedTemplate)) {
+            if (templateField === junctionFieldName) {
+                result.add(relatedPkField);
+            } else if (templateField.startsWith(`${junctionFieldName}.`)) {
+                result.add(templateField.slice(junctionFieldName.length + 1));
+            } else {
+                result.add(templateField);
+            }
+        }
+        result.add(relatedPkField);
+        return [...result];
+    }, [fields, resolvedTemplate, relationInfo]);
+
     const handleSelectExisting = useCallback(
-        (selectedIds: (string | number)[]) => {
+        async (selectedIds: (string | number)[]) => {
+            if (relationInfo && !isMockMode && selectedIds.length > 0) {
+                try {
+                    const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
+                    const params = new URLSearchParams({
+                        fields: relatedItemFields.join(","),
+                        filter: JSON.stringify({ [relatedPkField]: { _in: selectedIds } }),
+                        limit: String(selectedIds.length),
+                    });
+                    const response = await apiRequest<
+                        { data: Record<string, unknown>[] } | Record<string, unknown>[]
+                    >(`/api/items/${relationInfo.relatedCollection.collection}?${params}`);
+                    const rows = Array.isArray(response) ? response : (response.data ?? []);
+                    const relatedDataById: Record<string | number, Record<string, unknown>> = {};
+                    for (const row of rows) {
+                        const id = row[relatedPkField] as string | number;
+                        relatedDataById[id] = row;
+                    }
+                    selectItems(selectedIds, relatedDataById);
+                    closeSelectModal();
+                    return;
+                } catch {
+                    // Non-fatal: fall through to id-only staging — the label
+                    // resolves once the item is saved and the list reloads.
+                }
+            }
             selectItems(selectedIds);
             closeSelectModal();
         },
-        [selectItems, closeSelectModal],
+        [selectItems, closeSelectModal, relationInfo, relatedItemFields, isMockMode],
     );
 
     const handleRemoveItem = useCallback(

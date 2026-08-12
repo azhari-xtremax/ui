@@ -18,12 +18,14 @@ const mockUseRelationPermissionsM2M = jest.fn();
 const mockSelectItems = jest.fn();
 const mockLoadItems = jest.fn();
 const mockRemoveItem = jest.fn();
+const mockApiRequest = jest.fn();
 
 jest.mock('@buildpad/hooks', () => {
     const ReactActual = require('react');
 
     return {
         isValidPrimaryKey: (pk: unknown) => pk !== undefined && pk !== null && pk !== '' && pk !== '+',
+        apiRequest: (...args: unknown[]) => mockApiRequest(...args),
         useRelationM2M: (...args: unknown[]) => mockUseRelationM2M(...args),
         useRelationPermissionsM2M: (...args: unknown[]) => mockUseRelationPermissionsM2M(...args),
         useFieldMetadata: () => ({ getDisplayName: (f: string) => f, loading: false }),
@@ -34,11 +36,18 @@ jest.mock('@buildpad/hooks', () => {
                 delete: [] as (string | number)[],
             });
 
-            const selectItems = ReactActual.useCallback((ids: (string | number)[]) => {
-                mockSelectItems(ids);
+            const selectItems = ReactActual.useCallback((ids: (string | number)[], relatedDataById?: Record<string | number, Record<string, unknown>>) => {
+                mockSelectItems(ids, relatedDataById);
                 setChanges((prev: any) => ({
                     ...prev,
-                    create: [...prev.create, ...ids.map((id: string | number) => ({ $type: 'created', id }))],
+                    create: [
+                        ...prev.create,
+                        ...ids.map((id: string | number) => ({
+                            $type: 'created',
+                            id,
+                            tag_id: { id, ...(relatedDataById?.[id] ?? {}) },
+                        })),
+                    ],
                 }));
             }, []);
 
@@ -203,7 +212,7 @@ describe('ListM2M "Create New" junction linking', () => {
         // handleEditFormSuccess must call selectItems([data.id]) to stage a
         // junction row linking the newly created item — not silently drop it.
         await waitFor(() => {
-            expect(mockSelectItems).toHaveBeenCalledWith(['new-tag-id']);
+            expect(mockSelectItems).toHaveBeenCalledWith(['new-tag-id'], undefined);
         });
     });
 });
@@ -259,6 +268,58 @@ describe('ListM2M fields= query PK resolution', () => {
         await waitFor(() => expect(mockLoadItems).toHaveBeenCalled());
         const fields: string[] = mockLoadItems.mock.calls.at(-1)?.[0]?.fields ?? [];
         expect(fields).toContain('tag_id.name');
+    });
+});
+
+describe('ListM2M select-existing label resolution', () => {
+    // Picking an existing item via the select modal only ever staged
+    // `{ tag_id: { id } }` locally (selectItems has no fetch of its own) — a
+    // locally-created junction entry never goes through loadItems, so its
+    // display template rendered blank until the parent form was saved and
+    // the list reloaded. handleSelectExisting must fetch the selected
+    // related items' own fields (per the display template) and pass them
+    // into selectItems so the label resolves immediately.
+    it('fetches the selected related items and merges their fields into the staged junction entry', async () => {
+        mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
+        mockApiRequest.mockResolvedValue({ data: [{ id: 42, name: 'Announcement' }] });
+
+        render(
+            <TestWrapper>
+                <ListM2M collection="articles" field="tags" primaryKey={1} template="{{tag_id.name}}" />
+            </TestWrapper>
+        );
+
+        fireEvent.click(screen.getByText('Add Existing'));
+        fireEvent.click(await screen.findByText('Add Selected'));
+
+        await waitFor(() => expect(mockApiRequest).toHaveBeenCalled());
+        const [url] = mockApiRequest.mock.calls.at(-1) ?? [];
+        expect(url).toContain('/api/items/tags');
+        expect(url).toContain('name');
+
+        await waitFor(() => {
+            expect(mockSelectItems).toHaveBeenCalledWith([42], { 42: { id: 42, name: 'Announcement' } });
+        });
+
+        expect(await screen.findByText('Announcement')).toBeInTheDocument();
+    });
+
+    it('falls back to id-only staging when the fetch fails', async () => {
+        mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
+        mockApiRequest.mockRejectedValue(new Error('network error'));
+
+        render(
+            <TestWrapper>
+                <ListM2M collection="articles" field="tags" primaryKey={1} template="{{tag_id.name}}" />
+            </TestWrapper>
+        );
+
+        fireEvent.click(screen.getByText('Add Existing'));
+        fireEvent.click(await screen.findByText('Add Selected'));
+
+        await waitFor(() => {
+            expect(mockSelectItems).toHaveBeenCalledWith([42], undefined);
+        });
     });
 });
 

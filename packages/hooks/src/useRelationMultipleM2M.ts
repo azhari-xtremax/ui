@@ -338,6 +338,7 @@ export function useRelationMultipleM2M(
      */
     const selectItems = useCallback((
         selectedIds: (string | number)[],
+        relatedDataById?: Record<string | number, Record<string, unknown>>,
     ): void => {
         if (!relationInfo) return;
 
@@ -345,6 +346,12 @@ export function useRelationMultipleM2M(
             const entry: Record<string, unknown> = {
                 [junctionFieldName]: {
                     [relatedPKField]: id,
+                    // Merge in the related item's own fields (e.g. a display
+                    // template's "name") when the caller already fetched them —
+                    // a locally-created junction entry never goes through
+                    // loadItems, so without this its display template renders
+                    // blank until the item is saved and the list reloads.
+                    ...(relatedDataById?.[id] ?? {}),
                 },
             };
 
