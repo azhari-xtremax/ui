@@ -414,7 +414,13 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         }
 
         const currentChanges = getChanges();
-        const serialized = JSON.stringify(currentChanges);
+        // The dedupe key must also track whatever selects page-scoped vs.
+        // full-fetch below (totalCount/limit/search) — the changeset itself
+        // can be byte-identical to the last emit while search just became
+        // active, and that alone must still re-run the effect through the
+        // full-fetch gate instead of bailing out with the stale (possibly
+        // page-scoped) payload from before search was active.
+        const serialized = JSON.stringify({ currentChanges, totalCount, limit, search });
 
         if (serialized === prevChangesRef.current) return;
         prevChangesRef.current = serialized;
@@ -459,9 +465,111 @@ export const ListM2A: React.FC<ListM2AProps> = ({
             })
             .filter(entry => entry[collField] && entry[itemField]);
 
-        onChangeRef.current?.(payload as unknown as M2AItem[]);
-        hasEmittedRef.current = true;
-    }, [isDemoMode, relationInfo, getChanges, hasChanges, hookDisplayItems]);
+        // hookDisplayItems only ever holds the current page's rows merged with
+        // local create/update/delete. On a saved parent with more junction
+        // rows than fit on one page, emitting straight from it silently drops
+        // every off-page row from the replace-mode payload (v1 §6.1) — the
+        // backend deletes-all-then-inserts, so anything not in the payload is
+        // gone. When the on-page set can't represent the whole relation
+        // (more rows than the page limit, OR an active search that could be
+        // hiding non-matching-but-still-linked rows), fetch every currently
+        // linked junction row unpaginated and overlay the same local
+        // create/update/delete onto that full set instead.
+        let cancelled = false;
+
+        const buildAndEmit = async () => {
+            let baselineItems = hookDisplayItems;
+
+            const junctionPk = relationInfo.junctionPrimaryKeyField?.field;
+            const parentFk = relationInfo.reverseJunctionField?.field;
+            const sortFieldName = relationInfo.sortField;
+            let preserveFetchFailed = false;
+            if (
+                isParentSaved &&
+                (totalCount > limit || !!search) &&
+                relationInfo.junctionCollection?.collection &&
+                junctionPk &&
+                parentFk &&
+                primaryKey
+            ) {
+                try {
+                    const { apiRequest } = await import("@buildpad/services");
+                    const junctionCol = relationInfo.junctionCollection.collection;
+                    const qp = new URLSearchParams();
+                    qp.set("filter", JSON.stringify({ [parentFk]: { _eq: primaryKey } }));
+                    const fetchFields = [junctionPk, collField, itemField];
+                    if (sortFieldName) fetchFields.push(sortFieldName);
+                    qp.set("fields", fetchFields.join(","));
+                    // limit=-1 alone is NOT "no limit" — page defaults to 1
+                    // regardless, and the range branch computes a broken
+                    // range for limit=-1. page=0 is required to skip it.
+                    qp.set("limit", "-1");
+                    qp.set("page", "0");
+                    if (sortFieldName) qp.set("sort", sortFieldName);
+                    const resp = await apiRequest<{ data: Record<string, unknown>[] }>(
+                        `/api/items/${junctionCol}?${qp.toString()}`,
+                    );
+                    const allRows = (resp.data || []) as M2AItem[];
+
+                    const currentChanges = getChanges();
+                    // Overlay local update/delete onto the FULL set — the same
+                    // merge useRelationM2AItems.displayItems does per-page.
+                    const deleteIds = new Set(currentChanges.delete);
+                    const updateByPk = new Map(
+                        currentChanges.update.map((u) => [u[junctionPk], u]),
+                    );
+                    const merged: M2AItem[] = [];
+                    for (const row of allRows) {
+                        const pk = row[junctionPk];
+                        if (deleteIds.has(pk as string | number)) continue;
+                        const update = updateByPk.get(pk as string | number);
+                        merged.push(update ? { ...row, ...update } : row);
+                    }
+                    merged.push(...(currentChanges.create as M2AItem[]));
+                    baselineItems = merged;
+                } catch (err) {
+                    console.error("Failed to fetch full M2A junction set to preserve on save:", err);
+                    // An incomplete/aborted preserve-fetch must NOT proceed to
+                    // emit — a page-scoped payload here is destructive (the
+                    // replace-mode backend deletes everything missing from
+                    // it), not just incomplete. Abort instead of falling
+                    // back to the page-scoped view.
+                    preserveFetchFailed = true;
+                }
+            }
+
+            if (cancelled || preserveFetchFailed) return;
+
+            const finalPayload =
+                baselineItems === hookDisplayItems
+                    ? payload
+                    : baselineItems
+                          .filter((item) => item.$type !== "deleted")
+                          .map((item) => {
+                              const collectionName = item[collField] as string;
+                              const junctionFieldValue = item[itemField];
+                              let itemValue: unknown;
+                              if (typeof junctionFieldValue === "object" && junctionFieldValue !== null) {
+                                  const nested = junctionFieldValue as Record<string, unknown>;
+                                  const pkField =
+                                      relationInfo.relationPrimaryKeyFields?.[collectionName]?.field || "id";
+                                  itemValue = nested[pkField] != null ? (nested[pkField] as string | number) : nested;
+                              } else {
+                                  itemValue = junctionFieldValue as string | number;
+                              }
+                              return { [collField]: collectionName, [itemField]: itemValue };
+                          })
+                          .filter((entry) => entry[collField] && entry[itemField]);
+
+            onChangeRef.current?.(finalPayload as unknown as M2AItem[]);
+            hasEmittedRef.current = true;
+        };
+
+        buildAndEmit();
+        return () => {
+            cancelled = true;
+        };
+    }, [isDemoMode, relationInfo, getChanges, hasChanges, hookDisplayItems, totalCount, limit, search, isParentSaved, primaryKey]);
 
     // ── Drag & Drop (DnD) setup ──
     // Drag is only allowed when: there's a sortField, not disabled, and all items (across all pages) fit on one page
