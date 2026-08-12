@@ -85,7 +85,7 @@ import {
     type M2MRelationInfo,
 } from "@buildpad/hooks";
 import { CollectionList, CollectionForm } from "@buildpad/ui-collections";
-import { renderTemplate, resolveDisplayTemplate, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
+import { renderTemplate, resolveDisplayTemplate, extractFieldsFromTemplate, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
 import { useRelationMultipleM2M, type M2MDisplayItem, type M2MChangesItem } from "@buildpad/hooks";
 import { useRelationPermissionsM2M } from "@buildpad/hooks";
 import { mergeTranslations, interpolate, formatItemCount, type M2MTranslations } from "./translations";
@@ -833,6 +833,16 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 const resolved = f === "id" && relatedPkField !== "id" ? relatedPkField : f;
                 return `${relationInfo.junctionField.field}.${resolved}`;
             });
+            // The row-display template (e.g. "{{role_id.name}}") references
+            // fields via a junction-relative path — matching the exact query
+            // syntax already, unlike the bare `fields` prop above which gets
+            // junction-prefixed. Without this, only whatever `fields` happens
+            // to list gets fetched (defaulting to just the bootstrap "id"),
+            // so a template referencing anything else (e.g. the related
+            // item's own `name`) renders blank — nothing else was ever fetched.
+            for (const templateField of extractFieldsFromTemplate(resolvedTemplate)) {
+                if (!queryFields.includes(templateField)) queryFields.push(templateField);
+            }
             // Always include junction PK and sort field
             queryFields.push(relationInfo.junctionPrimaryKeyField.field);
             if (relationInfo.sortField) queryFields.push(relationInfo.sortField);
@@ -866,6 +876,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         loadItems,
         mockItems,
         refreshKey,
+        resolvedTemplate,
     ]);
 
     // ── Handlers ────────────────────────────────────────────────────

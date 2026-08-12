@@ -231,6 +231,35 @@ describe('ListM2M fields= query PK resolution', () => {
         expect(fields).toContain('tag_id.code');
         expect(fields).not.toContain('tag_id.id');
     });
+
+    // A field's row-display template (e.g. "{{tag_id.name}}", authored via
+    // meta.options.template) references a junction-relative path — the
+    // actual fetched fields must include it, or the template renders blank
+    // (the related item's `name` was never fetched, only whatever `fields`
+    // happened to list — defaulting to just the bootstrap "id").
+    it('includes fields referenced by the display template in the items query, even when not in the fields prop', async () => {
+        mockUseRelationM2M.mockReturnValue({
+            relationInfo: RELATION_INFO,
+            loading: false,
+            error: null,
+        });
+
+        render(
+            <MantineProvider>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    fields={['id']}
+                    template="{{tag_id.name}}"
+                />
+            </MantineProvider>
+        );
+
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalled());
+        const fields: string[] = mockLoadItems.mock.calls.at(-1)?.[0]?.fields ?? [];
+        expect(fields).toContain('tag_id.name');
+    });
 });
 
 describe('ListM2M load-items dedupe', () => {
