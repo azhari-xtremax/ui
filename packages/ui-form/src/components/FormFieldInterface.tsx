@@ -249,7 +249,14 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
   // unknown to known changed the hook count on the same instance, triggering React's
   // "Rendered more hooks than during the previous render" crash.
   const effectiveValue = useMemo(() => {
-    if (value !== undefined && value !== null) return value;
+    // Only synthesize when the field was omitted entirely (undefined) — an
+    // explicit `null` is itself meaningful for conceal fields: DaaS's
+    // server-side conceal transformer already returns '**********' on read
+    // when a token exists and `null` when it doesn't. Treating that `null`
+    // the same as "omitted" re-masked a just-cleared token back to
+    // '**********' forever, since the client can never tell the two states
+    // apart afterward.
+    if (value !== undefined) return value;
     const isHashField = field.meta?.special?.includes?.('hash') || field.type === 'hash';
     if (isHashField && interfaceConfig.type === 'input-hash') return '**********';
     const isConcealField = field.meta?.special?.includes?.('conceal');
@@ -322,6 +329,9 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     // accessible name (axe "label" rule). Each interface spreads this onto its
     // Mantine control via ...rest.
     'aria-label': accessibleName || field.name || field.field,
+    // Test hook — interfaces that accept it (InputHash, SystemToken, ...)
+    // derive their own sub-element testids from this (e.g. `${testId}-lock-icon`).
+    'data-testid': `field-${field.field}`,
 
     // Field metadata
     collection: field.collection,
