@@ -675,12 +675,19 @@ const ICON_MAP: Record<string, React.ComponentType<MappedIconProps>> = {
   highlight: IconHighlight,
 };
 
+// S5.7: SelectIcon's own trigger (`renderIcon` below) and this read-only
+// companion used two different "unknown icon" glyphs (IconQuestionMark vs
+// IconUsersGroup) for the exact same condition — a stored name with no
+// ICON_MAP entry. Both now default to the same glyph so an unmapped icon
+// looks the same everywhere it's rendered.
+export const DEFAULT_UNKNOWN_ICON: React.ComponentType<MappedIconProps> = IconQuestionMark;
+
 export interface IconDisplayProps {
   /** Material Design icon name as stored on the entity (e.g. `role.icon`, `policy.icon`). */
   icon?: string | null;
   /** Icon size in px. Default: 20. */
   size?: number;
-  /** Tabler icon component rendered when the name is unknown/empty. Default: `IconUsersGroup`. */
+  /** Tabler icon component rendered when the name is unknown/empty. Default: `DEFAULT_UNKNOWN_ICON`. */
   fallback?: React.ComponentType<MappedIconProps>;
   /** Stroke width passed to the Tabler icon. Default: 1.5. */
   stroke?: number;
@@ -694,7 +701,7 @@ export interface IconDisplayProps {
 export const IconDisplay: React.FC<IconDisplayProps> = ({
   icon,
   size = 20,
-  fallback: Fallback = IconUsersGroup,
+  fallback: Fallback = DEFAULT_UNKNOWN_ICON,
   stroke = 1.5,
 }) => {
   const Component = (icon && ICON_MAP[icon]) || Fallback;
@@ -722,6 +729,10 @@ export interface SelectIconProps {
   'data-testid'?: string;
   /** Accessible name for the trigger button, used when no visible `label` is set */
   'aria-label'?: string;
+  /** Autofocus the trigger button on mount */
+  autoFocus?: boolean;
+  /** Additional props forwarded to the underlying Mantine `Button` trigger */
+  [key: string]: unknown;
 }
 
 /**
@@ -752,6 +763,8 @@ export function SelectIcon({
   width,
   'data-testid': testId,
   'aria-label': ariaLabel,
+  autoFocus = false,
+  ...rest
 }: SelectIconProps) {
   const [searchValue, setSearchValue] = useState('');
   const [opened, setOpened] = useState(false);
@@ -819,13 +832,21 @@ export function SelectIcon({
   // Render icon component
   const renderIcon = useCallback((iconName: unknown, size = 20) => {
     const IconComponent = typeof iconName === 'string' ? ICON_MAP[iconName] : undefined;
-    
+
     if (IconComponent) {
       return <IconComponent size={size} />;
     }
-    
-    // Fallback to question mark for unmapped icons
-    return <IconQuestionMark size={size} />;
+
+    // S5.7: same fallback glyph IconDisplay defaults to, for the same
+    // "unknown/unmapped" condition. S5.1: the picker itself is a fixed
+    // curated set (Material has thousands of icon names — mapping all of
+    // them isn't bounded), so a stored name outside it stays unpickable;
+    // this at least surfaces the raw name on hover instead of a bare '?'.
+    return (
+      <span title={typeof iconName === 'string' ? iconName : undefined}>
+        <DEFAULT_UNKNOWN_ICON size={size} />
+      </span>
+    );
   }, []);
 
   return (
@@ -868,6 +889,8 @@ export function SelectIcon({
               disabled={disabled}
               data-testid="select-icon-trigger"
               aria-label={!label ? (ariaLabel || 'Select an icon') : undefined}
+              autoFocus={autoFocus}
+              {...rest}
               styles={{
                 root: {
                   fontWeight: 400,

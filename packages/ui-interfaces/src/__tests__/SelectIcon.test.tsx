@@ -165,6 +165,25 @@ describe('SelectIcon', () => {
       });
     }
   });
+
+  // S5.5: SelectIconProps had no `...rest`/`autoFocus` forwarding, unlike
+  // every other selection leaf.
+  it('forwards autoFocus and arbitrary extra props to the trigger button', () => {
+    renderWithMantine(<SelectIcon autoFocus data-extra="probe" />);
+    const trigger = screen.getByTestId('select-icon-trigger');
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('data-extra', 'probe');
+  });
+
+  // S5.1/S5.7: a stored name outside the curated ICON_MAP can't be fixed by
+  // expanding the picker (Material has thousands of names), but the
+  // trigger's fallback glyph must at least match IconDisplay's (S5.7) and
+  // surface the raw name instead of a silent bare '?' (S5.1).
+  it('renders the shared unknown-icon fallback with the raw name on hover for an unmapped value', () => {
+    const { container } = renderWithMantine(<SelectIcon value="not_a_real_icon" />);
+    expect(container.querySelector('svg.tabler-icon-question-mark')).not.toBeNull();
+    expect(container.querySelector('span[title="not_a_real_icon"]')).not.toBeNull();
+  });
 });
 
 describe('IconDisplay', () => {
@@ -179,8 +198,11 @@ describe('IconDisplay', () => {
   });
 
   it('falls back to the provided component for unknown or empty names', () => {
+    // S5.7: the default fallback is now IconQuestionMark — the same glyph
+    // SelectIcon's own trigger (renderIcon) uses for the same condition, so
+    // "unknown icon" looks identical everywhere it's rendered.
     const { container } = renderWithMantine(<IconDisplay icon="not_a_real_icon" />);
-    expect(container.querySelector('svg.tabler-icon-users-group')).not.toBeNull();
+    expect(container.querySelector('svg.tabler-icon-question-mark')).not.toBeNull();
 
     const { container: second } = renderWithMantine(
       <IconDisplay icon={null} fallback={IconShield} />
