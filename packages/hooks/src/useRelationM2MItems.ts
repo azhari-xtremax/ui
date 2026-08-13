@@ -28,6 +28,13 @@ interface ItemsResponse {
 /**
  * Custom hook for managing M2M relationship items (CRUD operations)
  * Similar to DaaS useRelationMultiple composable
+ *
+ * Not currently consumed by any first-party component — `ListM2M.tsx` (the
+ * shipped ListM2M interface) uses `useRelationMultipleM2M` instead;
+ * `ListM2MInterface.tsx` only references this hook in a doc comment. Kept
+ * (and kept correct) as public package API rather than removed outright,
+ * since removing an exported hook is a breaking change for any external
+ * consumer that may already depend on it.
  */
 export function useRelationM2MItems(
   relationInfo: M2MRelationInfo | null,
@@ -87,7 +94,14 @@ export function useRelationM2MItems(
         `/api/items/${relationInfo.junctionCollection.collection}?${queryParams.toString()}`
       );
       
-      const loadedItems = response.data || [];
+      // R6.5: alias the real junction PK onto `.id` — removeItem/updateSortOrder
+      // build their URLs from `item.id` directly, and every junction table
+      // whose PK isn't literally named "id" left `.id` undefined, silently
+      // requesting `/api/items/{collection}/undefined` for delete/reorder.
+      const loadedItems: M2MItem[] = (response.data || []).map((item) => ({
+        ...item,
+        id: item[relationInfo.junctionPrimaryKeyField.field] as string | number,
+      }));
       setItems(loadedItems);
       setTotalCount(response.meta?.total_count || 0);
 
