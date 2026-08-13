@@ -311,14 +311,22 @@ export function SelectMultipleCheckboxTree({
     const currentValue = value || [];
     let newValue: (string | number | boolean)[];
 
-    // Find the choice being toggled
-    const findChoice = (nodes: TreeChoice[], val: string | number | boolean): TreeChoice | null => {
+    // Find the choice being toggled. Guarded like every other recursive
+    // walker in this file (S4.10) — this was the one exception, so a choices
+    // tree with a cycle (a node whose descendants loop back to it) overflowed
+    // the stack on the very first toggle instead of failing gracefully.
+    const findChoice = (
+      nodes: TreeChoice[],
+      val: string | number | boolean,
+      depth = 0,
+    ): TreeChoice | null => {
+      if (depth > MAX_TREE_DEPTH) return null;
       for (const node of nodes) {
         if (node.value === val) {
           return node;
         }
         if (node.children) {
-          const found = findChoice(node.children, val);
+          const found = findChoice(node.children, val, depth + 1);
           if (found) {
             return found;
           }

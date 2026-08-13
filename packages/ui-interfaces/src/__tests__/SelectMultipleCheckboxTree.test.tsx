@@ -551,6 +551,34 @@ describe('SelectMultipleCheckboxTree cascade toggle skips disabled descendants (
   });
 });
 
+describe('SelectMultipleCheckboxTree toggle guards against a cyclic choices tree (S4.10)', () => {
+  it('does not overflow the stack when an earlier sibling has a cyclic subtree', () => {
+    const handleChange = jest.fn();
+    // A node whose own `children` array (transitively) contains itself —
+    // e.g. a malformed API response reusing a shared object reference.
+    // `findChoice` walks siblings in order and fully recurses into each
+    // node's `children` before moving to the next sibling, so this cyclic
+    // node must come *before* the actually-clicked node in the array —
+    // otherwise the target is found immediately, without ever recursing
+    // into the cyclic branch at all. With no depth guard, DFS into the
+    // cyclic branch never returns, and the real target sibling after it is
+    // never reached.
+    const cyclic: TreeChoice = { text: 'Cyclic', value: 'cyclic', children: [] };
+    cyclic.children = [cyclic];
+    const choices: TreeChoice[] = [cyclic, { text: 'Target', value: 'target' }];
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={choices} value={[]} onChange={handleChange} />
+      </TestWrapper>
+    );
+
+    expect(() => {
+      fireEvent.click(screen.getByTestId('checkbox-1').querySelector('input') as HTMLInputElement);
+    }).not.toThrow();
+  });
+});
+
 describe('SelectMultipleCheckboxTree custom color normalization (S4.11)', () => {
   it('applies a var(--mantine-color-X-6)-wrapped color instead of dropping it', () => {
     render(
