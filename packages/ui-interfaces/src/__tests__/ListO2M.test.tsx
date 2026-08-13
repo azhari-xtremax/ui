@@ -30,8 +30,9 @@ jest.mock("@buildpad/hooks", () => ({
 jest.mock("@buildpad/ui-collections", () => {
   const R = require("react");
   return {
-    CollectionForm: ({ onSuccess, defaultValues }: any) => {
+    CollectionForm: ({ onSuccess, defaultValues, id }: any) => {
       (globalThis as any).__lastFormDefaults = defaultValues;
+      (globalThis as any).__lastFormId = id;
       return R.createElement(
         "button",
         {
@@ -61,6 +62,21 @@ const RELATION_INFO = {
   relatedCollection: { collection: "posts" },
   reverseJunctionField: { field: "category_id", type: "uuid" },
   relatedPrimaryKeyField: { field: "id", type: "uuid" },
+  parentPrimaryKeyField: { field: "id", type: "uuid" },
+  relation: {
+    field: "category_id",
+    collection: "posts",
+    related_collection: "categories",
+  },
+};
+
+// A related collection whose real PK column is "slug", not "id" — the case
+// R6.1's fixes cover. Items from this collection never carry a literal
+// `.id` property at all.
+const SLUG_PK_RELATION_INFO = {
+  relatedCollection: { collection: "posts" },
+  reverseJunctionField: { field: "category_id", type: "uuid" },
+  relatedPrimaryKeyField: { field: "slug", type: "text" },
   parentPrimaryKeyField: { field: "id", type: "uuid" },
   relation: {
     field: "category_id",
@@ -432,6 +448,109 @@ describe("ListO2M — onPendingChange during the async preserve-fetch (§2 harde
 
     await waitFor(() => expect(onPendingChange).toHaveBeenCalledWith(false));
     expect(onChange).toHaveBeenCalled();
+  });
+});
+
+describe("ListO2M — PK-name-agnostic select-all / edit-modal / staged emits (R6.1)", () => {
+  beforeEach(() => {
+    (useRelationO2M as jest.Mock).mockReturnValue({
+      relationInfo: SLUG_PK_RELATION_INFO,
+      loading: false,
+      error: null,
+    });
+  });
+
+  it("selects every row via the header checkbox, keyed by the resolved real PK", async () => {
+    setHookItems([
+      { slug: "post-a", name: "Post A" },
+      { slug: "post-b", name: "Post B" },
+    ]);
+
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />));
+
+    fireEvent.click(await screen.findByTestId("o2m-select-all"));
+
+    // Individual row checkboxes are keyed by getPk(item) (here, `slug`) — if
+    // select-all populated selectedIds with `.id` (undefined for this
+    // collection) instead, none of these would show as checked.
+    await waitFor(() => {
+      expect(screen.getByTestId("o2m-check-post-a")).toBeChecked();
+      expect(screen.getByTestId("o2m-check-post-b")).toBeChecked();
+    });
+  });
+
+  it("opens the edit modal against the resolved real PK, not undefined", async () => {
+    setHookItems([{ slug: "post-a", name: "Post A" }]);
+
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />));
+
+    fireEvent.click(await screen.findByTestId("o2m-edit-post-a"));
+
+    await waitFor(() =>
+      expect((globalThis as any).__lastFormId).toBe("post-a"),
+    );
+  });
+
+  it("keys a staged-link payload entry by the resolved real PK field, not literal id", async () => {
+    (apiRequest as jest.Mock).mockResolvedValue({
+      data: [{ slug: "post-z", name: "Picked post" }],
+    });
+    (globalThis as any).__pickIds = ["post-z"];
+    setHookItems([]);
+
+    const onChange = jest.fn();
+    render(
+      wrap(
+        <ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} onChange={onChange} />,
+      ),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const lastPayload = onChange.mock.calls.at(-1)![0] as Record<string, unknown>[];
+    expect(lastPayload).toContainEqual(
+      expect.objectContaining({ slug: "post-z" }),
+    );
+    // Never the wrong key — the relation writer looks records up by the
+    // real PK column name, not a literal "id".
+    expect(lastPayload.some((e) => "id" in e)).toBe(false);
+  });
+
+  it("keys a staged-update payload entry by the resolved real PK field, not literal id", async () => {
+    // changeset.update is only staged for an UNSAVED parent (a saved
+    // parent's edit modal calls the API directly and bypasses the
+    // changeset/emit path entirely — see handleFormSuccess's early return
+    // when isParentSaved). The realistic way to reach it pre-save is
+    // editing a just-staged link.
+    (apiRequest as jest.Mock).mockResolvedValue({
+      data: [{ slug: "post-a", name: "Post A" }],
+    });
+    (globalThis as any).__pickIds = ["post-a"];
+    (globalThis as any).__formName = "Renamed";
+    setHookItems([]);
+
+    const onChange = jest.fn();
+    render(
+      wrap(<ListO2M {...BASE_PROPS} primaryKey="+" value={[]} onChange={onChange} />),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(screen.getByTestId("o2m-edit-post-a")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("o2m-edit-post-a"));
+    fireEvent.click(await screen.findByTestId("mock-form-save"));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const lastPayload = onChange.mock.calls.at(-1)![0] as Record<string, unknown>[];
+    expect(
+      lastPayload.some(
+        (e) => e["slug"] === "post-a" && e["name"] === "Renamed",
+      ),
+    ).toBe(true);
+    expect(lastPayload.some((e) => "id" in e)).toBe(false);
   });
 });
 
