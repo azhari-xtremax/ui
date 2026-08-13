@@ -85,8 +85,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   primaryKey: _primaryKey,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   nullable: _nullable,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  autofocus: _autofocus,
+  // S2.3: FormFieldInterface forwards `autofocus` generically to every leaf,
+  // but this one silently discarded it instead of applying it — the field
+  // marked `autofocus` in its meta never actually received focus on mount.
+  autofocus,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   defaultValue: _defaultValue,
   ...props
@@ -141,6 +143,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
     description,
     style: { fontFamily: getFontFamily() },
     maxLength,
+    autoFocus: autofocus,
     ...props,
   };
   
