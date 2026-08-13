@@ -517,13 +517,16 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       // from the save (201, `posts: []`) instead of linking it.
       const stagedLinkIds = new Set(changeset.link.map((item) => item.id));
       for (const item of changeset.link) {
-        // KNOWN LIMIT: link/update/delete payload entries still key the item by
-        // the literal "id" property (item.id holds the real PK *value* via
-        // getPk). For related collections whose PK column isn't named "id",
-        // whether DaaS accepts this shape is unverified — resolving it needs a
-        // backend-contract check, not just a client change.
+        // R6.1: key the entry by the resolved real PK field, not a literal
+        // "id" — the relation writer looks the record up via
+        // `itemObj[manyPrimary]` (its own resolved PK column name), so for a
+        // related collection whose PK isn't literally "id" a literal `id:`
+        // key was never found server-side and this silently created a
+        // duplicate record instead of linking the one picked (item.id itself
+        // already holds the correct real PK *value*, via getPk at staging
+        // time — only the key name was wrong).
         payload.push({
-          id: item.id,
+          [pkField]: item.id,
           ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
         });
       }
@@ -542,10 +545,13 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         }
       }
 
-      // Updates: emit id + changed fields
+      // Updates: emit changed fields + the resolved real PK, re-keyed the
+      // same way as Links above (R6.1) — `id` here already holds the
+      // correct value (getPk, set when the edit was staged), just under
+      // the wrong key for a non-"id"-PK related collection.
       for (const item of changeset.update) {
-        const { $type, ...data } = item;
-        payload.push(data);
+        const { $type, id, ...data } = item;
+        payload.push({ ...data, [pkField]: id });
       }
 
       // Deletes: emit id with $delete marker (DaaS convention)
@@ -831,11 +837,17 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           ),
         }));
       } else if (currentlyEditing && data) {
+        // R6.1: stage the resolved real PK (getPk), not the raw `.id`
+        // property — for a related collection whose PK isn't literally
+        // "id", `currentlyEditing.id` is undefined, which both broke
+        // de-duping against a prior staged update for the same row and
+        // fed an undefined id into the emitted payload.
+        const editedPk = getPk(currentlyEditing);
         setChangeset((prev) => ({
           ...prev,
           update: [
-            ...prev.update.filter((u) => u.id !== currentlyEditing.id),
-            { $type: "updated", id: currentlyEditing.id, ...data },
+            ...prev.update.filter((u) => u.id !== editedPk),
+            { $type: "updated", id: editedPk, ...data },
           ],
         }));
       }
@@ -1280,8 +1292,15 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                         if (selectedIds.size === displayItems.length) {
                           clearSelection();
                         } else {
+                          // R6.1: individual row checkboxes key selectedIds by
+                          // getPk(item) (the resolved real PK), not `.id` —
+                          // for a related collection whose PK isn't literally
+                          // "id", selecting via this header checkbox put
+                          // `undefined` (or the wrong value) into the set for
+                          // every row, so per-row checkboxes never matched
+                          // and batch actions silently targeted nothing.
                           setSelectedIds(
-                            new Set(displayItems.map((i) => i.id)),
+                            new Set(displayItems.map((i) => getPk(i))),
                           );
                         }
                       }}
@@ -1578,12 +1597,19 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           <CollectionForm
             collection={relationInfo.relatedCollection.collection}
             id={
-              currentlyEditing?.id &&
+              // R6.1: resolve via getPk, not the raw `.id` property — for a
+              // related collection whose PK isn't literally "id",
+              // `currentlyEditing.id` was undefined, so the edit modal
+              // always opened in create mode instead of editing the
+              // clicked row. The `$temp_` check itself still reads `.id`
+              // directly (matching getPk's own convention — a staged local
+              // create always uses that literal client-side scheme).
+              currentlyEditing &&
               !(
                 typeof currentlyEditing.id === "string" &&
                 currentlyEditing.id.startsWith("$temp_")
               )
-                ? currentlyEditing.id
+                ? getPk(currentlyEditing)
                 : undefined
             }
             mode={isCreatingNew ? "create" : "edit"}
