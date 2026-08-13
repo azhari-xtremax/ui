@@ -401,3 +401,51 @@ describe('SelectMultipleCheckbox per-option disabled', () => {
     expect(screen.getByLabelText('Open')).not.toBeDisabled();
   });
 });
+
+describe('SelectMultipleCheckbox per-choice icon and color (S7.2)', () => {
+  it('renders a choice icon as a glyph and still exposes the label text', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[
+            { text: 'Locked', value: 'locked', icon: 'lock' },
+            { text: 'Open', value: 'open' },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Select Locked')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select Open')).toBeInTheDocument();
+    // The raw icon name is never printed as text.
+    expect(screen.queryByText('lock')).not.toBeInTheDocument();
+  });
+
+  it('renders a color swatch for a choice with color but no icon', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox choices={[{ text: 'Red', value: 'red', color: '#ff0000' }]} />
+      </TestWrapper>
+    );
+
+    const checkbox = screen.getByLabelText('Select Red');
+    const root = checkbox.closest('.mantine-Checkbox-root');
+    expect(root?.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+  });
+
+  it('applies per-choice color to the Checkbox itself, overriding the group default', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          color="blue"
+          choices={[{ text: 'Custom', value: 'custom', color: 'red' }]}
+        />
+      </TestWrapper>
+    );
+
+    const checkbox = screen.getByLabelText('Select Custom') as HTMLInputElement;
+    // Mantine sets the resolved color as a CSS custom property on the root.
+    const root = checkbox.closest('.mantine-Checkbox-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--checkbox-color')).toContain('red');
+  });
+});

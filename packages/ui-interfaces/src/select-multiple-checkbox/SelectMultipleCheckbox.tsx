@@ -10,13 +10,30 @@ import {
   Group,
   ActionIcon,
   TextInput,
+  ColorSwatch,
 } from '@mantine/core';
 import { IconPlus, IconX } from '@tabler/icons-react';
+import { IconDisplay } from '../select-icon/SelectIcon';
 
 export interface Option {
   text: string;
   value: string | number | boolean;
   disabled?: boolean;
+  /** Icon name (Material Design name, resolved via the shared ICON_MAP), shown before the label */
+  icon?: string | null;
+  /** Theme color name or CSS color, applied to the checked state and an optional swatch */
+  color?: string | null;
+}
+
+// Strips a `var(--mantine-color-X-6)`-wrapped color down to the bare Mantine
+// palette name `X` so it can be passed to props like `Checkbox`'s `color`
+// that expect a palette name, not a CSS var() expression. Shared by both the
+// group-level `color` prop and each choice's own `icon`/`color` override.
+function normalizeColor(color: string): string {
+  if (color.startsWith('var(--mantine-color-')) {
+    return color.replace('var(--mantine-color-', '').replace(')', '').replace('-6', '');
+  }
+  return color;
 }
 
 export interface SelectMultipleCheckboxProps {
@@ -89,12 +106,7 @@ export function SelectMultipleCheckbox({
   };
 
   // Parse color prop to work with Mantine's color system
-  const mantineColor = useMemo(() => {
-    if (color.startsWith('var(--mantine-color-')) {
-      return color.replace('var(--mantine-color-', '').replace(')', '').replace('-6', '');
-    }
-    return color;
-  }, [color]);
+  const mantineColor = useMemo(() => normalizeColor(color), [color]);
 
   // `mantineColor` is only a real Mantine palette name when it's not a raw
   // hex/CSS-color literal — interpolating a hex into `var(--mantine-color-*)`
@@ -260,15 +272,37 @@ export function SelectMultipleCheckbox({
           // compare item.value directly, not its string form).
           <Grid.Col span={12 / gridColumns} key={`${index}-${String(item.value)}`}>
             <Checkbox
-              label={item.text}
+              label={
+                item.icon || item.color ? (
+                  <Group gap={6} wrap="nowrap">
+                    {item.icon && <IconDisplay icon={item.icon} size={14} />}
+                    {item.color && !item.icon && (
+                      <ColorSwatch color={normalizeColor(item.color)} size={12} />
+                    )}
+                    <Text size="sm" span>{item.text}</Text>
+                  </Group>
+                ) : (
+                  item.text
+                )
+              }
               checked={normalizedValue.includes(item.value)}
               onChange={(event) => handleCheckboxChange(item.value, event.currentTarget.checked)}
               disabled={disabled || item.disabled}
               size="sm"
-              color={mantineColor}
+              // choice.color overrides the group default, matching SelectRadio's
+              // per-choice color resolution (S3.3/S7.2).
+              color={item.color ? normalizeColor(item.color) : mantineColor}
               aria-label={`Select ${item.text}`}
-              wrapperProps={{
-                style: {
+              // `wrapperProps.style` is spread directly onto the root element's
+              // props *after* Mantine's own computed `style` (which carries
+              // `--checkbox-color` and friends), so a raw wrapperProps.style
+              // object doesn't merge with it — it replaces it outright,
+              // silently discarding the resolved color CSS vars regardless of
+              // whether `color` came from the group default or a per-choice
+              // override. `styles={{ root: {...} }}` goes through Mantine's
+              // own vars resolver instead, which does merge.
+              styles={{
+                root: {
                   width: '100%',
                   padding: '12px',
                   backgroundColor: 'var(--mantine-color-gray-0)',
