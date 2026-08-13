@@ -105,6 +105,15 @@ export interface ListO2MProps {
   value?: (string | number | Record<string, unknown>)[];
   /** Callback fired when value changes — emits DaaS-compatible changeset payload */
   onChange?: (value: (string | number | Record<string, unknown>)[]) => void;
+  /**
+   * Fired whenever the saved-parent preserve-fetch (see the N1/V3-1 fixes)
+   * starts and finishes. The emit that follows a staged change on a saved
+   * parent is async — if the user's Save click races ahead of it, the
+   * change made just before Save can silently be missing from that submit
+   * (not present until the next save). Consumers with a Save button should
+   * disable it while this is `true`.
+   */
+  onPendingChange?: (pending: boolean) => void;
   /** Current collection name (the "one" side) */
   collection: string;
   /** Field name for this O2M relationship */
@@ -216,6 +225,7 @@ function formatCount(n: number): string {
 export const ListO2M: React.FC<ListO2MProps> = ({
   value: valueProp,
   onChange,
+  onPendingChange,
   collection,
   field,
   primaryKey,
@@ -358,6 +368,11 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   // mount emit: once the user has staged something, going back to an empty
   // changeset must still be emitted so the parent form drops the field edit.
   const hasEmittedRef = useRef(false);
+  // Counts in-flight preserve-fetches so a stale, superseded fetch resolving
+  // after a newer one has started doesn't call onPendingChange(false) while
+  // the newer one is still running — onPendingChange only flips to false
+  // once the count actually reaches zero.
+  const pendingFetchCountRef = useRef(0);
 
   // Check if parent item is saved (valid PK, not '+' convention for new)
   const isParentSaved = primaryKey && primaryKey !== "+";
@@ -531,31 +546,58 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         relationInfo?.reverseJunctionField?.field &&
         primaryKey
       ) {
+        pendingFetchCountRef.current += 1;
+        onPendingChange?.(true);
         try {
           const { apiRequest } = await import("@buildpad/services");
           const col = relationInfo.relatedCollection.collection;
           const relatedPk = relationInfo.relatedPrimaryKeyField?.field || "id";
-          const qp = new URLSearchParams();
-          qp.set(
-            "filter",
-            JSON.stringify({ [relationInfo.reverseJunctionField.field]: { _eq: primaryKey } }),
-          );
-          qp.set("fields", relatedPk);
-          // `limit=-1` alone is NOT "no limit" here: the route defaults
-          // `page` to 1 regardless, and the range branch then computes a
-          // broken range for limit=-1. `page=0` is falsy so that branch is
-          // skipped entirely, same as passing no page at all.
-          qp.set("limit", "-1"); // fetch every linked child, not just the current page
-          qp.set("page", "0");
-          const resp = await apiRequest<{ data: Record<string, unknown>[] }>(
-            `/api/items/${col}?${qp.toString()}`,
-          );
-          for (const row of resp.data || []) {
-            const pk = row[relatedPk] as string | number;
-            if (!stagedLinkIds.has(pk)) {
-              payload.push(pk);
+          const filter = JSON.stringify({
+            [relationInfo.reverseJunctionField.field]: { _eq: primaryKey },
+          });
+
+          // `limit=-1&page=0` asks the backend for "no limit", but a
+          // PostgREST-fronted deployment can still silently cap the actual
+          // response at its own server-side max-rows setting — the backend
+          // has no way to signal that back other than a `total_count` that
+          // disagrees with how many rows actually came back. Request that
+          // meta and keep paging with a real limit until every row the
+          // backend claims exist has actually been fetched, rather than
+          // trusting a single unbounded request to mean "all of them".
+          const PAGE_SIZE = 500;
+          let page = 0;
+          let fetchedCount = 0;
+          let expectedTotal: number | undefined;
+          do {
+            const qp = new URLSearchParams();
+            qp.set("filter", filter);
+            qp.set("fields", relatedPk);
+            qp.set("meta", "total_count");
+            if (page === 0) {
+              qp.set("limit", "-1");
+              qp.set("page", "0");
+            } else {
+              qp.set("limit", String(PAGE_SIZE));
+              qp.set("page", String(page + 1));
             }
-          }
+            const resp = await apiRequest<{
+              data: Record<string, unknown>[];
+              meta?: { total_count?: number };
+            }>(`/api/items/${col}?${qp.toString()}`);
+            const rows = resp.data || [];
+            for (const row of rows) {
+              const pk = row[relatedPk] as string | number;
+              if (!stagedLinkIds.has(pk)) {
+                payload.push(pk);
+              }
+            }
+            fetchedCount += rows.length;
+            expectedTotal = resp.meta?.total_count ?? fetchedCount;
+            page += 1;
+            // Bail if a page comes back empty — avoids looping forever
+            // against a `total_count` the backend can't actually satisfy.
+            if (rows.length === 0) break;
+          } while (fetchedCount < expectedTotal);
         } catch (err) {
           console.error("Failed to fetch existing children to preserve on save:", err);
           // An incomplete/aborted preserve-fetch must NOT proceed to emit —
@@ -565,6 +607,9 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           // fails to save the newly staged change; emitting anyway would
           // silently unlink every other child.
           preserveFetchFailed = true;
+        } finally {
+          pendingFetchCountRef.current = Math.max(0, pendingFetchCountRef.current - 1);
+          if (pendingFetchCountRef.current === 0) onPendingChange?.(false);
         }
       }
 

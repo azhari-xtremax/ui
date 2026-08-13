@@ -338,6 +338,103 @@ describe("ListO2M — saved parent stage→unstage→save revert hole (V3)", () 
   });
 });
 
+describe("ListO2M — preserve-fetch pagination against a server-side max-rows cap (§2 hardening #4)", () => {
+  // Regression: `limit=-1&page=0` asks for "no limit", but a PostgREST-fronted
+  // deployment can silently cap the actual response at its own server-side
+  // max-rows setting regardless of what was requested — the only signal is a
+  // `meta.total_count` that disagrees with how many rows actually came back.
+  // The preserve-fetch must keep paging with a real limit until it has
+  // actually fetched everything the backend claims exists, rather than
+  // trusting the first (possibly truncated) response.
+  it("keeps paging when the first response is truncated below meta.total_count", async () => {
+    setHookItems([{ id: "p1", name: "Existing post" }], 1);
+    (apiRequest as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes("category_id")) {
+        if (url.includes("page=0")) {
+          // Server-side cap silently truncated this "unlimited" request —
+          // claims 3 total but only returns 1.
+          return Promise.resolve({ data: [{ id: "p1" }], meta: { total_count: 3 } });
+        }
+        if (url.includes("page=2")) {
+          return Promise.resolve({ data: [{ id: "p2" }], meta: { total_count: 3 } });
+        }
+        if (url.includes("page=3")) {
+          return Promise.resolve({ data: [{ id: "p3" }], meta: { total_count: 3 } });
+        }
+      }
+      return Promise.resolve({ data: [{ id: "p9", name: "Picked post" }] });
+    });
+
+    const onChange = jest.fn();
+    render(
+      wrap(
+        <ListO2M
+          {...BASE_PROPS}
+          primaryKey="cat-1"
+          value={[{ id: "p1", name: "Existing post" }]}
+          onChange={onChange}
+        />,
+      ),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    await flush();
+
+    const lastPayload = onChange.mock.calls.at(-1)![0] as unknown[];
+    expect(lastPayload).toEqual(expect.arrayContaining(["p1", "p2", "p3"]));
+  });
+});
+
+describe("ListO2M — onPendingChange during the async preserve-fetch (§2 hardening #4)", () => {
+  // Regression: the emit that follows a staged change on a saved parent is
+  // async (the preserve-fetch). If a consumer's Save button doesn't know to
+  // wait for it, a click that races ahead of the fetch can submit before the
+  // just-staged change reaches the parent's onChange. onPendingChange lets a
+  // consumer disable Save for the duration.
+  it("reports pending true while the preserve-fetch is in flight and false once it resolves", async () => {
+    setHookItems([{ id: "p1", name: "Existing post" }], 1);
+    let resolvePreserveFetch: (v: unknown) => void;
+    (apiRequest as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes("category_id")) {
+        return new Promise((resolve) => {
+          resolvePreserveFetch = resolve;
+        });
+      }
+      return Promise.resolve({ data: [{ id: "p9", name: "Picked post" }] });
+    });
+
+    const onChange = jest.fn();
+    const onPendingChange = jest.fn();
+    render(
+      wrap(
+        <ListO2M
+          {...BASE_PROPS}
+          primaryKey="cat-1"
+          value={[{ id: "p1", name: "Existing post" }]}
+          onChange={onChange}
+          onPendingChange={onPendingChange}
+        />,
+      ),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+
+    await waitFor(() => expect(onPendingChange).toHaveBeenCalledWith(true));
+    expect(onChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolvePreserveFetch({ data: [{ id: "p1" }], meta: { total_count: 1 } });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(onPendingChange).toHaveBeenCalledWith(false));
+    expect(onChange).toHaveBeenCalled();
+  });
+});
+
 describe("ListO2M — staged creates on an unsaved parent", () => {
   /** create → open edit (re-memoizes handleFormSuccess) → create */
   async function stageTwoCreatesAroundAnEdit() {
