@@ -199,12 +199,33 @@ export function SelectMultipleDropdown({
   // mirroring SelectDropdown's manual creatable pattern (S6.2).
   const [otherSearchValue, setOtherSearchValue] = useState('');
 
+  // Set synchronously by the chained onOptionSubmit below whenever Mantine
+  // submits a dropdown option (click or Enter on a highlighted option).
+  // Read by the microtask-DEFERRED Enter commit: the consumer onKeyDown
+  // runs before Mantine's own Enter handling, so committing synchronously
+  // there both added the raw filter text as a junk pill AND let Mantine
+  // toggle the highlighted option — two onChange emissions per keystroke.
+  // Mantine's submission is synchronous within the same task, so by drain
+  // time this flag says whether the Enter was a selection (skip) or free
+  // text (commit). Self-expires on a microtask so a later, unrelated
+  // keystroke or blur never sees it.
+  const justSelectedRef = React.useRef(false);
+  const clearJustSelectedSoon = () => {
+    queueMicrotask(() => {
+      justSelectedRef.current = false;
+    });
+  };
+
   const commitOtherValue = () => {
-    if (!allowOther) return;
+    if (!allowOther || disabled) return;
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
     const trimmed = otherSearchValue.trim();
     if (!trimmed) return;
     const matchesExistingChoice = choices.some(
-      (choice) => choice.text === trimmed || String(choice.value) === trimmed,
+      (choice) => choice.text.trim() === trimmed || String(choice.value).trim() === trimmed,
     );
     const alreadySelected = normalizedValue.some((v) => String(v) === trimmed);
     if (!matchesExistingChoice && !alreadySelected) {
@@ -302,9 +323,26 @@ export function SelectMultipleDropdown({
           ? {
               searchValue: otherSearchValue,
               onSearchChange: setOtherSearchValue,
+              // Fires for every dropdown submission. Flag the selection for
+              // the deferred Enter commit and consume the filter text — the
+              // typed fragment was a filter, not a pending pill, and leaving
+              // it in place would let the next blur commit it.
+              onOptionSubmit: () => {
+                justSelectedRef.current = true;
+                clearJustSelectedSoon();
+                setOtherSearchValue('');
+              },
               onBlur: commitOtherValue,
               onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
-                if (event.key === 'Enter') commitOtherValue();
+                // Enter confirming an IME composition is not a commit
+                // (mirrors Mantine's own isComposing / keyCode-229 guards,
+                // which run after this handler without preventDefault).
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+                // Deferred one microtask: Mantine's Enter handling runs
+                // after this handler but synchronously in the same task, so
+                // by drain time justSelectedRef says whether this Enter
+                // selected a highlighted option (skip) or was free text.
+                if (event.key === 'Enter') queueMicrotask(commitOtherValue);
               },
             }
           : {})}
