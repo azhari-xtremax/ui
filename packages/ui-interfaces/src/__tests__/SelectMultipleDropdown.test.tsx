@@ -1,11 +1,19 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { SelectMultipleDropdown } from '../select-multiple-checkbox/SelectMultipleDropdown';
 
 const TestWrapper = ({ children }: { children: React.ReactNode }) => (
   <MantineProvider>{children}</MantineProvider>
 );
+
+// The allowOther Enter commit is deferred one microtask (see the component);
+// drain before asserting. jsdom also lacks scrollIntoView, which Mantine's
+// keyboard option navigation calls.
+const flush = () => act(async () => {});
+beforeAll(() => {
+  Element.prototype.scrollIntoView = jest.fn();
+});
 
 const sampleChoices = [
   { text: 'React', value: 'react' },
@@ -155,7 +163,7 @@ describe('SelectMultipleDropdown stringify-colliding choices', () => {
 });
 
 describe('SelectMultipleDropdown allowOther (S6.2)', () => {
-  it('commits typed free text on Enter as an additional pill', () => {
+  it('commits typed free text on Enter as an additional pill', async () => {
     const handleChange = jest.fn();
     render(
       <TestWrapper>
@@ -172,8 +180,60 @@ describe('SelectMultipleDropdown allowOther (S6.2)', () => {
     fireEvent.click(input);
     fireEvent.change(input, { target: { value: 'Ember' } });
     fireEvent.keyDown(input, { key: 'Enter' });
+    await flush();
 
     expect(handleChange).toHaveBeenCalledWith(['react', 'Ember']);
+  });
+
+  // N3-b class, real Mantine path: Enter on a highlighted option must NOT
+  // also commit the raw filter text as a junk pill — one keystroke, one
+  // emission, the resolved option only. (Mantine's keyboard branches are
+  // event.code-gated, so the events must carry `code`.)
+  it('emits only the selected option when Enter submits a highlighted option', async () => {
+    const handleChange = jest.fn();
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          value={[]}
+          onChange={handleChange}
+          choices={sampleChoices}
+          allowOther
+          searchable
+        />
+      </TestWrapper>
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 're' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown', code: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    await flush();
+
+    expect(handleChange.mock.calls).toEqual([[['react']]]);
+  });
+
+  // Enter that confirms an IME composition must not commit the fragment.
+  it('does not commit half-composed text on an IME-composition Enter', async () => {
+    const handleChange = jest.fn();
+    render(
+      <TestWrapper>
+        <SelectMultipleDropdown
+          value={[]}
+          onChange={handleChange}
+          choices={sampleChoices}
+          allowOther
+        />
+      </TestWrapper>
+    );
+
+    const input = screen.getByRole('textbox');
+    fireEvent.click(input);
+    fireEvent.change(input, { target: { value: 'にほ' } });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229, isComposing: true });
+    await flush();
+
+    expect(handleChange).not.toHaveBeenCalled();
   });
 
   it('displays an already-committed custom value instead of dropping it', () => {
@@ -191,7 +251,7 @@ describe('SelectMultipleDropdown allowOther (S6.2)', () => {
     expect(screen.getAllByText('Ember').length).toBeGreaterThan(0);
   });
 
-  it('does not commit text that exactly matches an existing choice as free text', () => {
+  it('does not commit text that exactly matches an existing choice as free text', async () => {
     const handleChange = jest.fn();
     render(
       <TestWrapper>
@@ -208,6 +268,7 @@ describe('SelectMultipleDropdown allowOther (S6.2)', () => {
     fireEvent.click(input);
     fireEvent.change(input, { target: { value: 'React' } });
     fireEvent.keyDown(input, { key: 'Enter' });
+    await flush();
 
     // 'React' matches an existing choice's text — not committed as free text
     expect(handleChange).not.toHaveBeenCalledWith(['React']);
