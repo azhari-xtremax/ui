@@ -389,16 +389,24 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         onChangeRef.current = _onChange;
     }, [_onChange]);
 
-    // Track previous changes JSON to avoid duplicate onChange emissions
-    const prevChangesRef = useRef<string>('');
+    // Track the changes JSON we last *successfully* emitted for. Set only
+    // after an emit completes, so an aborted or cancelled payload build is
+    // retried on the next effect run instead of being deduped away.
+    const lastEmittedChangesRef = useRef<string>('');
     // Track whether we've ever emitted so we don't clear formData on initial load
     const hasEmittedRef = useRef(false);
 
     // Notify parent component whenever local changes change.
     // Builds a flat M2A payload for DaaS processM2AField (replace mode):
     //   [{ collection: "coll_name", item: "item_id" }, ...]
-    // Must include ALL visible items (fetched + created - deleted) because
-    // DaaS deletes all existing junction records, then inserts the payload.
+    // DaaS deletes ALL junction records for the parent, then inserts exactly
+    // the payload (assigning sort from payload order) — so the payload must
+    // contain every junction row that should survive, across every page.
+    // displayItems is page-scoped, so the surviving rows are re-fetched here
+    // unpaginated at build time (fresh per emit, not a mount-time snapshot)
+    // and merged with the staged changes. Bare-primitive entries are ignored
+    // by processM2AField, so unlike ListO2M each preserved row must be a full
+    // { collection, item } object.
     useEffect(() => {
         if (isDemoMode || !relationInfo) return;
 
@@ -408,60 +416,160 @@ export const ListM2A: React.FC<ListM2AProps> = ({
             if (hasEmittedRef.current) {
                 onChangeRef.current?.(undefined as unknown as M2AItem[]);
                 hasEmittedRef.current = false;
-                prevChangesRef.current = '';
+                lastEmittedChangesRef.current = '';
             }
             return;
         }
 
         const currentChanges = getChanges();
         const serialized = JSON.stringify(currentChanges);
+        if (serialized === lastEmittedChangesRef.current) return;
 
-        if (serialized === prevChangesRef.current) return;
-        prevChangesRef.current = serialized;
+        let cancelled = false;
 
-        // Build the full M2A replacement payload from all non-deleted items.
         const collField = relationInfo.collectionField.field;
         const itemField = relationInfo.junctionField.field;
+        const sortField = relationInfo.sortField;
+        const junctionPK = relationInfo.junctionPrimaryKeyField?.field || 'id';
 
-        const payload = hookDisplayItems
-            .filter(item => item.$type !== 'deleted')
-            .map(item => {
-                const collectionName = item[collField] as string;
-                const junctionFieldValue = item[itemField];
+        const buildAndEmit = async () => {
+            // Rows that survive the replace, with the sort value that decides
+            // payload order (entries carry no sort of their own — the backend
+            // persists payload order as the sort).
+            const survivors: { collection: string; itemValue: unknown; sort: number }[] = [];
 
-                // Extract the plain item ID.
-                // loadItems enrichment replaces the flat junction ID with a nested
-                // object like { id: "uuid", title: "..." }. For locally-created
-                // items it's { id: "uuid" }. We need the flat ID for the backend.
-                let itemValue: unknown;
-                if (typeof junctionFieldValue === 'object' && junctionFieldValue !== null) {
-                    const nested = junctionFieldValue as Record<string, unknown>;
-                    const pkField = relationInfo.relationPrimaryKeyFields?.[collectionName]?.field || 'id';
-                    if (nested[pkField] != null) {
-                        itemValue = nested[pkField] as string | number;
-                    } else {
-                        // No resolvable PK — this is an inline "Create New" item that
-                        // was never assigned its own id (JunctionItemForm.handleSave
-                        // omits the PK key for new items). Grabbing the first object
-                        // value here used to return the collection-discriminator
-                        // string instead of an item id. Pass the whole nested object
-                        // through so the backend can deep-create the related item.
-                        itemValue = nested;
+            if (isParentSaved) {
+                // Preserve-fetch: every junction row currently linked to this
+                // parent, raw and unpaginated. Staged deletes are dropped and
+                // staged sort updates applied below; everything else must be
+                // re-sent, or the replace-mode save silently unlinks it.
+                try {
+                    const { apiRequest } = await import('@buildpad/services');
+                    const qp = new URLSearchParams({
+                        filter: JSON.stringify({
+                            [relationInfo.reverseJunctionField.field]: { _eq: primaryKey },
+                        }),
+                        fields: [junctionPK, collField, itemField, ...(sortField ? [sortField] : [])].join(','),
+                        // `limit=-1` alone is NOT "no limit" here: the route
+                        // defaults `page` to 1 regardless, and the range branch
+                        // then computes a broken range for limit=-1. `page=0` is
+                        // falsy so that branch is skipped entirely.
+                        limit: '-1',
+                        page: '0',
+                        // The route's default count mode is the planner's
+                        // estimate; the completeness check below needs the
+                        // real number.
+                        count: 'exact',
+                        meta: 'total_count',
+                    });
+                    if (sortField) qp.set('sort', sortField);
+
+                    const resp = await apiRequest<
+                        { data?: M2AItem[]; meta?: { total_count?: number; filter_count?: number } } | M2AItem[]
+                    >(`/api/items/${relationInfo.junctionCollection.collection}?${qp.toString()}`);
+
+                    const rows = (Array.isArray(resp) ? resp : (resp.data || [])) as Record<string, unknown>[];
+
+                    // Completeness check: if the server reports more linked rows
+                    // than it returned (a clamped limit, a capped page size),
+                    // emitting would silently unlink the difference.
+                    const expected = Array.isArray(resp)
+                        ? undefined
+                        : (resp.meta?.total_count ?? resp.meta?.filter_count);
+                    if (typeof expected === 'number' && rows.length !== expected) {
+                        console.error(
+                            `M2A preserve-fetch returned ${rows.length} of ${expected} junction rows — refusing to emit an incomplete replace payload.`,
+                        );
+                        return;
                     }
+
+                    const deletedPks = new Set<unknown>(currentChanges.delete);
+                    const updatesByPk = new Map(currentChanges.update.map(u => [u[junctionPK], u]));
+
+                    for (const row of rows) {
+                        const pk = row[junctionPK];
+                        if (deletedPks.has(pk)) continue;
+                        // Only the staged *sort* participates here — it decides
+                        // payload order. The link itself always comes from the
+                        // fetched row: edit staging never retargets a junction
+                        // row, and passing staged nested edits through would
+                        // deep-create a new related item instead of re-linking.
+                        const staged = updatesByPk.get(pk);
+                        let sortVal: unknown = sortField ? row[sortField] : undefined;
+                        if (sortField && staged && staged[sortField] !== undefined) {
+                            sortVal = staged[sortField];
+                        }
+                        survivors.push({
+                            collection: row[collField] as string,
+                            itemValue: row[itemField],
+                            sort: typeof sortVal === 'number' ? sortVal : Number.POSITIVE_INFINITY,
+                        });
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch existing M2A junction rows to preserve on save:', err);
+                    // A failed preserve-fetch must NOT fall through to a
+                    // changes-only payload — replace mode treats the payload as
+                    // the complete set and would delete every other junction
+                    // row. Aborting only fails to stage this save; emitting
+                    // anyway would destroy data.
+                    return;
+                }
+            }
+
+            // Staged creates: the link value comes from the staged entry.
+            for (const entry of currentChanges.create) {
+                const collectionName = entry[collField] as string;
+                const raw = entry[itemField];
+
+                // Extract the plain item ID. selectItems/createItem stage
+                // { [pkField]: id }. createItemWithData stages the new item's
+                // fields with no PK (JunctionItemForm.handleSave omits the PK
+                // key for new items) — grabbing the first object value here
+                // used to return the collection-discriminator string instead
+                // of an item id. Pass the whole nested object through so the
+                // backend can deep-create the related item.
+                let itemValue: unknown;
+                if (typeof raw === 'object' && raw !== null) {
+                    const nested = raw as Record<string, unknown>;
+                    const pkField = relationInfo.relationPrimaryKeyFields?.[collectionName]?.field || 'id';
+                    itemValue = nested[pkField] != null ? (nested[pkField] as string | number) : nested;
                 } else {
-                    itemValue = junctionFieldValue as string | number;
+                    itemValue = raw;
                 }
 
-                return {
-                    [collField]: collectionName,
-                    [itemField]: itemValue,
-                };
-            })
-            .filter(entry => entry[collField] && entry[itemField]);
+                const sortVal = sortField ? entry[sortField] : undefined;
+                survivors.push({
+                    collection: collectionName,
+                    itemValue,
+                    sort: typeof sortVal === 'number' ? sortVal : Number.POSITIVE_INFINITY,
+                });
+            }
 
-        onChangeRef.current?.(payload as unknown as M2AItem[]);
-        hasEmittedRef.current = true;
-    }, [isDemoMode, relationInfo, getChanges, hasChanges, hookDisplayItems]);
+            // Payload order carries the sort. Array.prototype.sort is stable,
+            // so rows without a numeric sort keep their relative order at the
+            // end (fetched rows first, then creates) — same as displayItems.
+            if (sortField) {
+                survivors.sort((a, b) => a.sort - b.sort);
+            }
+
+            const payload = survivors
+                .filter(s => s.collection && s.itemValue)
+                .map(s => ({
+                    [collField]: s.collection,
+                    [itemField]: s.itemValue,
+                }));
+
+            if (cancelled) return;
+            lastEmittedChangesRef.current = serialized;
+            onChangeRef.current?.(payload as unknown as M2AItem[]);
+            hasEmittedRef.current = true;
+        };
+
+        buildAndEmit();
+        return () => {
+            cancelled = true;
+        };
+    }, [isDemoMode, relationInfo, getChanges, hasChanges, isParentSaved, primaryKey]);
 
     // ── Drag & Drop (DnD) setup ──
     // Drag is only allowed when: there's a sortField, not disabled, and all items (across all pages) fit on one page
