@@ -118,6 +118,9 @@ export function useRelationMultipleM2M(
     const [stagedRelatedData, setStagedRelatedData] = useState<
         Record<string | number, Record<string, unknown>>
     >({});
+    // Full set of linked related PKs when the relation spans more than one
+    // page; null means "fetchedItems is already the complete set".
+    const [allLinkedRelatedPKs, setAllLinkedRelatedPKs] = useState<(string | number)[] | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -128,6 +131,19 @@ export function useRelationMultipleM2M(
         delete: [],
     });
 
+    // Staged changes belong to ONE parent record. Without this, a consumer
+    // that swaps `parentPrimaryKey` without remounting (navigating between
+    // records in a single-page detail view) keeps the previous record's
+    // staged creates/updates/deletes alive against the newly-fetched rows —
+    // saving the new record then also mutates the old one.
+    const lastParentRef = useRef(parentPrimaryKey);
+    if (lastParentRef.current !== parentPrimaryKey) {
+        lastParentRef.current = parentPrimaryKey;
+        if (changes.create.length || changes.update.length || changes.delete.length) {
+            setChanges({ create: [], update: [], delete: [] });
+        }
+    }
+
     // Helper field names
     const junctionPKField = relationInfo?.junctionPrimaryKeyField?.field ?? 'id';
     const junctionFieldName = relationInfo?.junctionField?.field ?? '';
@@ -137,13 +153,17 @@ export function useRelationMultipleM2M(
     const requestIdRef = useRef(0);
 
     const loadItems = useCallback(async (params: M2MMultipleQueryParams) => {
-        const requestId = ++requestIdRef.current;
-
+        // Bump the generation only once we're committed to fetching. Bumping
+        // before the guard orphans any in-flight request: its `finally` sees a
+        // newer generation and skips `setLoading(false)`, leaving the consumer
+        // stuck on a loading skeleton forever.
         if (!relationInfo || isNewItem(parentPrimaryKey)) {
             setFetchedItems([]);
             setExistingItemCount(0);
             return;
         }
+
+        const requestId = ++requestIdRef.current;
 
         try {
             setLoading(true);
@@ -198,13 +218,58 @@ export function useRelationMultipleM2M(
                 total = response.length;
             } else {
                 items = response.data || [];
-                total = response.meta?.total_count ?? response.meta?.filter_count ?? items.length;
+                // This query is ALWAYS filtered by the parent, and on this
+                // DaaS build `meta.total_count` is the unfiltered collection
+                // count (the whole junction table) while `meta.filter_count`
+                // only reflects the current page — see the same note in
+                // ui-files/FileManager and ui-interfaces/Upload. Using
+                // total_count here reported every junction row in the
+                // database as this parent's count, which disabled drag
+                // (`totalCount <= limit`), hid staged creates behind a bogus
+                // page count, and rendered phantom pagination. Infer from
+                // page fullness instead: a short page is the last one.
+                const pageSize = params.limit ?? items.length;
+                const page = params.page ?? 1;
+                total =
+                    items.length < pageSize
+                        ? (page - 1) * pageSize + items.length
+                        : page * pageSize + 1; // at least one more page
             }
 
             if (requestIdRef.current !== requestId) return; // superseded by a newer call
 
             setFetchedItems(items);
             setExistingItemCount(total);
+
+            // The select modal excludes already-linked related items, but
+            // `fetchedItems` is only the current PAGE — so on a multi-page
+            // relation the exclusion silently stopped excluding anything
+            // linked elsewhere, letting the user stage a duplicate link
+            // (or hit a unique-constraint 500 on save). Fetch the full set
+            // of linked related PKs alongside the page when there is more
+            // than one. `limit=-1` needs `page=0` to actually mean "all"
+            // on this backend: the route defaults page to 1 otherwise and
+            // computes a broken range.
+            if (items.length < total) {
+                const allQuery = new URLSearchParams({
+                    fields: `${junctionFieldName}.${relatedPKField}`,
+                    filter: JSON.stringify(filter),
+                    limit: '-1',
+                    page: '0',
+                });
+                const allResp = await apiRequest<{ data?: Record<string, unknown>[] }>(
+                    `/api/items/${relationInfo.junctionCollection.collection}?${allQuery.toString()}`,
+                );
+                if (requestIdRef.current !== requestId) return;
+                const allRows = Array.isArray(allResp) ? allResp : allResp?.data ?? [];
+                setAllLinkedRelatedPKs(
+                    allRows
+                        .map(r => (r[junctionFieldName] as Record<string, unknown> | undefined)?.[relatedPKField])
+                        .filter((v): v is string | number => v !== undefined && v !== null),
+                );
+            } else {
+                setAllLinkedRelatedPKs(null); // single page: fetchedItems is complete
+            }
         } catch (err) {
             if (requestIdRef.current !== requestId) return;
             const errorMessage = err instanceof Error ? err.message : 'Failed to load related items';
@@ -262,6 +327,25 @@ export function useRelationMultipleM2M(
                 if (updateIdx !== -1) {
                     result.$edits = updateIdx;
                 }
+            }
+
+            // R6.2: alias the real junction PK onto `.id`. Fetched items
+            // previously kept `{ ...item }` with no alias, so any junction
+            // table whose PK isn't literally named "id" left `.id` undefined
+            // for every fetched row — React keys, DnD sortable ids, and
+            // drag-end matching in ListM2M all read `item.id` directly.
+            //
+            // Applied AFTER the overlays above, because a staged edit can
+            // itself carry an `id` key (consumers naturally spread a display
+            // item into their edits) and would otherwise clobber the alias.
+            // Falls back to the row's own `id` when the PK field is absent
+            // from the response — writing `undefined` over a real id would
+            // collapse every row onto one identity, which is worse than the
+            // bug this alias fixes.
+            if (pk !== undefined && pk !== null) {
+                result.id = pk as string | number;
+            } else if (result.id === undefined) {
+                result.id = item.id as string | number;
             }
 
             return result;
@@ -350,6 +434,28 @@ export function useRelationMultipleM2M(
     ): void => {
         if (!relationInfo) return;
 
+        // Seed the running max ONCE, then advance it per entry. Recomputing
+        // it from the same pre-call snapshot inside the map gave every id in
+        // a multi-select the identical sort value — and multi-select is the
+        // primary add path (the select modal submits a batch), so the user's
+        // chosen order was lost on save and `reorderItems`' equal-sort
+        // short-circuit then made it unrecoverable.
+        let runningSort = 0;
+        if (relationInfo.sortField) {
+            const sortKey = relationInfo.sortField;
+            const allVisible = [...fetchedItems, ...changes.create.map((c, i) => ({
+                ...c,
+                id: ((c as Record<string, unknown>)[junctionPKField] as string | number) ?? `$new-${i}`,
+            }))].filter(i => {
+                const pk = (i as Record<string, unknown>)[junctionPKField] ?? i.id;
+                return !changes.delete.includes(pk as string | number);
+            });
+            runningSort = allVisible.reduce((max, item) => {
+                const sortVal = (item as Record<string, unknown>)[sortKey];
+                return typeof sortVal === 'number' && sortVal > max ? sortVal : max;
+            }, 0);
+        }
+
         const newEntries = selectedIds.map((id) => {
             const entry: Record<string, unknown> = {
                 // Reference only: exactly the related PK. Consumers
@@ -364,19 +470,7 @@ export function useRelationMultipleM2M(
 
             // Auto-assign sort value
             if (relationInfo.sortField) {
-                const sortKey = relationInfo.sortField;
-                const allVisible = [...fetchedItems, ...changes.create.map((c, i) => ({
-                    ...c,
-                    id: ((c as Record<string, unknown>)[junctionPKField] as string | number) ?? `$new-${i}`,
-                }))].filter(i => {
-                    const pk = (i as Record<string, unknown>)[junctionPKField] ?? i.id;
-                    return !changes.delete.includes(pk as string | number);
-                });
-                const maxSort = allVisible.reduce((max, item) => {
-                    const sortVal = (item as Record<string, unknown>)[sortKey];
-                    return typeof sortVal === 'number' && sortVal > max ? sortVal : max;
-                }, 0);
-                entry[sortKey] = maxSort + 1;
+                entry[relationInfo.sortField] = ++runningSort;
             }
 
             return cleanItem(entry);
@@ -586,16 +680,31 @@ export function useRelationMultipleM2M(
 
         const pks: (string | number)[] = [];
 
-        // From fetched items (exclude deleted)
-        for (const item of fetchedItems) {
-            const pk = item[junctionPKField];
-            if (changes.delete.includes(pk as string | number)) continue;
+        if (allLinkedRelatedPKs) {
+            // Multi-page relation: `fetchedItems` is only the current page, so
+            // use the full linked set captured in loadItems. Deletions still
+            // need excluding, but they're keyed by junction PK — resolve those
+            // via the rows we do have.
+            const deletedRelatedPKs = new Set(
+                fetchedItems
+                    .filter(i => changes.delete.includes(i[junctionPKField] as string | number))
+                    .map(i => (i[junctionFieldName] as Record<string, unknown> | undefined)?.[relatedPKField]),
+            );
+            for (const pk of allLinkedRelatedPKs) {
+                if (!deletedRelatedPKs.has(pk)) pks.push(pk);
+            }
+        } else {
+            // From fetched items (exclude deleted)
+            for (const item of fetchedItems) {
+                const pk = item[junctionPKField];
+                if (changes.delete.includes(pk as string | number)) continue;
 
-            const nested = item[junctionFieldName];
-            if (nested && typeof nested === 'object') {
-                const relatedPK = (nested as Record<string, unknown>)[relatedPKField];
-                if (relatedPK !== undefined) {
-                    pks.push(relatedPK as string | number);
+                const nested = item[junctionFieldName];
+                if (nested && typeof nested === 'object') {
+                    const relatedPK = (nested as Record<string, unknown>)[relatedPKField];
+                    if (relatedPK !== undefined) {
+                        pks.push(relatedPK as string | number);
+                    }
                 }
             }
         }
@@ -612,7 +721,7 @@ export function useRelationMultipleM2M(
         }
 
         return pks;
-    }, [fetchedItems, changes, relationInfo, junctionPKField, junctionFieldName, relatedPKField]);
+    }, [fetchedItems, changes, relationInfo, junctionPKField, junctionFieldName, relatedPKField, allLinkedRelatedPKs]);
 
     /** Return the current local changes for the parent form save payload */
     const getChanges = useCallback((): M2MChangesItem => {

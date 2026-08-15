@@ -10,7 +10,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { MultiSelect, Text, Stack, ColorSwatch } from '@mantine/core';
-import { IconChevronDown } from '@tabler/icons-react';
+import { IconChevronDown, IconCheck } from '@tabler/icons-react';
 import { IconDisplay } from '../select-icon/SelectIcon';
 
 export interface DropdownChoice {
@@ -84,7 +84,16 @@ export function SelectMultipleDropdown({
     }
     return value ?? [];
   }, [value]);
-  const isCsvStorage = type === 'csv' || typeof value === 'string';
+  // Latch the csv inference: `typeof value === 'string'` is the only signal
+  // when the backend reports the underlying column type instead of the
+  // abstract 'csv' interface type, and it disappears the moment we emit a
+  // non-string (allowNone clears to `null`). Without latching, every write
+  // after a clear goes out as an array into a comma-string field.
+  const sawCsvStorage = React.useRef(false);
+  if (type === 'csv' || typeof value === 'string') {
+    sawCsvStorage.current = true;
+  }
+  const isCsvStorage = sawCsvStorage.current;
   // Transform choices for Mantine MultiSelect
   const data = useMemo(() => {
     if (!choices || choices.length === 0) {
@@ -139,10 +148,29 @@ export function SelectMultipleDropdown({
     }
   };
 
+  // Set synchronously by the chained onOptionSubmit below whenever Mantine
+  // submits a dropdown option (mouse click or Enter on a highlighted one),
+  // and read by the microtask-DEFERRED Enter commit: this component's
+  // onKeyDown runs BEFORE Mantine's own Enter handling, so nothing Mantine
+  // is about to do is observable there yet. Mantine's submission is
+  // synchronous within the same task, so by microtask-drain time the flag
+  // says authoritatively whether that Enter selected an option (skip — the
+  // selection already emitted) or was free text (commit). Self-expires on a
+  // microtask so a later, unrelated keystroke or blur never sees it.
+  const justSelectedRef = React.useRef(false);
+  const clearJustSelectedSoon = () => {
+    queueMicrotask(() => {
+      justSelectedRef.current = false;
+    });
+  };
+
   // Handle value changes with proper sorting
   const handleChange = (newValue: string[]) => {
     if (!newValue || newValue.length === 0) {
-      emit(allowNone ? null : []);
+      // Under csv storage the empty selection is the empty STRING; emitting
+      // `null` here would also erase the storage-shape signal for every
+      // subsequent write (see the sawCsvStorage latch above).
+      emit(allowNone && !isCsvStorage ? null : []);
       return;
     }
 
@@ -200,16 +228,47 @@ export function SelectMultipleDropdown({
   const [otherSearchValue, setOtherSearchValue] = useState('');
 
   const commitOtherValue = () => {
-    if (!allowOther) return;
+    // A field that is disabled, or made read-only by turning off `searchable`,
+    // must never emit: Mantine gates only its own keyboard logic on those,
+    // not this chained onBlur/onKeyDown, so without this guard text left in
+    // the box when the field is disabled mid-edit (the standard "disable
+    // while saving" pattern) commits on the resulting blur.
+    if (!allowOther || disabled || !searchable) return;
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
     const trimmed = otherSearchValue.trim();
     if (!trimmed) return;
-    const matchesExistingChoice = choices.some(
-      (choice) => choice.text === trimmed || String(choice.value) === trimmed,
+    // V3-6: text naming an existing choice RESOLVES to that choice (matched
+    // case-insensitively, so "REACT" finds "React") and selects it, rather
+    // than being dropped. Returning silently here made typing an option's
+    // name a dead keystroke whose text the unconditional clear below then
+    // destroyed.
+    const lowerTrimmed = trimmed.toLowerCase();
+    const matchedChoice = choices.find(
+      (choice) =>
+        String(choice.text).toLowerCase() === lowerTrimmed ||
+        String(choice.value).toLowerCase() === lowerTrimmed,
     );
-    const alreadySelected = normalizedValue.some((v) => String(v) === trimmed);
-    if (!matchesExistingChoice && !alreadySelected) {
-      emit([...normalizedValue, trimmed]);
+    // Custom values are compared case-SENSITIVELY: on a free-text field the
+    // casing is user-authored data (tags, SKUs, unit codes), so "Ember" and
+    // "ember" are two distinct entries.
+    const alreadySelected = normalizedValue.some(
+      (v) => String(v) === trimmed || (matchedChoice !== undefined && v === matchedChoice.value),
+    );
+    // maxValues also caps manual commits — the complement of Mantine's own
+    // `_value.length < maxValues` rule.
+    const atMax = typeof maxValues === 'number' && normalizedValue.length >= maxValues;
+    if (alreadySelected) {
+      setOtherSearchValue('');
+      return;
     }
+    // Only a successful commit clears the box; a blocked one leaves the text
+    // in place so the user can see and correct it instead of watching their
+    // typing silently vanish.
+    if (atMax) return;
+    emit([...normalizedValue, matchedChoice ? matchedChoice.value : trimmed]);
     setOtherSearchValue('');
   };
 
@@ -276,10 +335,18 @@ export function SelectMultipleDropdown({
           const choice = data.find((d) => d.value === option.value);
           return (
             <Text component="span" size="sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Show both when a choice sets both — gating the swatch on
+                  `!choice.icon` dropped the colour entirely for such
+                  choices (the same fix SelectDropdown already carries). */}
+              {choice?.color && <ColorSwatch color={choice.color} size={12} />}
               {choice?.icon && <IconDisplay icon={choice.icon} size={14} />}
-              {choice?.color && !choice.icon && <ColorSwatch color={choice.color} size={12} />}
               {option.label}
-              {checked && ' ✓'}
+              {/* An icon, not a ' ✓' text node: Mantine already conveys the
+                  state via aria-selected, so a literal check character in
+                  the label made screen readers announce it twice and put
+                  U+2713 inside the option's accessible name. Matches
+                  SelectDropdown. */}
+              {checked && <IconCheck size={14} />}
             </Text>
           );
         }}
@@ -297,14 +364,41 @@ export function SelectMultipleDropdown({
                 color: `var(--mantine-color-${mantineColor}-filled)`,
               },
         }}
-        filter={searchable ? undefined : () => data} // Disable filtering if not searchable
+        // Pass Mantine's own already-filtered `options` through rather than
+        // the full `data` memo: returning `data` here put back the entries
+        // hidePickedOptions had removed (and ignored `limit`).
+        filter={searchable ? undefined : ({ options }) => options}
         {...(allowOther
           ? {
               searchValue: otherSearchValue,
               onSearchChange: setOtherSearchValue,
+              // Fires for every dropdown submission (click or Enter on a
+              // highlighted option), including re-submitting an already
+              // selected value, which Mantine's onChange skips. Flags the
+              // selection for the deferred Enter commit below.
+              onOptionSubmit: () => {
+                justSelectedRef.current = true;
+                clearJustSelectedSoon();
+                // The typed text was a filter, not a pending pill; consume it
+                // so a later blur can't commit the abandoned fragment.
+                setOtherSearchValue('');
+              },
               onBlur: commitOtherValue,
               onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
-                if (event.key === 'Enter') commitOtherValue();
+                // An Enter that confirms an IME composition is not a commit
+                // (mirrors Mantine's own isComposing / keyCode-229 guards,
+                // which run after this handler and without preventDefault).
+                if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+                // V3-6: Enter with a highlighted dropdown option double-
+                // emitted — once via the manual commit (raw search text),
+                // once via Mantine's own selection. This handler runs BEFORE
+                // Mantine's Enter handling, so `event.defaultPrevented` is
+                // always false here and cannot be used to detect it. Defer
+                // one microtask instead: Mantine's selection is synchronous
+                // within this task, so by drain time justSelectedRef (set by
+                // onOptionSubmit above) says whether this Enter selected an
+                // option or was free text.
+                if (event.key === 'Enter') queueMicrotask(commitOtherValue);
               },
             }
           : {})}

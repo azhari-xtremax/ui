@@ -19,17 +19,23 @@ const mockSelectItems = jest.fn();
 const mockLoadItems = jest.fn();
 const mockRemoveItem = jest.fn();
 const mockApiRequest = jest.fn();
+const mockLastParentPk = jest.fn();
 
 jest.mock('@buildpad/hooks', () => {
     const ReactActual = require('react');
+    const actual = jest.requireActual('@buildpad/hooks');
 
     return {
-        isValidPrimaryKey: (pk: unknown) => pk !== undefined && pk !== null && pk !== '' && pk !== '+',
+        // Use the real predicate — a hand-rolled copy here drifts from the
+        // implementation under test (it missed '%2B') and pins behavior the
+        // shipped component does not have.
+        isValidPrimaryKey: actual.isValidPrimaryKey,
         apiRequest: (...args: unknown[]) => mockApiRequest(...args),
         useRelationM2M: (...args: unknown[]) => mockUseRelationM2M(...args),
         useRelationPermissionsM2M: (...args: unknown[]) => mockUseRelationPermissionsM2M(...args),
         useFieldMetadata: () => ({ getDisplayName: (f: string) => f, loading: false }),
         useRelationMultipleM2M: (relationInfo: unknown, _pk: unknown) => {
+            mockLastParentPk(_pk);
             const [changes, setChanges] = ReactActual.useState({
                 create: [] as Record<string, unknown>[],
                 update: [] as Record<string, unknown>[],
@@ -446,5 +452,57 @@ describe('ListM2M load-items dedupe', () => {
             </MantineProvider>
         );
         await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(2));
+    });
+
+    // V3-5: the signature used to omit primaryKey/isParentSaved, so a
+    // mounted ListM2M whose primaryKey switches to a different saved record
+    // without a remount (e.g. navigating between records in a single-page
+    // detail view) kept the same params/refreshKey and skipped the refetch
+    // — the previous record's rows stayed on screen.
+    it('refires when primaryKey switches to a different record with no other param change', async () => {
+        const { rerender } = render(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={1} filter={{ status: 'published' }} />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(1));
+
+        rerender(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={2} filter={{ status: 'published' }} />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(2));
+        // The params are identical between records (the parent key only
+        // reaches the request through the hook), so assert on the parent the
+        // hook was driven with — otherwise this passes even if the refetch
+        // queried the OLD record.
+        expect(mockLastParentPk).toHaveBeenLastCalledWith(2);
+
+        // And no third, duplicate query settles afterwards: including
+        // refreshKey in the signature made a record switch that also cleared
+        // `value` fire the same query twice.
+        await new Promise((r) => setTimeout(r, 50));
+        expect(mockLoadItems).toHaveBeenCalledTimes(2);
+    });
+
+    it('clears the previous record\'s rows when switching to an unsaved parent', async () => {
+        const { rerender } = render(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey={1} />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(1));
+
+        // '+' is a new record: loadItems is what empties fetchedItems for a
+        // new item, so returning early left the previous record's rows on
+        // screen inside the blank create form.
+        rerender(
+            <MantineProvider>
+                <ListM2M collection="articles" field="tags" primaryKey="+" />
+            </MantineProvider>
+        );
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(2));
+        expect(mockLastParentPk).toHaveBeenLastCalledWith('+');
     });
 });
