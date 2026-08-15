@@ -390,3 +390,88 @@ describe('useRelationMultipleM2M alias robustness (R6.2)', () => {
     expect(result.current.loading).toBe(false);
   });
 });
+
+describe('useRelationMultipleM2M selectItems display data', () => {
+  it('keeps the staged junction payload reference-only and holds display data separately', async () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    act(() => {
+      result.current.selectItems([42], {
+        42: { id: 42, name: 'Announcement', status: 'published' },
+      });
+    });
+
+    // CollectionForm distinguishes "link this existing row" from
+    // "deep-create a new one" by the junction value carrying nothing but the
+    // related PK, so display fields must never be merged into it.
+    const staged = result.current.getChanges().create[0];
+    expect(staged.tag_id).toEqual({ id: 42 });
+    expect(Object.keys(staged.tag_id as object)).toEqual(['id']);
+
+    // ...and the display data is still available for rendering.
+    expect(result.current.stagedRelatedData[42]).toEqual({
+      id: 42,
+      name: 'Announcement',
+      status: 'published',
+    });
+  });
+
+  it('preserves the caller-supplied primary key type', async () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    // The select modal supplies string ids; an API row may carry a number.
+    // The staged PK must stay what the caller passed.
+    act(() => {
+      result.current.selectItems(['42'], { 42: { id: 42, name: 'Announcement' } });
+    });
+
+    expect(result.current.getChanges().create[0].tag_id).toEqual({ id: '42' });
+  });
+
+  it('stages a reference-only payload when no display data is supplied', async () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    act(() => {
+      result.current.selectItems([7]);
+    });
+
+    expect(result.current.getChanges().create[0].tag_id).toEqual({ id: 7 });
+    expect(result.current.stagedRelatedData).toEqual({});
+  });
+});
+
+describe('useRelationMultipleM2M staged payload vs the M2M save path', () => {
+  // Mirrors CollectionForm.flushM2MChanges' select-vs-deep-create branch
+  // verbatim. Keeping a copy here is deliberate: the hook and that guard live
+  // in different packages and nothing else composes them, which is exactly
+  // how a staged shape that silently deep-creates could ship green.
+  function flattenLikeCollectionForm(
+    entry: Record<string, unknown>,
+    junctionField: string,
+  ): Record<string, unknown> {
+    const relatedValue = entry[junctionField];
+    const isSelectEntry =
+      !!relatedValue &&
+      typeof relatedValue === 'object' &&
+      !Array.isArray(relatedValue) &&
+      Object.keys(relatedValue as object).length === 1 &&
+      'id' in (relatedValue as object);
+    return isSelectEntry
+      ? { ...entry, [junctionField]: (relatedValue as Record<string, unknown>).id }
+      : entry;
+  }
+
+  it('flattens to a bare FK — a picked row must link, never deep-create', () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    act(() => {
+      result.current.selectItems([42], { 42: { id: 42, name: 'Announcement' } });
+    });
+
+    const flat = flattenLikeCollectionForm(
+      result.current.getChanges().create[0],
+      'tag_id',
+    );
+    expect(flat.tag_id).toBe(42);
+  });
+});

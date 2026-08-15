@@ -18,6 +18,7 @@ const mockUseRelationPermissionsM2M = jest.fn();
 const mockSelectItems = jest.fn();
 const mockLoadItems = jest.fn();
 const mockRemoveItem = jest.fn();
+const mockApiRequest = jest.fn();
 const mockLastParentPk = jest.fn();
 
 jest.mock('@buildpad/hooks', () => {
@@ -29,6 +30,7 @@ jest.mock('@buildpad/hooks', () => {
         // implementation under test (it missed '%2B') and pins behavior the
         // shipped component does not have.
         isValidPrimaryKey: actual.isValidPrimaryKey,
+        apiRequest: (...args: unknown[]) => mockApiRequest(...args),
         useRelationM2M: (...args: unknown[]) => mockUseRelationM2M(...args),
         useRelationPermissionsM2M: (...args: unknown[]) => mockUseRelationPermissionsM2M(...args),
         useFieldMetadata: () => ({ getDisplayName: (f: string) => f, loading: false }),
@@ -40,11 +42,25 @@ jest.mock('@buildpad/hooks', () => {
                 delete: [] as (string | number)[],
             });
 
-            const selectItems = ReactActual.useCallback((ids: (string | number)[]) => {
-                mockSelectItems(ids);
+            const [stagedRelatedData, setStagedRelatedData] = ReactActual.useState({} as Record<string | number, Record<string, unknown>>);
+
+            // Mirrors the real hook's contract: the staged payload stays
+            // reference-only ({pk} and nothing else, which is what
+            // CollectionForm uses to tell "link existing" from "deep-create"),
+            // and display data is kept separately.
+            const selectItems = ReactActual.useCallback((ids: (string | number)[], relatedDataById?: Record<string | number, Record<string, unknown>>) => {
+                mockSelectItems(ids, relatedDataById);
+                if (relatedDataById) setStagedRelatedData((prev: any) => ({ ...prev, ...relatedDataById }));
                 setChanges((prev: any) => ({
                     ...prev,
-                    create: [...prev.create, ...ids.map((id: string | number) => ({ $type: 'created', id }))],
+                    create: [
+                        ...prev.create,
+                        ...ids.map((id: string | number) => ({
+                            $type: 'created',
+                            id,
+                            tag_id: { id },
+                        })),
+                    ],
                 }));
             }, []);
 
@@ -85,6 +101,7 @@ jest.mock('@buildpad/hooks', () => {
                 reorderItems,
                 moveItemUp,
                 moveItemDown,
+                stagedRelatedData,
                 getSelectedRelatedPKs,
                 getChanges,
                 hasChanges: changes.create.length > 0 || changes.update.length > 0 || changes.delete.length > 0,
@@ -107,7 +124,13 @@ jest.mock('@buildpad/ui-collections', () => ({
     CollectionList: ({ bulkActions }: any) => (
         <div data-testid="collection-list">
             {bulkActions && (
-                <button onClick={() => bulkActions[0].action([42])}>Add Selected</button>
+                <button
+                    onClick={() =>
+                        bulkActions[0].action([42], [{ id: 42, name: 'Announcement' }])
+                    }
+                >
+                    Add Selected
+                </button>
             )}
         </div>
     ),
@@ -209,8 +232,28 @@ describe('ListM2M "Create New" junction linking', () => {
         // handleEditFormSuccess must call selectItems([data.id]) to stage a
         // junction row linking the newly created item — not silently drop it.
         await waitFor(() => {
-            expect(mockSelectItems).toHaveBeenCalledWith(['new-tag-id']);
+            expect(mockSelectItems).toHaveBeenCalledWith(
+                ['new-tag-id'],
+                { 'new-tag-id': { id: 'new-tag-id', name: 'Brand new tag' } },
+            );
         });
+    });
+
+    // Only `data.id` was ever forwarded to selectItems — the rest of the
+    // just-created record (e.g. `name`) was discarded, so a display template
+    // had nothing to resolve against and rendered blank until the parent
+    // form was saved and the list reloaded from the server.
+    it('renders the display template immediately using the just-created record, without a reload', async () => {
+        render(
+            <TestWrapper>
+                <ListM2M {...defaultProps} template="{{tag_id.name}}" />
+            </TestWrapper>,
+        );
+
+        fireEvent.click(await screen.findByText('Create New'));
+        fireEvent.click(await screen.findByText('Save Form'));
+
+        expect(await screen.findByText('Brand new tag')).toBeInTheDocument();
     });
 });
 
@@ -236,6 +279,128 @@ describe('ListM2M fields= query PK resolution', () => {
         const fields: string[] = mockLoadItems.mock.calls.at(-1)?.[0]?.fields ?? [];
         expect(fields).toContain('tag_id.code');
         expect(fields).not.toContain('tag_id.id');
+    });
+
+    // A field's row-display template (e.g. "{{tag_id.name}}", authored via
+    // meta.options.template) references a junction-relative path — the
+    // actual fetched fields must include it, or the template renders blank
+    // (the related item's `name` was never fetched, only whatever `fields`
+    // happened to list — defaulting to just the bootstrap "id").
+    it('includes fields referenced by the display template in the items query, even when not in the fields prop', async () => {
+        mockUseRelationM2M.mockReturnValue({
+            relationInfo: RELATION_INFO,
+            loading: false,
+            error: null,
+        });
+
+        render(
+            <MantineProvider>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    fields={['id']}
+                    template="{{tag_id.name}}"
+                />
+            </MantineProvider>
+        );
+
+        await waitFor(() => expect(mockLoadItems).toHaveBeenCalled());
+        const fields: string[] = mockLoadItems.mock.calls.at(-1)?.[0]?.fields ?? [];
+        expect(fields).toContain('tag_id.name');
+    });
+});
+
+describe('ListM2M select-existing label resolution', () => {
+    // Picking an item stages only a reference locally, so a display template
+    // had nothing to resolve against and rendered blank until the parent form
+    // was saved and the list reloaded. The select modal already loaded these
+    // rows, so it hands them back with the ids — no extra request — and the
+    // label resolves immediately.
+    it('uses the rows supplied by the select modal to resolve the label immediately', async () => {
+        mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
+
+        render(
+            <TestWrapper>
+                <ListM2M collection="articles" field="tags" primaryKey={1} template="{{tag_id.name}}" />
+            </TestWrapper>
+        );
+
+        fireEvent.click(screen.getByText('Add Existing'));
+        fireEvent.click(await screen.findByText('Add Selected'));
+
+        await waitFor(() => {
+            expect(mockSelectItems).toHaveBeenCalledWith([42], { 42: { id: 42, name: 'Announcement' } });
+        });
+        expect(await screen.findByText('Announcement')).toBeInTheDocument();
+    });
+
+    it('does not issue its own request for the selected rows', async () => {
+        mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
+
+        render(
+            <TestWrapper>
+                <ListM2M collection="articles" field="tags" primaryKey={1} template="{{tag_id.name}}" />
+            </TestWrapper>
+        );
+
+        fireEvent.click(screen.getByText('Add Existing'));
+        fireEvent.click(await screen.findByText('Add Selected'));
+        await waitFor(() => expect(mockSelectItems).toHaveBeenCalled());
+
+        expect(mockApiRequest).not.toHaveBeenCalled();
+    });
+
+    // The staged payload is what CollectionForm inspects to tell "link this
+    // existing row" from "deep-create a new one" — it must carry the related
+    // PK and nothing else, however much display data the modal supplied.
+    it('keeps the staged junction payload reference-only', async () => {
+        mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
+
+        const onChange = jest.fn();
+        render(
+            <TestWrapper>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    template="{{tag_id.name}}"
+                    onChange={onChange}
+                />
+            </TestWrapper>
+        );
+
+        fireEvent.click(screen.getByText('Add Existing'));
+        fireEvent.click(await screen.findByText('Add Selected'));
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+
+        const staged = onChange.mock.calls.at(-1)![0].create[0];
+        expect(Object.keys(staged.tag_id)).toEqual(['id']);
+        expect(staged.tag_id).toEqual({ id: 42 });
+    });
+});
+
+describe('ListM2M row-label rendering with a junction-relative template', () => {
+    it('resolves "{{tag_id.name}}" against the nested related item, not a blank label', () => {
+        // formatDisplayValue used to render the template against `relatedData`
+        // (already item.tag_id — just {id, name}), so "{{tag_id.name}}" tried
+        // to resolve relatedData.tag_id.name, which doesn't exist — blank label.
+        render(
+            <MantineProvider>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    template="{{tag_id.name}}"
+                    mockRelationInfo={RELATION_INFO as any}
+                    mockItems={[
+                        { id: 'junction-1', tag_id: { id: 'tag-1', name: 'Announcement' } } as any,
+                    ]}
+                />
+            </MantineProvider>
+        );
+
+        expect(screen.getByText('Announcement')).toBeInTheDocument();
     });
 });
 
