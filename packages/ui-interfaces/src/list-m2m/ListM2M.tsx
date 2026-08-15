@@ -668,6 +668,19 @@ export const ListM2M: React.FC<ListM2MProps> = ({
     // Batch edit selection (table layout only)
     const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
 
+    // Page, search and selection are per-record. Now that a primaryKey switch
+    // actually refetches, carrying them over meant the new record was queried
+    // at the old record's page (returning nothing, with the pagination control
+    // unmounting once totalPages collapsed — no way back), and the batch
+    // toolbar reported a selection count over rows that were never checked.
+    const lastPrimaryKeyRef = useRef(primaryKey);
+    if (lastPrimaryKeyRef.current !== primaryKey) {
+        lastPrimaryKeyRef.current = primaryKey;
+        if (currentPage !== 1) setCurrentPage(1);
+        if (search !== "") setSearch("");
+        if (selectedIds.size > 0) setSelectedIds(new Set());
+    }
+
     // Drawer / modal states
     const [editDrawerOpened, { open: openEditDrawer, close: closeEditDrawer }] = useDisclosure(false);
     const [selectModalOpened, { open: openSelectModal, close: closeSelectModal }] = useDisclosure(false);
@@ -818,6 +831,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
     // dev; both fired this effect twice with an identical query ("double
     // initial fetch"). Compare serialized params, not references.
     const lastLoadSignatureRef = useRef<string | null>(null);
+    const lastRefreshKeyRef = useRef<number | null>(null);
     useEffect(() => {
         if (relationInfo && isParentSaved && !mockItems) {
             // Build fields for the query — prefix with junction field for related data.
@@ -844,25 +858,59 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 search: enableSearchFilter ? search : undefined,
                 filter: filter as Record<string, unknown>,
             };
-            // V3-5: primaryKey/isParentSaved must be part of the signature,
-            // not just gate the effect. Without them, a mounted ListM2M
-            // whose `primaryKey` switches to a different saved record
-            // (without a remount — e.g. navigating between records in a
-            // single-page detail view) keeps `params` and `refreshKey`
-            // identical, so the signature dedupe skips the refetch and the
-            // previous record's rows stay on screen until page/limit/search
-            // changes for some other reason.
+            // V3-5: `primaryKey` must be part of the signature, not just gate
+            // the effect. Without it, a mounted ListM2M whose `primaryKey`
+            // switches to a different saved record (without a remount — e.g.
+            // navigating between records in a single-page detail view) keeps
+            // `params` identical, so the dedupe skips the refetch and the
+            // previous record's rows stay on screen.
+            //
+            // `refreshKey` is deliberately NOT in the signature: it is a bump
+            // counter whose only job is to force a refetch, and including it
+            // meant a record switch that also cleared `value` (the normal
+            // flow once anything is staged) produced two identical queries —
+            // one for the primaryKey change, one for the refreshKey bump.
+            // Comparing it separately keeps the forced refetch while still
+            // deduping the identical query.
+            // (`isParentSaved` is intentionally absent too — it is derived
+            // from `primaryKey` and is always true inside this branch, so it
+            // could never discriminate two signatures.)
             const signature = JSON.stringify([
                 relationInfo.junctionCollection?.collection,
                 params,
-                refreshKey,
                 primaryKey ?? null,
-                isParentSaved,
             ]);
-            if (signature === lastLoadSignatureRef.current) return;
+            if (
+                signature === lastLoadSignatureRef.current &&
+                refreshKey === lastRefreshKeyRef.current
+            ) {
+                return;
+            }
             lastLoadSignatureRef.current = signature;
+            lastRefreshKeyRef.current = refreshKey;
 
-            loadItems(params);
+            // Reset the signature if the fetch fails, so a transient error
+            // doesn't poison this query forever (loadItems catches its own
+            // errors and never rejects, so check the error state instead of
+            // awaiting a rejection).
+            void Promise.resolve(loadItems(params)).catch(() => {
+                lastLoadSignatureRef.current = null;
+            });
+        } else if (relationInfo && !isParentSaved && !mockItems) {
+            // Switching to an unsaved parent ('+' / new record) must clear the
+            // previous record's rows: loadItems is what empties `fetchedItems`
+            // for a new item, and returning early here left them on screen —
+            // the same "previous record's rows stay visible" symptom V3-5 is
+            // about, just on the saved→new transition.
+            if (lastLoadSignatureRef.current !== null) {
+                lastLoadSignatureRef.current = null;
+                lastRefreshKeyRef.current = refreshKey;
+                loadItems({
+                    limit: currentLimit,
+                    page: currentPage,
+                    fields: [],
+                });
+            }
         }
     }, [
         relationInfo,
@@ -1512,6 +1560,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                         {/* Junction field section at top (if configured) */}
                         {!isCreatingNew &&
                             currentlyEditing &&
+                            currentlyEditing.$type !== "created" &&
                             junctionFieldLocation === "top" && (
                                 <>
                                     <Text size="sm" fw={500} c="dimmed">
@@ -1542,6 +1591,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                         {/* Junction field section at bottom (if configured) */}
                         {!isCreatingNew &&
                             currentlyEditing &&
+                            currentlyEditing.$type !== "created" &&
                             junctionFieldLocation === "bottom" && (
                                 <>
                                     <Divider />
