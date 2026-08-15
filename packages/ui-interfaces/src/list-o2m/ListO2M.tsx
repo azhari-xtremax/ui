@@ -358,6 +358,25 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   // mount emit: once the user has staged something, going back to an empty
   // changeset must still be emitted so the parent form drops the field edit.
   const hasEmittedRef = useRef(false);
+  // Last successfully fetched id set of the parent's currently linked
+  // children, keyed by the parent pk it was fetched for. Lets the emit
+  // effect deliver a synchronous payload (the parent form snapshots field
+  // values at Save-click time, so an emit that lands only after a network
+  // round-trip leaves a window where Save submits the previous payload) and
+  // gives the failure path a known-good fallback. The direct-API mutation
+  // handlers below keep it in sync.
+  const preservedIdsRef = useRef<{
+    key: string | number;
+    ids: (string | number)[];
+  } | null>(null);
+  // Bumped to force a re-emit after out-of-band mutations (direct unlink /
+  // delete, modal create on a saved parent) and by the preserve-error Retry
+  // button.
+  const [preserveEpoch, setPreserveEpoch] = useState(0);
+  // Set when a preserve fetch failed with no cached fallback: the pending
+  // change is still rendered in the list but has NOT been handed to the
+  // parent form.
+  const [preserveError, setPreserveError] = useState<string | null>(null);
 
   // Check if parent item is saved (valid PK, not '+' convention for new)
   const isParentSaved = primaryKey && primaryKey !== "+";
@@ -467,54 +486,201 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     // Bailing on `!hasChanges` alone is not enough: once something has been
     // staged, un-staging it back to empty must still emit `[]`, otherwise the
     // parent form keeps the last payload and saves items the user removed.
-    if (!hasChanges && !hasEmittedRef.current) return;
+    if (!hasChanges && !hasEmittedRef.current) {
+      // Nothing staged and nothing ever emitted — any earlier preserve
+      // failure is moot (the change it failed to stage is gone).
+      setPreserveError((prev) => (prev === null ? prev : null));
+      return;
+    }
 
     const fkField = relationInfo?.reverseJunctionField?.field;
-    const payload: Record<string, unknown>[] = [];
+    const relatedCol = relationInfo?.relatedCollection?.collection;
 
-    // Creates: emit the item data with FK pointing to parent
-    for (const item of changeset.create) {
-      const { $type, $index, ...data } = item;
-      payload.push({
-        ...data,
-        ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
-      });
+    const buildPayload = (preservedIds: (string | number)[] | null) => {
+      const payload: (string | number | Record<string, unknown>)[] = [];
+
+      // Creates: emit the item data with FK pointing to parent
+      for (const item of changeset.create) {
+        const { $type, $index, ...data } = item;
+        payload.push({
+          ...data,
+          ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
+        });
+      }
+
+      // Links: existing items picked while the parent is unsaved. Emit the
+      // reference only (id + FK) — DaaS links by id and fills in the real parent
+      // key. The staged entry also carries the fetched display fields so the row
+      // can render, but those must NOT be echoed back: when the display template
+      // references a nested path (e.g. `{{author_id.name}}`) the fetched row
+      // contains a nested object, and DaaS then silently drops the whole entry
+      // from the save (201, `posts: []`) instead of linking it.
+      const stagedLinkIds = new Set(changeset.link.map((item) => item.id));
+      for (const item of changeset.link) {
+        // KNOWN LIMIT: link/update/delete payload entries still key the item by
+        // the literal "id" property (item.id holds the real PK *value* via
+        // getPk). For related collections whose PK column isn't named "id",
+        // whether DaaS accepts this shape is unverified — resolving it needs a
+        // backend-contract check, not just a client change.
+        payload.push({
+          id: item.id,
+          ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
+        });
+      }
+
+      // N1 fix: a saved parent with staged links needs every other
+      // already-linked child preserved in the payload too, or the relation
+      // writer deselects them. Bare primitive entries match its
+      // string/number shorthand (`recordsToUpdate` keyed by the real PK
+      // column, no "id" property assumed) — safe for any PK name, unlike
+      // the object-shaped entries above.
+      if (preservedIds) {
+        for (const pk of preservedIds) {
+          if (!stagedLinkIds.has(pk)) {
+            payload.push(pk);
+          }
+        }
+      }
+
+      // Updates: emit id + changed fields
+      for (const item of changeset.update) {
+        const { $type, ...data } = item;
+        payload.push(data);
+      }
+
+      // Deletes: emit id with $delete marker (DaaS convention)
+      for (const item of changeset.delete) {
+        payload.push({ id: item.id, $delete: true });
+      }
+
+      return payload;
+    };
+
+    const emit = (preservedIds: (string | number)[] | null) => {
+      hasEmittedRef.current = true;
+      onChange(buildPayload(preservedIds));
+    };
+
+    // The preserve requirement must NOT be gated on
+    // `changeset.link.length > 0` ALONE, or a revert hole opens up: stage a
+    // link (preserve runs, hasEmittedRef becomes true) → un-stage it again
+    // (change of mind) → changeset is entirely empty, so
+    // `changeset.link.length > 0` is false, but the effect still runs (see
+    // the bail-out above) and would emit `[]` — the relation writer's
+    // empty-array branch then unlinks/deletes every child.
+    // `hasEmittedRef.current` is added as an OR so any run after the first
+    // real emit also re-preserves, turning the revert into a no-op re-link
+    // of the full current id set instead. Dropping the original
+    // `changeset.link.length > 0` arm instead of OR-ing would skip the
+    // preserve on the very first stage (hasEmittedRef is still false then),
+    // reopening the original N1 bug.
+    if (
+      !isParentSaved ||
+      (changeset.link.length === 0 && !hasEmittedRef.current) ||
+      !relatedCol ||
+      !fkField ||
+      !primaryKey
+    ) {
+      emit(null);
+      return;
     }
 
-    // Links: existing items picked while the parent is unsaved. Emit the
-    // reference only (id + FK) — DaaS links by id and fills in the real parent
-    // key. The staged entry also carries the fetched display fields so the row
-    // can render, but those must NOT be echoed back: when the display template
-    // references a nested path (e.g. `{{author_id.name}}`) the fetched row
-    // contains a nested object, and DaaS then silently drops the whole entry
-    // from the save (201, `posts: []`) instead of linking it.
-    for (const item of changeset.link) {
-      // KNOWN LIMIT: link/update/delete payload entries still key the item by
-      // the literal "id" property (item.id holds the real PK *value* via
-      // getPk). For related collections whose PK column isn't named "id",
-      // whether DaaS accepts this shape is unverified — resolving it needs a
-      // backend-contract check, not just a client change.
-      payload.push({
-        id: item.id,
-        ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
-      });
+    const cached =
+      preservedIdsRef.current && preservedIdsRef.current.key === primaryKey
+        ? preservedIdsRef.current.ids
+        : null;
+
+    // Emit synchronously whenever a known-good id set exists. The parent
+    // form snapshots its field values at Save-click time, so an emit that
+    // only lands after a network round-trip leaves a window where Save
+    // submits the PREVIOUS payload — e.g. a link the user just reverted.
+    // The fetch below still runs and re-emits only if the server set
+    // actually differs from the cache.
+    if (cached) {
+      emit(cached);
     }
 
-    // Updates: emit id + changed fields
-    for (const item of changeset.update) {
-      const { $type, ...data } = item;
-      payload.push(data);
-    }
+    let cancelled = false;
 
-    // Deletes: emit id with $delete marker (DaaS convention)
-    for (const item of changeset.delete) {
-      payload.push({ id: item.id, $delete: true });
-    }
+    const refreshAndReconcile = async () => {
+      try {
+        const { apiRequest } = await import("@buildpad/services");
+        const qp = new URLSearchParams();
+        qp.set("filter", JSON.stringify({ [fkField]: { _eq: primaryKey } }));
+        qp.set("fields", pkField);
+        // `limit=-1` alone is NOT "no limit" here: the route defaults
+        // `page` to 1 regardless, and the range branch then computes a
+        // broken range for limit=-1. `page=0` is falsy so that branch is
+        // skipped entirely, same as passing no page at all.
+        qp.set("limit", "-1"); // fetch every linked child, not just the current page
+        qp.set("page", "0");
+        // An exact count lets us detect a silently capped response (e.g. a
+        // server-side max-rows setting): emitting a truncated id set as the
+        // authoritative payload would deselect every child beyond the cap.
+        qp.set("count", "exact");
+        const resp = await apiRequest<{
+          data: Record<string, unknown>[];
+          meta?: { total_count?: number };
+        }>(`/api/items/${relatedCol}?${qp.toString()}`);
+        if (cancelled) return;
 
-    hasEmittedRef.current = true;
-    onChange(payload);
+        const rows = resp.data || [];
+        const total = resp.meta?.total_count;
+        if (typeof total === "number" && rows.length !== total) {
+          throw new Error(
+            `preserve fetch returned ${rows.length} of ${total} linked rows (server-side row cap?)`,
+          );
+        }
+        const ids: (string | number)[] = [];
+        for (const row of rows) {
+          const pk = row[pkField];
+          if (pk === undefined || pk === null) {
+            // A row we can't key would silently fall out of the payload and
+            // be deselected on save (e.g. field permissions stripping the
+            // PK column). Treat the whole fetch as unusable instead.
+            throw new Error(`linked row is missing its primary key ('${pkField}')`);
+          }
+          ids.push(pk as string | number);
+        }
+
+        preservedIdsRef.current = { key: primaryKey, ids };
+        setPreserveError((prev) => (prev === null ? prev : null));
+
+        if (!cached) {
+          emit(ids);
+        } else {
+          const cachedSet = new Set(cached);
+          const changed =
+            ids.length !== cached.length || ids.some((id) => !cachedSet.has(id));
+          if (changed) {
+            emit(ids);
+          }
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Failed to fetch existing children to preserve on save:", err);
+        if (!cached) {
+          // No known-good id set to fall back on: an emit here would be a
+          // links-only payload, which the relation writer treats as
+          // authoritative and answers by deselecting every other child.
+          // Withhold the emit and surface it — the staged change is visible
+          // in the list but has NOT been handed to the parent form.
+          setPreserveError(
+            "Couldn't load the currently linked items, so the pending change was not staged for save.",
+          );
+        }
+        // With a cache, the synchronous emit above already delivered the
+        // last known-good payload; a failed refresh only skips
+        // reconciliation for this round.
+      }
+    };
+
+    refreshAndReconcile();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeset]);
+  }, [changeset, isParentSaved, primaryKey, relationInfo, preserveEpoch]);
 
   // ── Priority #4: Unique FK guard ────────────────────────────────────────
   // In demo mode, use mockRelationInfo; otherwise use hookRelationInfo
@@ -627,6 +793,15 @@ export const ListO2M: React.FC<ListO2MProps> = ({
             sortDirection,
             fields: resolvedFields,
           });
+        }
+        if (isCreatingNew) {
+          // A child was just created and born linked (via the FK default in
+          // the modal). A previously emitted payload doesn't contain it, and
+          // the relation writer treats that payload as authoritative — saving
+          // the parent would deselect the new child. Invalidate the snapshot
+          // and re-emit so the payload is rebuilt from fresh server state.
+          preservedIdsRef.current = null;
+          setPreserveEpoch((v) => v + 1);
         }
         return;
       }
@@ -767,6 +942,19 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         } else {
           await removeItem(item);
         }
+        // The child is gone server-side, but a previously emitted payload
+        // still carries its pk as a preserved entry — saving the parent
+        // would re-link it (or reference a deleted row). Drop it from the
+        // snapshot and re-emit the corrected payload.
+        const removedPk = getPk(item);
+        const cache = preservedIdsRef.current;
+        if (cache && cache.key === primaryKey) {
+          preservedIdsRef.current = {
+            key: cache.key,
+            ids: cache.ids.filter((id) => id !== removedPk),
+          };
+        }
+        setPreserveEpoch((v) => v + 1);
       } catch (err) {
         console.error("Error removing item:", err);
       }
@@ -955,6 +1143,30 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         >
           This relationship has a unique constraint. Only one related item is
           allowed.
+        </Alert>
+      )}
+
+      {/* Preserve-fetch failure: the staged change is rendered but was NOT
+          handed to the parent form (emitting without the preserved id set
+          would deselect every other child on save). */}
+      {preserveError && (
+        <Alert
+          icon={<IconAlertCircle size={16} />}
+          color="red"
+          data-testid="o2m-preserve-error"
+        >
+          <Group justify="space-between" wrap="nowrap">
+            <Text size="sm">{preserveError}</Text>
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              onClick={() => setPreserveEpoch((v) => v + 1)}
+              data-testid="o2m-preserve-retry"
+            >
+              Retry
+            </Button>
+          </Group>
         </Alert>
       )}
 
