@@ -110,6 +110,14 @@ export function useRelationMultipleM2M(
     // ── server state ────────────────────────────────────────────────
     const [fetchedItems, setFetchedItems] = useState<M2MDisplayItem[]>([]);
     const [existingItemCount, setExistingItemCount] = useState(0);
+    // Display-only cache of related rows the caller already had when staging
+    // a selection, keyed by related PK. Deliberately NOT part of `changes`:
+    // the staged payload must stay reference-only (see selectItems), while
+    // the UI still needs these fields to render a label before the first
+    // reload.
+    const [stagedRelatedData, setStagedRelatedData] = useState<
+        Record<string | number, Record<string, unknown>>
+    >({});
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -344,14 +352,13 @@ export function useRelationMultipleM2M(
 
         const newEntries = selectedIds.map((id) => {
             const entry: Record<string, unknown> = {
+                // Reference only: exactly the related PK. Consumers
+                // distinguish "link this existing row" from "deep-create a new
+                // one" by this object carrying nothing but the key, so display
+                // fields must NOT be merged in here — they are returned
+                // separately via `stagedRelatedData` for rendering.
                 [junctionFieldName]: {
                     [relatedPKField]: id,
-                    // Merge in the related item's own fields (e.g. a display
-                    // template's "name") when the caller already fetched them —
-                    // a locally-created junction entry never goes through
-                    // loadItems, so without this its display template renders
-                    // blank until the item is saved and the list reloads.
-                    ...(relatedDataById?.[id] ?? {}),
                 },
             };
 
@@ -374,6 +381,10 @@ export function useRelationMultipleM2M(
 
             return cleanItem(entry);
         });
+
+        if (relatedDataById && Object.keys(relatedDataById).length > 0) {
+            setStagedRelatedData(prev => ({ ...prev, ...relatedDataById }));
+        }
 
         setChanges(prev => ({
             ...prev,
@@ -628,6 +639,11 @@ export function useRelationMultipleM2M(
         displayItems,
         /** Raw items from server (no local changes applied) */
         fetchedItems,
+        /**
+         * Display-only related-row data for locally staged selections, keyed
+         * by related PK. Never part of the save payload — see selectItems.
+         */
+        stagedRelatedData,
         /** Total count accounting for local creates/deletes */
         totalCount,
         /** Whether items are being fetched */

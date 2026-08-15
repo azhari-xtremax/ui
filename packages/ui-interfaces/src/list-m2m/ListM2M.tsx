@@ -85,10 +85,9 @@ import {
     type M2MRelationInfo,
 } from "@buildpad/hooks";
 import { CollectionList, CollectionForm } from "@buildpad/ui-collections";
-import { renderTemplate, resolveDisplayTemplate, extractFieldsFromTemplate, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
+import { renderTemplate, resolveDisplayTemplate, splitJunctionTemplateFields, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
 import { useRelationMultipleM2M, type M2MDisplayItem, type M2MChangesItem } from "@buildpad/hooks";
 import { useRelationPermissionsM2M } from "@buildpad/hooks";
-import { apiRequest } from "@buildpad/hooks";
 import { mergeTranslations, interpolate, formatItemCount, type M2MTranslations } from "./translations";
 
 // ── Props ──────────────────────────────────────────────────────────
@@ -635,6 +634,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         moveItemDown,
         reorderItems,
         getSelectedRelatedPKs,
+        stagedRelatedData,
         getChanges,
         hasChanges,
         setLocalChanges,
@@ -834,14 +834,19 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 const resolved = f === "id" && relatedPkField !== "id" ? relatedPkField : f;
                 return `${relationInfo.junctionField.field}.${resolved}`;
             });
-            // The row-display template (e.g. "{{role_id.name}}") references
-            // fields via a junction-relative path — matching the exact query
-            // syntax already, unlike the bare `fields` prop above which gets
-            // junction-prefixed. Without this, only whatever `fields` happens
-            // to list gets fetched (defaulting to just the bootstrap "id"),
-            // so a template referencing anything else (e.g. the related
-            // item's own `name`) renders blank — nothing else was ever fetched.
-            for (const templateField of extractFieldsFromTemplate(resolvedTemplate)) {
+            // Fetch whatever the row-display template references, or it
+            // renders blank. Template paths must be normalised to the
+            // JUNCTION scope first: only an explicit junction-relative
+            // template (`{{role_id.name}}`) already matches the query
+            // syntax — a related-relative one (`{{name}}`, which the prop
+            // docs imply, and which the related collection's own
+            // display_template and the `{{ pk }}` bootstrap always produce)
+            // would otherwise ask the junction table for a column it does
+            // not have and error the whole request.
+            for (const templateField of splitJunctionTemplateFields(
+                resolvedTemplate,
+                relationInfo.junctionField.field,
+            ).junction) {
                 if (!queryFields.includes(templateField)) queryFields.push(templateField);
             }
             // Always include junction PK and sort field
@@ -898,60 +903,55 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         [openEditDrawer, isEffectivelyNonEditable],
     );
 
-    // Fields to request when fetching selected related items directly (see
-    // handleSelectExisting below) — same fields the display template needs,
-    // but relative to the related item itself rather than junction-relative
-    // (a template path's leading segment matching the junction field name is
-    // stripped, e.g. "role_id.name" -> "name").
+    // Fields the select modal must load for each candidate row, so a picked
+    // row already carries whatever the display template needs — expressed
+    // relative to the RELATED collection. Template paths are normalised by
+    // the shared splitter; `fields`-prop entries are bare related-item names
+    // by contract, so a dotted one (which the junction query supports) is
+    // dropped here rather than sent to the related collection, where it is
+    // not a column.
     const relatedItemFields = useMemo(() => {
         if (!relationInfo) return fields;
-        const junctionFieldName = relationInfo.junctionField.field;
         const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
-        const result = new Set<string>(fields.map((f) => (f === "id" ? relatedPkField : f)));
-        for (const templateField of extractFieldsFromTemplate(resolvedTemplate)) {
-            if (templateField === junctionFieldName) {
-                result.add(relatedPkField);
-            } else if (templateField.startsWith(`${junctionFieldName}.`)) {
-                result.add(templateField.slice(junctionFieldName.length + 1));
-            } else {
-                result.add(templateField);
-            }
+        const result = new Set<string>([relatedPkField]);
+        for (const f of fields) {
+            if (f.includes(".")) continue;
+            result.add(f === "id" ? relatedPkField : f);
         }
-        result.add(relatedPkField);
+        for (const f of splitJunctionTemplateFields(
+            resolvedTemplate,
+            relationInfo.junctionField.field,
+        ).related) {
+            result.add(f);
+        }
         return [...result];
     }, [fields, resolvedTemplate, relationInfo]);
 
     const handleSelectExisting = useCallback(
-        async (selectedIds: (string | number)[]) => {
-            if (relationInfo && !isMockMode && selectedIds.length > 0) {
-                try {
-                    const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
-                    const params = new URLSearchParams({
-                        fields: relatedItemFields.join(","),
-                        filter: JSON.stringify({ [relatedPkField]: { _in: selectedIds } }),
-                        limit: String(selectedIds.length),
-                    });
-                    const response = await apiRequest<
-                        { data: Record<string, unknown>[] } | Record<string, unknown>[]
-                    >(`/api/items/${relationInfo.relatedCollection.collection}?${params}`);
-                    const rows = Array.isArray(response) ? response : (response.data ?? []);
-                    const relatedDataById: Record<string | number, Record<string, unknown>> = {};
-                    for (const row of rows) {
-                        const id = row[relatedPkField] as string | number;
-                        relatedDataById[id] = row;
+        (
+            selectedIds: (string | number)[],
+            selectedRows?: Record<string, unknown>[],
+        ) => {
+            // The select modal already loaded these rows (it rendered them),
+            // and now hands them over — no second round-trip, and nothing to
+            // await, so the modal still closes on the same tick as the click.
+            let relatedDataById:
+                | Record<string | number, Record<string, unknown>>
+                | undefined;
+            if (relationInfo && selectedRows?.length) {
+                const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
+                relatedDataById = {};
+                for (const row of selectedRows) {
+                    const rowId = row[relatedPkField] as string | number | undefined;
+                    if (rowId !== undefined && rowId !== null) {
+                        relatedDataById[rowId] = row;
                     }
-                    selectItems(selectedIds, relatedDataById);
-                    closeSelectModal();
-                    return;
-                } catch {
-                    // Non-fatal: fall through to id-only staging — the label
-                    // resolves once the item is saved and the list reloads.
                 }
             }
-            selectItems(selectedIds);
+            selectItems(selectedIds, relatedDataById);
             closeSelectModal();
         },
-        [selectItems, closeSelectModal, relationInfo, relatedItemFields, isMockMode],
+        [selectItems, closeSelectModal, relationInfo],
     );
 
     const handleRemoveItem = useCallback(
@@ -1058,23 +1058,40 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         (item: M2MDisplayItem): string => {
             if (!relationInfo) return String(item.id ?? "");
 
-            // For M2M, related data is nested under the junction field
-            const relatedData = item[relationInfo.junctionField.field] as
+            // For M2M, related data is nested under the junction field. A
+            // locally staged pick has only the reference there, so fall back
+            // to the display-only cache the hook kept for it.
+            const nested = item[relationInfo.junctionField.field] as
                 | Record<string, unknown>
                 | undefined;
+            const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
+            const stagedKey = nested?.[relatedPkField] as string | number | undefined;
+            const staged =
+                stagedKey !== undefined && stagedKey !== null
+                    ? stagedRelatedData?.[stagedKey]
+                    : undefined;
+            const relatedData =
+                nested && staged ? { ...staged, ...nested } : (nested ?? staged);
 
             if (resolvedTemplate && relatedData && typeof relatedData === "object") {
-                // An explicit, author-configured template uses junction-
-                // relative paths (e.g. "{{role_id.name}}", matching how the
-                // field's own options.template is written) — those resolve
-                // against the full junction item. The bootstrap fallback
-                // template from resolveDisplayTemplate's last rung
-                // ("{{ id }}") instead means "the related item's own PK",
-                // relative to relatedData, not the junction row's id.
-                // Merge relatedData's own fields onto item (item's real
-                // keys win on collision) so a single renderTemplate() call
-                // resolves either convention correctly.
-                return renderTemplate(resolvedTemplate, { ...relatedData, ...item });
+                // Templates come in both conventions: junction-relative
+                // ("{{role_id.name}}") and related-relative ("{{name}}", which
+                // the related collection's display_template and the "{{ pk }}"
+                // bootstrap always produce). Resolve against the junction item
+                // with the related fields spread LAST, so a bare path finds the
+                // related item's value — including "{{ id }}", which means the
+                // related PK — while "{{role_id.name}}" still resolves through
+                // item's own junction key. Junction-only columns (sort, the
+                // reverse FK) stay reachable but never shadow a related field.
+                return renderTemplate(resolvedTemplate, {
+                    ...item,
+                    ...relatedData,
+                    // Also expose the merged related data under the junction
+                    // key, so a junction-relative path resolves against the
+                    // full record rather than the reference-only stub a
+                    // locally staged pick carries.
+                    [relationInfo.junctionField.field]: relatedData,
+                });
             }
 
             // Fallback: show first available field value
@@ -1087,7 +1104,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
 
             return String(item.id ?? "");
         },
-        [relationInfo, resolvedTemplate, fields],
+        [relationInfo, resolvedTemplate, fields, stagedRelatedData],
     );
 
     // ── Selection filter for select modal ───────────────────────────
@@ -1154,9 +1171,10 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         // second related item).
         if (isCreatingNew && data?.id != null) {
             const newId = data.id as string | number;
-            // `data` is the full created record CollectionForm just returned —
-            // pass it straight through as the related-item data so the display
-            // template resolves immediately, without another round-trip fetch.
+            // `data` is the full record CollectionForm just created. It is
+            // passed as DISPLAY data only — selectItems keeps the staged
+            // payload reference-only, so the junction row still links to the
+            // existing record rather than deep-creating a second one.
             selectItems([newId], { [newId]: data });
         }
 
@@ -1170,11 +1188,11 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 const resolved = f === "id" && relatedPkField !== "id" ? relatedPkField : f;
                 return `${relationInfo.junctionField.field}.${resolved}`;
             });
-            // See the matching comment in the load-items effect above —
-            // the display template references fields via a junction-relative
-            // path already, and must be fetched too or a reload after
-            // editing a related item reverts the row back to a blank label.
-            for (const templateField of extractFieldsFromTemplate(resolvedTemplate)) {
+            // See the matching comment in the load-items effect above.
+            for (const templateField of splitJunctionTemplateFields(
+                resolvedTemplate,
+                relationInfo.junctionField.field,
+            ).junction) {
                 if (!queryFields.includes(templateField)) queryFields.push(templateField);
             }
             queryFields.push(relationInfo.junctionPrimaryKeyField.field);
@@ -1646,6 +1664,10 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                         <CollectionList
                             collection={relationInfo.relatedCollection.collection}
                             enableSelection
+                            // Load whatever the row-display template needs, so a
+                            // picked row already carries it and the staged label
+                            // resolves without a second fetch.
+                            fields={relatedItemFields}
                             filter={selectionFilter}
                             bulkActions={[
                                 {

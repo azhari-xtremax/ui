@@ -36,8 +36,15 @@ jest.mock('@buildpad/hooks', () => {
                 delete: [] as (string | number)[],
             });
 
+            const [stagedRelatedData, setStagedRelatedData] = ReactActual.useState({} as Record<string | number, Record<string, unknown>>);
+
+            // Mirrors the real hook's contract: the staged payload stays
+            // reference-only ({pk} and nothing else, which is what
+            // CollectionForm uses to tell "link existing" from "deep-create"),
+            // and display data is kept separately.
             const selectItems = ReactActual.useCallback((ids: (string | number)[], relatedDataById?: Record<string | number, Record<string, unknown>>) => {
                 mockSelectItems(ids, relatedDataById);
+                if (relatedDataById) setStagedRelatedData((prev: any) => ({ ...prev, ...relatedDataById }));
                 setChanges((prev: any) => ({
                     ...prev,
                     create: [
@@ -45,7 +52,7 @@ jest.mock('@buildpad/hooks', () => {
                         ...ids.map((id: string | number) => ({
                             $type: 'created',
                             id,
-                            tag_id: { id, ...(relatedDataById?.[id] ?? {}) },
+                            tag_id: { id },
                         })),
                     ],
                 }));
@@ -88,6 +95,7 @@ jest.mock('@buildpad/hooks', () => {
                 reorderItems,
                 moveItemUp,
                 moveItemDown,
+                stagedRelatedData,
                 getSelectedRelatedPKs,
                 getChanges,
                 hasChanges: changes.create.length > 0 || changes.update.length > 0 || changes.delete.length > 0,
@@ -110,7 +118,13 @@ jest.mock('@buildpad/ui-collections', () => ({
     CollectionList: ({ bulkActions }: any) => (
         <div data-testid="collection-list">
             {bulkActions && (
-                <button onClick={() => bulkActions[0].action([42])}>Add Selected</button>
+                <button
+                    onClick={() =>
+                        bulkActions[0].action([42], [{ id: 42, name: 'Announcement' }])
+                    }
+                >
+                    Add Selected
+                </button>
             )}
         </div>
     ),
@@ -292,16 +306,13 @@ describe('ListM2M fields= query PK resolution', () => {
 });
 
 describe('ListM2M select-existing label resolution', () => {
-    // Picking an existing item via the select modal only ever staged
-    // `{ tag_id: { id } }` locally (selectItems has no fetch of its own) — a
-    // locally-created junction entry never goes through loadItems, so its
-    // display template rendered blank until the parent form was saved and
-    // the list reloaded. handleSelectExisting must fetch the selected
-    // related items' own fields (per the display template) and pass them
-    // into selectItems so the label resolves immediately.
-    it('fetches the selected related items and merges their fields into the staged junction entry', async () => {
+    // Picking an item stages only a reference locally, so a display template
+    // had nothing to resolve against and rendered blank until the parent form
+    // was saved and the list reloaded. The select modal already loaded these
+    // rows, so it hands them back with the ids — no extra request — and the
+    // label resolves immediately.
+    it('uses the rows supplied by the select modal to resolve the label immediately', async () => {
         mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
-        mockApiRequest.mockResolvedValue({ data: [{ id: 42, name: 'Announcement' }] });
 
         render(
             <TestWrapper>
@@ -311,22 +322,15 @@ describe('ListM2M select-existing label resolution', () => {
 
         fireEvent.click(screen.getByText('Add Existing'));
         fireEvent.click(await screen.findByText('Add Selected'));
-
-        await waitFor(() => expect(mockApiRequest).toHaveBeenCalled());
-        const [url] = mockApiRequest.mock.calls.at(-1) ?? [];
-        expect(url).toContain('/api/items/tags');
-        expect(url).toContain('name');
 
         await waitFor(() => {
             expect(mockSelectItems).toHaveBeenCalledWith([42], { 42: { id: 42, name: 'Announcement' } });
         });
-
         expect(await screen.findByText('Announcement')).toBeInTheDocument();
     });
 
-    it('falls back to id-only staging when the fetch fails', async () => {
+    it('does not issue its own request for the selected rows', async () => {
         mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
-        mockApiRequest.mockRejectedValue(new Error('network error'));
 
         render(
             <TestWrapper>
@@ -336,10 +340,37 @@ describe('ListM2M select-existing label resolution', () => {
 
         fireEvent.click(screen.getByText('Add Existing'));
         fireEvent.click(await screen.findByText('Add Selected'));
+        await waitFor(() => expect(mockSelectItems).toHaveBeenCalled());
 
-        await waitFor(() => {
-            expect(mockSelectItems).toHaveBeenCalledWith([42], undefined);
-        });
+        expect(mockApiRequest).not.toHaveBeenCalled();
+    });
+
+    // The staged payload is what CollectionForm inspects to tell "link this
+    // existing row" from "deep-create a new one" — it must carry the related
+    // PK and nothing else, however much display data the modal supplied.
+    it('keeps the staged junction payload reference-only', async () => {
+        mockUseRelationM2M.mockReturnValue({ relationInfo: RELATION_INFO, loading: false, error: null });
+
+        const onChange = jest.fn();
+        render(
+            <TestWrapper>
+                <ListM2M
+                    collection="articles"
+                    field="tags"
+                    primaryKey={1}
+                    template="{{tag_id.name}}"
+                    onChange={onChange}
+                />
+            </TestWrapper>
+        );
+
+        fireEvent.click(screen.getByText('Add Existing'));
+        fireEvent.click(await screen.findByText('Add Selected'));
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+
+        const staged = onChange.mock.calls.at(-1)![0].create[0];
+        expect(Object.keys(staged.tag_id)).toEqual(['id']);
+        expect(staged.tag_id).toEqual({ id: 42 });
     });
 });
 
