@@ -17,6 +17,15 @@
  * actually resolve, **`value` here is the renderer-recognized id** while the
  * `types` compatibility mirrors `registry.json`.
  *
+ * `types` is therefore a **mirror of the registry's declared compatibility, not
+ * a claim about the leaf component's standalone capability.** The two can
+ * disagree: a `csv` column hands the interface a comma-separated string rather
+ * than an array, and the FormFieldInterface pipeline normalizes that for its
+ * multi-select leaves — but a consumer who installs a leaf through the registry
+ * and renders it directly gets the raw string. `tests/interface-catalog.test.ts`
+ * pins this file against `registry.json` in both directions; whether a given
+ * leaf actually honours a declared type is the leaf's own test's job.
+ *
  * Every interface listed here renders through `@buildpad/ui-interfaces`. The
  * ones that need extra rendering libraries — rich text (`@mantine/tiptap` +
  * `@tiptap/*`), block editor (`@editorjs/*`), and map (`maplibre-gl` +
@@ -27,7 +36,17 @@
  * `form-builder` → `collection-form` → `vform` pulls every interface). Excluded
  * still are relational (m2o/o2m/m2m/m2a), file, and group/presentation
  * interfaces: they need relations, junctions, or store no value, so they are not
- * provisionable as a single column (a later pass).
+ * provisionable as a single column (a later pass). Also excluded, and easy to
+ * mistake for an oversight because it sits in the registry's `selection` group:
+ *   - `input-autocomplete-api` — needs `meta.options.url` (plus
+ *     `resultsPath`/`textPath`/`valuePath`) pointing at an external endpoint.
+ *     The component no-ops without it and the builder has no editor for those
+ *     options, so it is not provisionable from a column type alone.
+ * Record any future exclusion both here and in the `INTENTIONALLY_EXCLUDED`
+ * table in `tests/interface-catalog.test.ts` — that test walks
+ * registry → catalog and will otherwise fail, which is the point: a genuine
+ * omission cannot ship silently the way the `select-multiple-checkbox-tree`
+ * entry once did.
  *
  * @module @buildpad/utils/interface-catalog
  */
