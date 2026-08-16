@@ -50,6 +50,8 @@ export interface SelectMultipleDropdownProps {
   hidePickedOptions?: boolean;
   width?: string;
   color?: string;
+  /** Value is visible but not editable. Mantine's MultiSelect supports this natively. */
+  readOnly?: boolean;
   'aria-label'?: string;
 }
 
@@ -59,6 +61,7 @@ export function SelectMultipleDropdown({
   onChange,
   label,
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   choices = [],
@@ -141,6 +144,9 @@ export function SelectMultipleDropdown({
   // Mantine's MultiSelect always hands us an array regardless of how the
   // value is actually stored.
   const emit = (next: (string | number | boolean)[] | null) => {
+    // Defence in depth behind MultiSelect's native readOnly: the "other" text
+    // path below calls emit() directly, outside the combobox.
+    if (disabled || readOnly) return;
     if (isCsvStorage && Array.isArray(next)) {
       onChange?.(next.join(','));
     } else {
@@ -316,10 +322,11 @@ export function SelectMultipleDropdown({
         value={stringValue}
         onChange={handleChange}
         disabled={disabled}
+        readOnly={readOnly}
         error={error}
         required={required}
         searchable={searchable}
-        clearable={clearable}
+        clearable={clearable && !readOnly}
         maxValues={maxValues}
         hidePickedOptions={hidePickedOptions}
         withAsterisk={required}

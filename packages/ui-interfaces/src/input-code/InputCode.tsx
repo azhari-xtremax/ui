@@ -29,6 +29,12 @@ export interface InputCodeProps extends Omit<React.ComponentPropsWithRef<'textar
   label?: string;
   /** Whether the field is disabled */
   disabled?: boolean;
+  /**
+   * Content is visible but not editable. Reached the textarea only via the
+   * `...props` rest spread before, which left `fillTemplate` and its button
+   * gated on `disabled` alone.
+   */
+  readOnly?: boolean;
   /** Whether the field is required */
   required?: boolean;
   /** Placeholder text */
@@ -81,6 +87,7 @@ export const InputCode = forwardRef<HTMLTextAreaElement, InputCodeProps>(({
   type,
   label,
   disabled = false,
+  readOnly = false,
   required = false,
   placeholder = 'Enter code...',
   error,
@@ -113,6 +120,7 @@ export const InputCode = forwardRef<HTMLTextAreaElement, InputCodeProps>(({
   }, [internalValue]);
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (disabled || readOnly) return;
     const newValue = event.target.value;
     setInternalValue(newValue);
 
@@ -132,7 +140,7 @@ export const InputCode = forwardRef<HTMLTextAreaElement, InputCodeProps>(({
   };
 
   const fillTemplate = () => {
-    if (template && !disabled) {
+    if (template && !disabled && !readOnly) {
       setInternalValue(template);
       onChange?.(template);
     }
@@ -234,6 +242,7 @@ export const InputCode = forwardRef<HTMLTextAreaElement, InputCodeProps>(({
                 color: disabled ? 'var(--mantine-color-gray-6)' : 'inherit',
                 tabSize: 4,
               }}
+              readOnly={readOnly}
               {...props}
             />
 
@@ -250,7 +259,7 @@ export const InputCode = forwardRef<HTMLTextAreaElement, InputCodeProps>(({
                     zIndex: 4,
                   }}
                   onClick={fillTemplate}
-                  disabled={disabled}
+                  disabled={disabled || readOnly}
                 >
                   <IconPlaylistAdd size={16} />
                 </Button>

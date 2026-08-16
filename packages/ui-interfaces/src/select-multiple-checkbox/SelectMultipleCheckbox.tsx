@@ -46,6 +46,13 @@ export interface SelectMultipleCheckboxProps {
   iconOff?: string;
   color?: string;
   itemsShown?: number;
+  /**
+   * Value is visible but not editable. Mantine's Checkbox has no native
+   * readOnly, so it is enforced at the `emit` chokepoint below plus pointer
+   * suppression — deliberately not by setting `disabled`, which would grey the
+   * control out and drop it from the tab order.
+   */
+  readOnly?: boolean;
 }
 
 export function SelectMultipleCheckbox({
@@ -54,6 +61,7 @@ export function SelectMultipleCheckbox({
   onChange,
   label,
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   choices = [],
@@ -81,6 +89,10 @@ export function SelectMultipleCheckbox({
   const isCsvStorage = type === 'csv' || typeof value === 'string';
   // Emit an array or, for csv storage, join it back to a comma-string.
   const emit = (next: (string | number | boolean)[] | null) => {
+    // Single chokepoint for every mutation path (checkbox, "other" text, "other"
+    // checkbox, clear). Gating here rather than per-handler means a new call
+    // site cannot silently bypass the read-only guard.
+    if (disabled || readOnly) return;
     if (isCsvStorage && Array.isArray(next)) {
       onChange?.(next.join(','));
     } else {
@@ -243,7 +255,11 @@ export function SelectMultipleCheckbox({
   }
 
   return (
-    <Stack gap="xs" style={{ width }}>
+    <Stack
+      gap="xs"
+      style={{ width, ...(readOnly && { pointerEvents: 'none' as const, opacity: 0.8 }) }}
+      {...(readOnly && { 'aria-readonly': true })}
+    >
       {label && (
         <Text size="sm" fw={500}>
           {label}

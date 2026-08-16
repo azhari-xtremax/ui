@@ -255,11 +255,16 @@ export const ListM2A: React.FC<ListM2AProps> = ({
     description,
     error,
     required = false,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    readOnly: _readOnly,
+    readOnly = false,
     mockItems,
     mockRelationInfo,
 }) => {
+    // `readOnly` was previously destructured into an unused variable, so every
+    // mutation affordance below was gated on `disabled` alone and a read-only
+    // M2A field stayed fully create/select/delete/reorder capable. Mirrors the
+    // `isEffectivelyDisabled` flag ListM2M and ListO2M already use.
+    const isEffectivelyDisabled = disabled || readOnly;
+
     // Determine if we're in demo/mock mode
     const isDemoMode = mockItems !== undefined;
 
@@ -574,7 +579,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
     // ── Drag & Drop (DnD) setup ──
     // Drag is only allowed when: there's a sortField, not disabled, and all items (across all pages) fit on one page
     const hasSortField = !!relationInfo?.sortField;
-    const canDrag = hasSortField && !disabled && totalCount <= limit;
+    const canDrag = hasSortField && !isEffectivelyDisabled && totalCount <= limit;
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -798,7 +803,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                             </Text>
                         )}
 
-                        {!disabled && enableSelect && selectableCollections.length > 0 && (
+                        {!isEffectivelyDisabled && enableSelect && selectableCollections.length > 0 && (
                             <Menu shadow="md" width={200}>
                                 <Menu.Target>
                                     <Button
@@ -825,7 +830,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                             </Menu>
                         )}
 
-                        {!disabled && enableCreate && creatableCollections.length > 0 && (
+                        {!isEffectivelyDisabled && enableCreate && creatableCollections.length > 0 && (
                             <Menu shadow="md" width={200}>
                                 <Menu.Target>
                                     <Tooltip 
@@ -880,7 +885,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                 )}
 
                 {/* Drag disabled notice (paginated) */}
-                {hasSortField && !disabled && totalCount > limit && (
+                {hasSortField && !isEffectivelyDisabled && totalCount > limit && (
                     <Alert icon={<IconAlertCircle size={16} />} color="warning" mb="md" data-testid="m2a-drag-disabled-notice">
                         Drag &amp; drop sorting is disabled when items are paginated. Reduce items or increase page size to enable.
                     </Alert>
@@ -961,7 +966,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </Tooltip>
                                                 )}
 
-                                                {!disabled && isAllowed && !isDeleted && canEditItem(item) && (
+                                                {!isEffectivelyDisabled && isAllowed && !isDeleted && canEditItem(item) && (
                                                     <Tooltip label="Edit">
                                                         <ActionIcon
                                                             variant="subtle"
@@ -975,7 +980,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </Tooltip>
                                                 )}
 
-                                                {!disabled && isDeleted && (
+                                                {!isEffectivelyDisabled && isDeleted && (
                                                     <Tooltip label="Undo remove">
                                                         <ActionIcon
                                                             variant="subtle"
@@ -988,7 +993,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </Tooltip>
                                                 )}
 
-                                                {!disabled && !isDeleted && canDeleteItem(item) && (
+                                                {!isEffectivelyDisabled && !isDeleted && canDeleteItem(item) && (
                                                     <Tooltip label="Remove">
                                                         <ActionIcon
                                                             variant="subtle"
@@ -1036,7 +1041,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                         textDecoration: isDeleted ? 'line-through' : undefined,
                                         borderColor: isCreated ? 'var(--mantine-color-green-4)' : isUpdated ? 'var(--mantine-color-yellow-4)' : isDeleted ? 'var(--mantine-color-red-3)' : undefined,
                                     }}
-                                    onClick={() => !disabled && isAllowed && !isDeleted && canEditItem(item) && handleEditItem(item)}
+                                    onClick={() => !isEffectivelyDisabled && isAllowed && !isDeleted && canEditItem(item) && handleEditItem(item)}
                                     data-testid={`m2a-item-${item.id}`}
                                     data-item-type={item.$type}
                                 >
@@ -1071,7 +1076,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     <IconExternalLink size={14} />
                                                 </ActionIcon>
                                             )}
-                                            {!disabled && isDeleted && (
+                                            {!isEffectivelyDisabled && isDeleted && (
                                                 <Tooltip label="Undo remove">
                                                     <ActionIcon
                                                         variant="subtle"
@@ -1086,7 +1091,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </ActionIcon>
                                                 </Tooltip>
                                             )}
-                                            {!disabled && !isDeleted && canDeleteItem(item) && (
+                                            {!isEffectivelyDisabled && !isDeleted && canDeleteItem(item) && (
                                                 <Tooltip label="Remove">
                                                     <ActionIcon
                                                         variant="subtle"
@@ -1173,7 +1178,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                         targetCollection={selectedCollection}
                         isNew={isCreatingNew}
                         parentPrimaryKey={primaryKey}
-                        disabled={disabled}
+                        disabled={isEffectivelyDisabled}
                         onCancel={() => {
                             closeEditModal();
                             setCurrentlyEditing(null);
