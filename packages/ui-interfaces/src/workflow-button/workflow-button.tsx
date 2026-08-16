@@ -74,6 +74,7 @@ const defaultApiClient = {
  */
 export function WorkflowButton({
   disabled = false,
+  readOnly = false,
   placeholder = 'Initial State',
   choices = [],
   alwaysVisible = true,
@@ -134,6 +135,7 @@ export function WorkflowButton({
   // Handle transition selection
   const handleSelection = useCallback(
     async (selectedCommand: string | number) => {
+      if (disabled || readOnly) return;
       setTransitioning(true);
       setMenuOpened(false);
 
@@ -149,7 +151,7 @@ export function WorkflowButton({
         setTransitioning(false);
       }
     },
-    [executeTransition, workflowField, onChange, onTransition]
+    [executeTransition, workflowField, onChange, onTransition, disabled, readOnly]
   );
 
   if (loading) {
@@ -191,7 +193,7 @@ export function WorkflowButton({
               >
                 <Menu.Target>
                   <Button
-                    disabled={disabled || transitioning || commands.length === 0}
+                    disabled={disabled || readOnly || transitioning || commands.length === 0}
                     rightSection={
                       commands.length > 0 && !transitioning ? (
                         <IconChevronDown size={16} />

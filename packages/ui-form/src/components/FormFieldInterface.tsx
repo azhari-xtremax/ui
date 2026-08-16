@@ -235,8 +235,12 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
   }, [interfaceConfig.type]);
 
   // Build props for interface component
-  // Merge interfaceConfig.props (from @buildpad/utils) with runtime props
-  // When nonEditable, suppress onChange and mark disabled+readonly
+  // Merge interfaceConfig.props (from @buildpad/utils) with runtime props.
+  //
+  // Two distinct locked states, per S2.6:
+  //   readonly     — value visible, not editable, still focusable and un-greyed
+  //   nonEditable  — no interaction at all; keeps `disabled` on top of readOnly
+  // Both suppress onChange; only nonEditable sets `disabled`.
   const isEffectivelyReadonly = readonly || nonEditable;
 
   // DaaS omits hash field values (e.g. password) from API responses for security.
@@ -311,18 +315,13 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
 
   const interfaceProps: any = {
     value: isMultiSelectInterface ? normalizedMultiSelectValue : effectiveValue,
-    onChange: nonEditable ? undefined : (isMultiSelectInterface ? handleMultiSelectChange : onChange),
-    // S2.6: a merely-readonly field (readonly=true, nonEditable=false) must
-    // NOT also set disabled=true — the two are visually and semantically
-    // distinct (readonly: value visible, not editable; disabled: greyed
-    // out, inert), and every leaf already receives `readOnly` separately.
-    // nonEditable is stronger — no interaction at all, including focus —
-    // so it keeps the disabled styling on top of readOnly.
-    disabled: disabled || nonEditable,
-    readOnly: isEffectivelyReadonly,
-    required: nonEditable ? false : required,
+    // A locked field can never be satisfied by the user, so it must not render
+    // the required asterisk or set aria-required — that would tell assistive
+    // tech to fill a field the user may not edit.
+    required: isEffectivelyReadonly ? false : required,
     error,
-    autofocus,
+    // Never steal initial focus into a field that cannot be edited.
+    autofocus: isEffectivelyReadonly ? false : autofocus,
     // Note: label is NOT passed here because FormField already renders FormFieldLabel.
     // We forward an aria-label so the underlying input still has a programmatic
     // accessible name (axe "label" rule). Each interface spreads this onto its
@@ -339,9 +338,28 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     maxLength: field.schema?.max_length,
     nullable: field.schema?.is_nullable,
     defaultValue: field.schema?.default_value,
-    
+
     // Spread interface-specific props from InterfaceConfig (includes meta.options)
     ...interfaceConfig.props,
+
+    // ── Lock props: declared AFTER the meta.options spread so they win ──
+    // Admin-authored options JSON flows into interfaceConfig.props unfiltered,
+    // so a stray `readOnly: false` / `disabled: false` / `onChange` key would
+    // otherwise unlock the control. That was only half-effective before
+    // (defeating readOnly still left disabled=true), but is decisive now that
+    // readonly no longer implies disabled.
+    //
+    // onChange is suppressed for readonly as well as nonEditable: with
+    // `disabled` gone for a merely-readonly field this is the container-level
+    // write block, and it must not depend on each leaf honouring `readOnly`.
+    onChange: isEffectivelyReadonly ? undefined : (isMultiSelectInterface ? handleMultiSelectChange : onChange),
+    // S2.6: a merely-readonly field (readonly=true, nonEditable=false) must NOT
+    // also set disabled=true — the two are visually and semantically distinct
+    // (readonly: value visible, not editable; disabled: greyed out, inert).
+    // nonEditable is stronger — no interaction at all, including focus — so it
+    // keeps the disabled styling on top of readOnly.
+    disabled: disabled || nonEditable,
+    readOnly: isEffectivelyReadonly,
   };
 
   // Note: File interfaces (File, FileImage, Files) now use @buildpad/hooks useFiles

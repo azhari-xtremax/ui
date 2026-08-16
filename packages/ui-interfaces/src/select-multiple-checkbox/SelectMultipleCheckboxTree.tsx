@@ -53,6 +53,12 @@ export interface SelectMultipleCheckboxTreeProps {
   onChange?: (value: (string | number | boolean)[] | null) => void;
   label?: string;
   disabled?: boolean;
+  /**
+   * Value is visible but not editable. Enforced at the `handleToggle`
+   * chokepoint plus pointer suppression, not by setting `disabled` — the tree
+   * stays readable, searchable and focusable.
+   */
+  readOnly?: boolean;
   required?: boolean;
   error?: string;
   choices?: TreeChoice[];
@@ -69,6 +75,8 @@ interface TreeNodeProps {
   searchQuery: string;
   showSelectionOnly: boolean;
   disabled: boolean;
+  /** Selection is locked, but the tree stays browsable (chevrons remain live). */
+  readOnly: boolean;
   level: number;
   color: string;
   /** Values whose subtree contains a search/selection match — force-expanded regardless of prior manual collapse (S4.9) */
@@ -130,6 +138,7 @@ export function SelectMultipleCheckboxTree({
   onChange,
   label,
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   choices = [],
@@ -304,7 +313,7 @@ export function SelectMultipleCheckboxTree({
 
   // Handle checkbox toggle
   const handleToggle = useCallback((toggleValue: string | number | boolean, checked: boolean) => {
-    if (disabled) {
+    if (disabled || readOnly) {
       return;
     }
 
@@ -401,7 +410,7 @@ export function SelectMultipleCheckboxTree({
     }
 
     onChange?.(newValue.length > 0 ? newValue : null);
-  }, [value, onChange, disabled, choices, valueCombining, getChildrenValues, getLeafValues]);
+  }, [value, onChange, disabled, readOnly, choices, valueCombining, getChildrenValues, getLeafValues]);
 
   // Show choices validation message
   if (!choices || choices.length === 0) {
@@ -481,6 +490,7 @@ export function SelectMultipleCheckboxTree({
                 searchQuery={debouncedSearch}
                 showSelectionOnly={showSelectionOnly}
                 disabled={disabled}
+                readOnly={readOnly}
                 level={0}
                 color={normalizedColor}
                 autoExpandValues={autoExpandValues}
@@ -538,6 +548,7 @@ function TreeNode({
   searchQuery,
   showSelectionOnly,
   disabled,
+  readOnly,
   level,
   color,
   autoExpandValues,
@@ -681,9 +692,13 @@ function TreeNode({
           wrapperProps={{
             'data-testid': `checkbox-${nodePath}`,
           }}
+          {...(readOnly && {
+            style: { pointerEvents: 'none' as const, opacity: 0.8 },
+            'aria-readonly': true,
+          })}
           styles={{
             label: {
-              cursor: disabled ? 'default' : 'pointer',
+              cursor: disabled || readOnly ? 'default' : 'pointer',
             },
           }}
         />
@@ -703,6 +718,7 @@ function TreeNode({
                 searchQuery={searchQuery}
                 showSelectionOnly={showSelectionOnly}
                 disabled={disabled}
+                readOnly={readOnly}
                 level={level + 1}
                 color={color}
                 autoExpandValues={autoExpandValues}

@@ -109,6 +109,12 @@ export interface WorkflowButtonProps {
   value?: string | number | null;
   /** Whether the button is disabled */
   disabled?: boolean;
+  /**
+   * Current state is visible but no transition may be triggered. Menu commands
+   * execute a real state transition, so they must be gated on this as well as
+   * on `disabled`.
+   */
+  readOnly?: boolean;
   /** Placeholder text when no workflow exists */
   placeholder?: string;
   /** Allow selecting "none" option */
