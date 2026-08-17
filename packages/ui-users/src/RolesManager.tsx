@@ -160,7 +160,12 @@ export const RolesManager: React.FC<RolesManagerProps> = ({
     const role = item as unknown as Role;
     switch (header.value) {
       case 'icon':
-        return <IconDisplay icon={role.icon} />;
+        // Explicit fallback: IconDisplay's default is the generic
+        // unknown-icon glyph, which reads as broken data for the common case
+        // of a role simply having no icon set. A users-group glyph is the
+        // right empty state here — the sibling policy surfaces pass
+        // `fallback={IconShield}` for the same reason.
+        return <IconDisplay icon={role.icon} fallback={IconUsersGroup} />;
       case 'name':
         return (
           <Text size="sm" fw={500}>
