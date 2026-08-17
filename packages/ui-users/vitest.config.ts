@@ -22,7 +22,16 @@ export default defineConfig({
       '@buildpad/services': resolve(__dirname, '../services/src'),
       '@buildpad/hooks': resolve(__dirname, '../hooks/src'),
       '@buildpad/utils': resolve(__dirname, '../utils/src'),
+      // Deep subpath alias must precede the package alias — Vite matches these
+      // in order, so a bare '@buildpad/ui-interfaces' entry would otherwise
+      // rewrite '@buildpad/ui-interfaces/select-icon' to '<src>/select-icon'
+      // only by luck of path shape. Declared explicitly for clarity.
+      '@buildpad/ui-interfaces/select-icon': resolve(__dirname, '../ui-interfaces/src/select-icon'),
       '@buildpad/ui-interfaces': resolve(__dirname, '../ui-interfaces/src'),
+      // Without this, RolesManager/PoliciesManager/UsersManager — every suite
+      // that renders a table — fails to resolve and silently collects 0 tests
+      // unless ui-table happens to have been built.
+      '@buildpad/ui-table': resolve(__dirname, '../ui-table/src'),
       'react': resolve(rootModules, 'react'),
       'react-dom': resolve(rootModules, 'react-dom'),
       'react/jsx-runtime': resolve(rootModules, 'react/jsx-runtime'),

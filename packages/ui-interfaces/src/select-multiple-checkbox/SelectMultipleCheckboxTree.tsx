@@ -49,16 +49,41 @@ interface KeyedTreeChoice extends Omit<TreeChoice, 'children'> {
 }
 
 export interface SelectMultipleCheckboxTreeProps {
-  value?: (string | number | boolean)[];
-  onChange?: (value: (string | number | boolean)[] | null) => void;
+  /**
+   * Registered for `types: ['json', 'csv']` — a `csv`-typed field delivers a
+   * raw comma-separated string, not an array. `type` lets this component
+   * normalize on read and re-serialize on write when used standalone
+   * (outside the FormFieldInterface pipeline, which already normalizes this
+   * for its own three multi-select leaves but can't help a direct consumer
+   * of this exported component — and the registry ships this file on its own).
+   * Without normalization a csv string breaks every operation below:
+   * substring-match reads via String.includes, character-spread on add
+   * ([...str, v]), and TypeError on remove (str.filter is not a function).
+   */
+  type?: 'csv' | 'json';
+  value?: (string | number | boolean)[] | string | null;
+  onChange?: (value: (string | number | boolean)[] | string | null) => void;
   label?: string;
   disabled?: boolean;
+  /**
+   * Value is visible but not editable. Enforced at the `handleToggle`
+   * chokepoint plus pointer suppression, not by setting `disabled` — the tree
+   * stays readable, searchable and focusable.
+   */
+  readOnly?: boolean;
   required?: boolean;
   error?: string;
   choices?: TreeChoice[];
   valueCombining?: 'all' | 'branch' | 'leaf' | 'indeterminate' | 'exclusive';
   width?: string;
   color?: string;
+  /**
+   * Accessible name. FormFieldInterface forwards one (it renders the visible
+   * label itself, so `label` is intentionally not passed); without this the
+   * fixed destructure below would drop it and every tree field on every form
+   * would be announced as the same literal string.
+   */
+  'aria-label'?: string;
 }
 
 interface TreeNodeProps {
@@ -69,6 +94,8 @@ interface TreeNodeProps {
   searchQuery: string;
   showSelectionOnly: boolean;
   disabled: boolean;
+  /** Selection is locked, but the tree stays browsable (chevrons remain live). */
+  readOnly: boolean;
   level: number;
   color: string;
   /** Values whose subtree contains a search/selection match — force-expanded regardless of prior manual collapse (S4.9) */
@@ -126,21 +153,74 @@ function SearchInput({
 }
 
 export function SelectMultipleCheckboxTree({
-  value = [],
-  onChange,
+  type,
+  value: rawValue = [],
+  onChange: onChangeProp,
   label,
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   choices = [],
   valueCombining = 'all',
   width,
   color = 'blue',
+  'aria-label': ariaLabel,
 }: SelectMultipleCheckboxTreeProps) {
   const [search, setSearch] = useState('');
   const [showSelectionOnly, setShowSelectionOnly] = useState(false);
   const [debouncedSearch] = useDebouncedValue(search, 250);
   const labelId = useId();
+
+  // Flattened choice values, used to restore the original type of each token
+  // parsed out of a csv string. A csv column stores "1,3" as text, so a naive
+  // split yields the STRINGS ['1','3'] while the choices carry the NUMBERS
+  // 1 and 3 — and every comparison below is SameValueZero, so nothing would
+  // ever match and each click would append a duplicate.
+  const choiceValues = useMemo(() => {
+    const out: (string | number | boolean)[] = [];
+    const walk = (nodes: TreeChoice[], depth: number) => {
+      if (depth > MAX_TREE_DEPTH) return;
+      for (const n of nodes) {
+        out.push(n.value);
+        if (n.children) walk(n.children, depth + 1);
+      }
+    };
+    walk(choices, 0);
+    return out;
+  }, [choices]);
+
+  // Normalize a raw csv-string value to an array before anything below reads
+  // it. `type === 'csv'` is the documented signal, but also trust what was
+  // actually observed (a string) — some backends report the underlying
+  // column type instead of the abstract 'csv' interface type. `?? []` also
+  // covers a null, which a freshly-provisioned nullable column holds and
+  // which the destructuring default above cannot catch.
+  const value = useMemo(() => {
+    if (Array.isArray(rawValue)) return rawValue;
+    if (typeof rawValue === 'string') {
+      return rawValue
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((token) => choiceValues.find((cv) => String(cv) === token) ?? token);
+    }
+    return rawValue ?? [];
+  }, [rawValue, choiceValues]);
+
+  const isCsvStorage = type === 'csv' || typeof rawValue === 'string';
+
+  // Emit an array or, for csv storage, join it back to a comma-string.
+  const onChange = useCallback(
+    (next: (string | number | boolean)[] | null) => {
+      if (isCsvStorage && Array.isArray(next)) {
+        onChangeProp?.(next.join(','));
+      } else {
+        onChangeProp?.(next);
+      }
+    },
+    [onChangeProp, isCsvStorage],
+  );
 
   // Strip a `var(--mantine-color-X-6)` wrapper down to the bare palette name
   // before handing it to Mantine's `color` prop (S4.11) — mirrors the
@@ -304,7 +384,7 @@ export function SelectMultipleCheckboxTree({
 
   // Handle checkbox toggle
   const handleToggle = useCallback((toggleValue: string | number | boolean, checked: boolean) => {
-    if (disabled) {
+    if (disabled || readOnly) {
       return;
     }
 
@@ -401,7 +481,7 @@ export function SelectMultipleCheckboxTree({
     }
 
     onChange?.(newValue.length > 0 ? newValue : null);
-  }, [value, onChange, disabled, choices, valueCombining, getChildrenValues, getLeafValues]);
+  }, [value, onChange, disabled, readOnly, choices, valueCombining, getChildrenValues, getLeafValues]);
 
   // Show choices validation message
   if (!choices || choices.length === 0) {
@@ -440,6 +520,7 @@ export function SelectMultipleCheckboxTree({
       )}
 
       <Box
+        id={`checkbox-tree-${labelId}`}
         style={{
           maxHeight: '300px',
           backgroundColor: 'var(--mantine-color-gray-0)',
@@ -448,7 +529,11 @@ export function SelectMultipleCheckboxTree({
           overflow: 'hidden',
         }}
         role="tree"
-        aria-label={label ? `${label} tree` : 'Tree selection'}
+        // Prefer the caller-supplied accessible name. FormFieldInterface renders
+        // the visible label itself and forwards a name here instead, so falling
+        // back to the constant would give every tree field on a form the same
+        // announcement.
+        aria-label={label ? `${label} tree` : (ariaLabel ?? 'Tree selection')}
       >
         {/* Search input */}
         {choices.length > 10 && (
@@ -481,6 +566,7 @@ export function SelectMultipleCheckboxTree({
                 searchQuery={debouncedSearch}
                 showSelectionOnly={showSelectionOnly}
                 disabled={disabled}
+                readOnly={readOnly}
                 level={0}
                 color={normalizedColor}
                 autoExpandValues={autoExpandValues}
@@ -543,6 +629,7 @@ function TreeNode({
   searchQuery,
   showSelectionOnly,
   disabled,
+  readOnly,
   level,
   color,
   autoExpandValues,
@@ -699,9 +786,13 @@ function TreeNode({
           wrapperProps={{
             'data-testid': `checkbox-${nodePath}`,
           }}
+          {...(readOnly && {
+            style: { pointerEvents: 'none' as const, opacity: 0.8 },
+            'aria-readonly': true,
+          })}
           styles={{
             label: {
-              cursor: disabled ? 'default' : 'pointer',
+              cursor: disabled || readOnly ? 'default' : 'pointer',
             },
           }}
         />
@@ -721,6 +812,7 @@ function TreeNode({
                 searchQuery={searchQuery}
                 showSelectionOnly={showSelectionOnly}
                 disabled={disabled}
+                readOnly={readOnly}
                 level={level + 1}
                 color={color}
                 autoExpandValues={autoExpandValues}
