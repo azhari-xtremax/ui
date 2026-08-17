@@ -719,6 +719,12 @@ export interface SelectIconProps {
   placeholder?: string;
   /** Whether the field is disabled */
   disabled?: boolean;
+  /**
+   * Value is visible but not editable. The icon grid is a set of buttons with
+   * no native readOnly, so this neutralises the emitter and suppresses pointer
+   * events on the picker.
+   */
+  readOnly?: boolean;
   /** Whether the field is required */
   required?: boolean;
   /** Error message to display */
@@ -754,10 +760,11 @@ export interface SelectIconProps {
  */
 export function SelectIcon({
   value,
-  onChange,
+  onChange: onChangeProp,
   label,
   placeholder = 'Search for an icon...',
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   width,
@@ -766,6 +773,9 @@ export function SelectIcon({
   autoFocus = false,
   ...rest
 }: SelectIconProps) {
+  // Neutralise the emitter so neither picking an icon nor clearing can mutate
+  // the value while read-only.
+  const onChange = disabled || readOnly ? undefined : onChangeProp;
   const [searchValue, setSearchValue] = useState('');
   const [opened, setOpened] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -1022,7 +1032,7 @@ export function SelectIcon({
       </Menu>
 
         {/* Clear button - outside the Menu to avoid button nesting */}
-        {value && !disabled && (
+        {value && !disabled && !readOnly && (
           <ActionIcon
             variant="subtle"
             size="sm"

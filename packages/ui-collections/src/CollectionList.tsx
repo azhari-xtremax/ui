@@ -67,7 +67,15 @@ export interface BulkAction {
   confirm?: boolean;
   /** Required permission action; bulk action is disabled when the user lacks this permission */
   requiredPermission?: "create" | "update" | "delete";
-  action: (selectedIds: (string | number)[]) => void | Promise<void>;
+  /**
+   * Receives the selected ids and, when the list has them loaded, the
+   * selected rows themselves — so a consumer that needs the rows' fields
+   * doesn't have to re-fetch data this list already rendered.
+   */
+  action: (
+    selectedIds: (string | number)[],
+    selectedRows?: Record<string, unknown>[],
+  ) => void | Promise<void>;
 }
 
 /** Permission state exposed to consumers via onPermissionsLoaded */
@@ -1044,6 +1052,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         onRefresh={loadItems}
         enableSelection={enableSelection}
         selectedIds={selectedIds}
+        selectedRows={selectedItems as Record<string, unknown>[]}
         enableDelete={enableDelete}
         deleteAllowed={deleteAllowed}
         createAllowed={createAllowed}
