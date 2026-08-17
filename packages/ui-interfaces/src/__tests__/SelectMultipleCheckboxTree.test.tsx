@@ -639,6 +639,63 @@ describe('SelectMultipleCheckboxTree cascade toggle skips disabled descendants (
   });
 });
 
+describe('SelectMultipleCheckboxTree toggle survives a cyclic choices tree (S4.10)', () => {
+  // A node whose own `children` array contains itself — e.g. a malformed API
+  // response reusing a shared object reference.
+  const makeCyclic = (refs: number): TreeChoice => {
+    const node: TreeChoice = { text: 'Cyclic', value: 'cyclic', children: [] };
+    node.children = Array.from({ length: refs }, () => node);
+    return node;
+  };
+
+  // Ordering matters and is asserted both ways on purpose: the lookup this
+  // replaces was a depth-first search, so a cyclic node placed AFTER the
+  // target was never reached and the test passed even unguarded. Covering
+  // both orders means reordering the fixture cannot quietly disarm this.
+  it.each([
+    ['cyclic sibling first', (c: TreeChoice): TreeChoice[] => [c, { text: 'Target', value: 'target' }]],
+    ['cyclic sibling last', (c: TreeChoice): TreeChoice[] => [{ text: 'Target', value: 'target' }, c]],
+  ])('toggles a healthy sibling with a %s', (_label, build) => {
+    const handleChange = jest.fn();
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={build(makeCyclic(1))} value={[]} onChange={handleChange} />
+      </TestWrapper>
+    );
+
+    // Assert the toggle actually WORKED, not merely that nothing threw:
+    // React routes an event-handler throw through reportGlobalError rather
+    // than rethrowing, so `.not.toThrow()` does not discriminate here, and a
+    // change that bails into the `if (!toggledChoice) return` path would
+    // satisfy it while the checkbox does nothing.
+    fireEvent.click(screen.getByLabelText('Target'));
+
+    expect(handleChange).toHaveBeenCalledWith(['target']);
+  });
+
+  // A depth cap only bounds how long a cycle spins. A node listed TWICE in its
+  // own children fans out 2^depth and exhausts memory long before any cap
+  // bites, so the traversal has to detect the revisit itself.
+  it('toggles a healthy sibling when the cyclic node references itself twice', () => {
+    const handleChange = jest.fn();
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={[makeCyclic(2), { text: 'Target', value: 'target' }]}
+          value={[]}
+          onChange={handleChange}
+        />
+      </TestWrapper>
+    );
+
+    fireEvent.click(screen.getByLabelText('Target'));
+
+    expect(handleChange).toHaveBeenCalledWith(['target']);
+  });
+});
+
 describe('SelectMultipleCheckboxTree custom color normalization (S4.11)', () => {
   it('applies a var(--mantine-color-X-6)-wrapped color instead of dropping it', () => {
     render(

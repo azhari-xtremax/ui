@@ -190,18 +190,33 @@ export function SelectMultipleCheckboxTree({
   // split yields the STRINGS ['1','3'] while the choices carry the NUMBERS
   // 1 and 3 — and every comparison below is SameValueZero, so nothing would
   // ever match and each click would append a duplicate.
-  const choiceValues = useMemo(() => {
-    const out: (string | number | boolean)[] = [];
-    const walk = (nodes: TreeChoice[], depth: number) => {
-      if (depth > MAX_TREE_DEPTH) return;
+  // Every node in the tree, keyed by value, built once per `choices`.
+  //
+  // A `WeakSet` of already-visited nodes rather than a depth cap: a cycle
+  // revisits the same object, so detecting that is exact and terminates on any
+  // shape — including a node listed twice in its own children, which a depth
+  // cap does not survive (it fans out 2^depth before the cap ever bites). It
+  // also has no false negatives on a legitimately deep tree, where a cap
+  // silently stops resolving nodes that are still on screen.
+  //
+  // First occurrence wins, preserving the depth-first search this replaces.
+  const choiceByValue = useMemo(() => {
+    const map = new Map<string | number | boolean, TreeChoice>();
+    const seen = new WeakSet<TreeChoice>();
+    const walk = (nodes: TreeChoice[]) => {
       for (const n of nodes) {
-        out.push(n.value);
-        if (n.children) walk(n.children, depth + 1);
+        if (seen.has(n)) continue;
+        seen.add(n);
+        if (!map.has(n.value)) map.set(n.value, n);
+        if (n.children) walk(n.children);
       }
     };
-    walk(choices, 0);
-    return out;
+    walk(choices);
+    return map;
   }, [choices]);
+
+  // Flattened values, derived from the same single walk.
+  const choiceValues = useMemo(() => [...choiceByValue.keys()], [choiceByValue]);
 
   // Normalize a raw csv-string value to an array before anything below reads
   // it. `type === 'csv'` is the documented signal, but also trust what was
@@ -332,19 +347,40 @@ export function SelectMultipleCheckboxTree({
     // Recursively annotate an unfiltered subtree with stable keys — used by
     // the own-text-match branch below, which keeps ALL children rather than
     // re-filtering them.
-    const annotateKeys = (node: TreeChoice, origIndex: number, depth: number): KeyedTreeChoice => ({
-      ...node,
-      __key: `${origIndex}-${String(node.value)}`,
-      __index: origIndex,
-      children:
-        depth > MAX_TREE_DEPTH
-          ? undefined
-          : node.children?.map((child, childIndex) => annotateKeys(child, childIndex, depth + 1)),
-    });
+    // `ancestors` carries the chain from the root to this node. A child that
+    // is already in its own ancestor chain is a cycle, and is dropped rather
+    // than descended into. The depth cap alone cannot do this: a node listed
+    // twice in its own children fans out 2^depth and exhausts memory long
+    // before the cap bites, which is what turns a malformed API response into
+    // a frozen tab instead of an empty branch.
+    const annotateKeys = (
+      node: TreeChoice,
+      origIndex: number,
+      depth: number,
+      ancestors: ReadonlySet<TreeChoice>,
+    ): KeyedTreeChoice => {
+      const nextAncestors = new Set(ancestors).add(node);
+      return {
+        ...node,
+        __key: `${origIndex}-${String(node.value)}`,
+        __index: origIndex,
+        children:
+          depth > MAX_TREE_DEPTH
+            ? undefined
+            : node.children
+                ?.filter((child) => !nextAncestors.has(child))
+                .map((child, childIndex) => annotateKeys(child, childIndex, depth + 1, nextAncestors)),
+      };
+    };
 
-    const filterTree = (nodes: TreeChoice[], depth: number): KeyedTreeChoice[] => {
+    const filterTree = (
+      nodes: TreeChoice[],
+      depth: number,
+      ancestors: ReadonlySet<TreeChoice> = new Set(),
+    ): KeyedTreeChoice[] => {
       if (depth > MAX_TREE_DEPTH) return [];
       return nodes
+        .filter((choice) => !ancestors.has(choice))
         .map((choice, origIndex) => ({ choice, origIndex }))
         .filter(({ choice }) => {
           if (showSelectionOnly) {
@@ -358,13 +394,15 @@ export function SelectMultipleCheckboxTree({
           // every child that doesn't itself match, hiding the whole subtree
           // under a parent the user was actually searching for.
           if (!showSelectionOnly && debouncedSearch && matchesOwnText(choice, debouncedSearch)) {
-            return annotateKeys(choice, origIndex, depth);
+            return annotateKeys(choice, origIndex, depth, ancestors);
           }
           return {
             ...choice,
             __key: `${origIndex}-${String(choice.value)}`,
             __index: origIndex,
-            children: choice.children ? filterTree(choice.children, depth + 1) : undefined,
+            children: choice.children
+              ? filterTree(choice.children, depth + 1, new Set(ancestors).add(choice))
+              : undefined,
           };
         });
     };
@@ -406,23 +444,7 @@ export function SelectMultipleCheckboxTree({
     const currentValue = value || [];
     let newValue: (string | number | boolean)[];
 
-    // Find the choice being toggled
-    const findChoice = (nodes: TreeChoice[], val: string | number | boolean): TreeChoice | null => {
-      for (const node of nodes) {
-        if (node.value === val) {
-          return node;
-        }
-        if (node.children) {
-          const found = findChoice(node.children, val);
-          if (found) {
-            return found;
-          }
-        }
-      }
-      return null;
-    };
-
-    const toggledChoice = findChoice(choices, toggleValue);
+    const toggledChoice = choiceByValue.get(toggleValue) ?? null;
     if (!toggledChoice) {
       return;
     }
@@ -496,7 +518,7 @@ export function SelectMultipleCheckboxTree({
     }
 
     onChange?.(newValue.length > 0 ? newValue : null);
-  }, [value, onChange, disabled, readOnly, choices, valueCombining, getChildrenValues, getLeafValues]);
+  }, [value, onChange, disabled, readOnly, choiceByValue, valueCombining, getChildrenValues, getLeafValues]);
 
   // Show choices validation message
   if (!choices || choices.length === 0) {
