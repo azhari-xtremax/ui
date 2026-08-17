@@ -223,6 +223,64 @@ describe('SelectMultipleCheckbox', () => {
     expect(screen.getByLabelText('Custom value checkbox: custom_value')).toBeChecked();
   });
 
+  // V3-7: the S7.3 exclusion matched a row against a stored value by
+  // stringified digits (`rowValues.has(String(v))`), not by actual value
+  // identity. A stored NUMBER 5 was hidden entirely whenever an unrelated
+  // new row's in-progress (unchecked) text happened to be the STRING "5" —
+  // neither the row itself (checked via strict equality, so "5" !== 5 never
+  // matched) nor the read-only fallback (wrongly excluded) rendered it.
+  it('does not hide a stored numeric custom value when an unrelated row is mid-typing the same digits', async () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox choices={mockChoices} value={[5]} allowOther />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Selected custom value: 5')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Other'));
+    const input = await screen.findByPlaceholderText('Enter custom value');
+    fireEvent.change(input, { target: { value: '5' } });
+
+    // The stored number 5 must still render — the new row is a different,
+    // unchecked, string-typed entry, not the thing backing it.
+    expect(screen.getByLabelText('Selected custom value: 5')).toBeInTheDocument();
+  });
+
+  // The other half of the same predicate: once the row IS checked, it is the
+  // thing backing that entry and the read-only copy must disappear. Comparing
+  // by strict equality alone cannot see this — a row's typed text is always a
+  // string, so it can never strictly equal a stored NUMBER, and the value
+  // would render twice (once read-only, once as the row).
+  it('hides the read-only copy once a row backing the same value is checked', async () => {
+    const Host = () => {
+      const [value, setValue] = React.useState<(string | number | boolean)[]>([5]);
+      return (
+        <SelectMultipleCheckbox
+          choices={mockChoices}
+          value={value}
+          onChange={(v) => setValue(v as (string | number | boolean)[])}
+          allowOther
+        />
+      );
+    };
+
+    render(
+      <TestWrapper>
+        <Host />
+      </TestWrapper>
+    );
+
+    fireEvent.click(screen.getByText('Other'));
+    const input = await screen.findByPlaceholderText('Enter custom value');
+    fireEvent.change(input, { target: { value: '5' } });
+
+    // Check the row — it now owns the "5" entry.
+    fireEvent.click(screen.getByLabelText('Custom value checkbox: 5'));
+
+    expect(screen.queryByLabelText('Selected custom value: 5')).not.toBeInTheDocument();
+  });
+
   it('is disabled when disabled prop is true', () => {
     render(
       <TestWrapper>
