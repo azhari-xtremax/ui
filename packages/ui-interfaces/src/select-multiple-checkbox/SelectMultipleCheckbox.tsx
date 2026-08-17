@@ -237,10 +237,22 @@ export function SelectMultipleCheckbox({
     }
 
     const choiceValues = choices.map(c => c.value);
-    const rowValues = new Set<string | number | boolean>(
+    // A row backs an entry only if it is CHECKED — i.e. its own typed string is
+    // itself in the selection. Matching every row regardless (the previous
+    // behaviour) hid a genuinely separate stored value whenever an unrelated,
+    // still-being-typed row happened to share its digits.
+    const checkedRowValues = new Set(
       otherValues.filter(item => normalizedValue.includes(item.value)).map(item => item.value),
     );
-    return normalizedValue.filter(v => !choiceValues.includes(v) && !rowValues.has(v));
+    // Compare by string. `otherValues[].value` is always a string (it is the
+    // row's typed text), so a strict-equality test can never match a stored
+    // NUMBER or BOOLEAN — the row that genuinely owns `5` would fail to
+    // exclude it and the entry would render twice, once read-only and once as
+    // the row. The checked-row filter above is what keeps this from
+    // over-matching the way a bare String() comparison did.
+    return normalizedValue.filter(
+      v => !choiceValues.includes(v) && !checkedRowValues.has(String(v)),
+    );
   }, [normalizedValue, choices, allowOther, otherValues]);
 
   // Show choices validation message

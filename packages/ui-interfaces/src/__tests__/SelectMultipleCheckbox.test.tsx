@@ -247,6 +247,40 @@ describe('SelectMultipleCheckbox', () => {
     expect(screen.getByLabelText('Selected custom value: 5')).toBeInTheDocument();
   });
 
+  // The other half of the same predicate: once the row IS checked, it is the
+  // thing backing that entry and the read-only copy must disappear. Comparing
+  // by strict equality alone cannot see this — a row's typed text is always a
+  // string, so it can never strictly equal a stored NUMBER, and the value
+  // would render twice (once read-only, once as the row).
+  it('hides the read-only copy once a row backing the same value is checked', async () => {
+    const Host = () => {
+      const [value, setValue] = React.useState<(string | number | boolean)[]>([5]);
+      return (
+        <SelectMultipleCheckbox
+          choices={mockChoices}
+          value={value}
+          onChange={(v) => setValue(v as (string | number | boolean)[])}
+          allowOther
+        />
+      );
+    };
+
+    render(
+      <TestWrapper>
+        <Host />
+      </TestWrapper>
+    );
+
+    fireEvent.click(screen.getByText('Other'));
+    const input = await screen.findByPlaceholderText('Enter custom value');
+    fireEvent.change(input, { target: { value: '5' } });
+
+    // Check the row — it now owns the "5" entry.
+    fireEvent.click(screen.getByLabelText('Custom value checkbox: 5'));
+
+    expect(screen.queryByLabelText('Selected custom value: 5')).not.toBeInTheDocument();
+  });
+
   it('is disabled when disabled prop is true', () => {
     render(
       <TestWrapper>
