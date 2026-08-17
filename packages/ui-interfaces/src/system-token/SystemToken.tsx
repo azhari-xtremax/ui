@@ -19,6 +19,12 @@ export interface SystemTokenProps {
   generate?: () => string | Promise<string>;
   /** Whether the field is disabled */
   disabled?: boolean;
+  /**
+   * Token is visible but not modifiable. The display input is already hardcoded
+   * readOnly; this additionally hides Generate/Regenerate and Clear, which were
+   * gated on `disabled` alone and could otherwise rotate a live API token.
+   */
+  readOnly?: boolean;
   /** Field label */
   label?: string;
   /** Description/help text */
@@ -37,6 +43,7 @@ export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
   onChange,
   generate,
   disabled = false,
+  readOnly = false,
   label,
   description,
   error,
@@ -102,12 +109,13 @@ export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
   }, [generate, applyGeneratedToken]);
 
   const emitValue = useCallback((newValue: string | null) => {
+    if (disabled || readOnly) return;
     onChange?.(newValue);
     setLocalValue(newValue);
     if (newValue === null) {
       setIsNewTokenGenerated(false);
     }
-  }, [onChange]);
+  }, [onChange, disabled, readOnly]);
 
   const handleFocus = useCallback((event: React.FocusEvent<HTMLInputElement>) => {
     if (localValue) {
@@ -121,7 +129,7 @@ export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
 
   const hasToken = !!value;
   const showCopy = !!localValue && isCopySupported;
-  const showClear = !disabled && hasToken;
+  const showClear = !disabled && !readOnly && hasToken;
 
   return (
     <div data-testid={testId ? `${testId}-container` : undefined}>
@@ -159,7 +167,7 @@ export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
                 <IconCopy size={16} />
               </ActionIcon>
             )}
-            {!disabled && (
+            {!disabled && !readOnly && (
               <ActionIcon
                 variant="subtle"
                 color="gray"

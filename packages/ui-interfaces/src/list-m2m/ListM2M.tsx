@@ -85,7 +85,7 @@ import {
     type M2MRelationInfo,
 } from "@buildpad/hooks";
 import { CollectionList, CollectionForm } from "@buildpad/ui-collections";
-import { renderTemplate, resolveDisplayTemplate, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
+import { renderTemplate, resolveDisplayTemplate, splitJunctionTemplateFields, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
 import { useRelationMultipleM2M, type M2MDisplayItem, type M2MChangesItem } from "@buildpad/hooks";
 import { useRelationPermissionsM2M } from "@buildpad/hooks";
 import { mergeTranslations, interpolate, formatItemCount, type M2MTranslations } from "./translations";
@@ -634,6 +634,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         moveItemDown,
         reorderItems,
         getSelectedRelatedPKs,
+        stagedRelatedData,
         getChanges,
         hasChanges,
         setLocalChanges,
@@ -667,6 +668,19 @@ export const ListM2M: React.FC<ListM2MProps> = ({
 
     // Batch edit selection (table layout only)
     const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
+
+    // Page, search and selection are per-record. Now that a primaryKey switch
+    // actually refetches, carrying them over meant the new record was queried
+    // at the old record's page (returning nothing, with the pagination control
+    // unmounting once totalPages collapsed — no way back), and the batch
+    // toolbar reported a selection count over rows that were never checked.
+    const lastPrimaryKeyRef = useRef(primaryKey);
+    if (lastPrimaryKeyRef.current !== primaryKey) {
+        lastPrimaryKeyRef.current = primaryKey;
+        if (currentPage !== 1) setCurrentPage(1);
+        if (search !== "") setSearch("");
+        if (selectedIds.size > 0) setSelectedIds(new Set());
+    }
 
     // Drawer / modal states
     const [editDrawerOpened, { open: openEditDrawer, close: closeEditDrawer }] = useDisclosure(false);
@@ -818,6 +832,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
     // dev; both fired this effect twice with an identical query ("double
     // initial fetch"). Compare serialized params, not references.
     const lastLoadSignatureRef = useRef<string | null>(null);
+    const lastRefreshKeyRef = useRef<number | null>(null);
     useEffect(() => {
         if (relationInfo && isParentSaved && !mockItems) {
             // Build fields for the query — prefix with junction field for related data.
@@ -833,6 +848,21 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 const resolved = f === "id" && relatedPkField !== "id" ? relatedPkField : f;
                 return `${relationInfo.junctionField.field}.${resolved}`;
             });
+            // Fetch whatever the row-display template references, or it
+            // renders blank. Template paths must be normalised to the
+            // JUNCTION scope first: only an explicit junction-relative
+            // template (`{{role_id.name}}`) already matches the query
+            // syntax — a related-relative one (`{{name}}`, which the prop
+            // docs imply, and which the related collection's own
+            // display_template and the `{{ pk }}` bootstrap always produce)
+            // would otherwise ask the junction table for a column it does
+            // not have and error the whole request.
+            for (const templateField of splitJunctionTemplateFields(
+                resolvedTemplate,
+                relationInfo.junctionField.field,
+            ).junction) {
+                if (!queryFields.includes(templateField)) queryFields.push(templateField);
+            }
             // Always include junction PK and sort field
             queryFields.push(relationInfo.junctionPrimaryKeyField.field);
             if (relationInfo.sortField) queryFields.push(relationInfo.sortField);
@@ -844,19 +874,64 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 search: enableSearchFilter ? search : undefined,
                 filter: filter as Record<string, unknown>,
             };
+            // V3-5: `primaryKey` must be part of the signature, not just gate
+            // the effect. Without it, a mounted ListM2M whose `primaryKey`
+            // switches to a different saved record (without a remount — e.g.
+            // navigating between records in a single-page detail view) keeps
+            // `params` identical, so the dedupe skips the refetch and the
+            // previous record's rows stay on screen.
+            //
+            // `refreshKey` is deliberately NOT in the signature: it is a bump
+            // counter whose only job is to force a refetch, and including it
+            // meant a record switch that also cleared `value` (the normal
+            // flow once anything is staged) produced two identical queries —
+            // one for the primaryKey change, one for the refreshKey bump.
+            // Comparing it separately keeps the forced refetch while still
+            // deduping the identical query.
+            // (`isParentSaved` is intentionally absent too — it is derived
+            // from `primaryKey` and is always true inside this branch, so it
+            // could never discriminate two signatures.)
             const signature = JSON.stringify([
                 relationInfo.junctionCollection?.collection,
                 params,
-                refreshKey,
+                primaryKey ?? null,
             ]);
-            if (signature === lastLoadSignatureRef.current) return;
+            if (
+                signature === lastLoadSignatureRef.current &&
+                refreshKey === lastRefreshKeyRef.current
+            ) {
+                return;
+            }
             lastLoadSignatureRef.current = signature;
+            lastRefreshKeyRef.current = refreshKey;
 
-            loadItems(params);
+            // Reset the signature if the fetch fails, so a transient error
+            // doesn't poison this query forever (loadItems catches its own
+            // errors and never rejects, so check the error state instead of
+            // awaiting a rejection).
+            void Promise.resolve(loadItems(params)).catch(() => {
+                lastLoadSignatureRef.current = null;
+            });
+        } else if (relationInfo && !isParentSaved && !mockItems) {
+            // Switching to an unsaved parent ('+' / new record) must clear the
+            // previous record's rows: loadItems is what empties `fetchedItems`
+            // for a new item, and returning early here left them on screen —
+            // the same "previous record's rows stay visible" symptom V3-5 is
+            // about, just on the saved→new transition.
+            if (lastLoadSignatureRef.current !== null) {
+                lastLoadSignatureRef.current = null;
+                lastRefreshKeyRef.current = refreshKey;
+                loadItems({
+                    limit: currentLimit,
+                    page: currentPage,
+                    fields: [],
+                });
+            }
         }
     }, [
         relationInfo,
         isParentSaved,
+        primaryKey,
         currentPage,
         currentLimit,
         search,
@@ -866,6 +941,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         loadItems,
         mockItems,
         refreshKey,
+        resolvedTemplate,
     ]);
 
     // ── Handlers ────────────────────────────────────────────────────
@@ -886,12 +962,55 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         [openEditDrawer, isEffectivelyNonEditable],
     );
 
+    // Fields the select modal must load for each candidate row, so a picked
+    // row already carries whatever the display template needs — expressed
+    // relative to the RELATED collection. Template paths are normalised by
+    // the shared splitter; `fields`-prop entries are bare related-item names
+    // by contract, so a dotted one (which the junction query supports) is
+    // dropped here rather than sent to the related collection, where it is
+    // not a column.
+    const relatedItemFields = useMemo(() => {
+        if (!relationInfo) return fields;
+        const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
+        const result = new Set<string>([relatedPkField]);
+        for (const f of fields) {
+            if (f.includes(".")) continue;
+            result.add(f === "id" ? relatedPkField : f);
+        }
+        for (const f of splitJunctionTemplateFields(
+            resolvedTemplate,
+            relationInfo.junctionField.field,
+        ).related) {
+            result.add(f);
+        }
+        return [...result];
+    }, [fields, resolvedTemplate, relationInfo]);
+
     const handleSelectExisting = useCallback(
-        (selectedIds: (string | number)[]) => {
-            selectItems(selectedIds);
+        (
+            selectedIds: (string | number)[],
+            selectedRows?: Record<string, unknown>[],
+        ) => {
+            // The select modal already loaded these rows (it rendered them),
+            // and now hands them over — no second round-trip, and nothing to
+            // await, so the modal still closes on the same tick as the click.
+            let relatedDataById:
+                | Record<string | number, Record<string, unknown>>
+                | undefined;
+            if (relationInfo && selectedRows?.length) {
+                const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
+                relatedDataById = {};
+                for (const row of selectedRows) {
+                    const rowId = row[relatedPkField] as string | number | undefined;
+                    if (rowId !== undefined && rowId !== null) {
+                        relatedDataById[rowId] = row;
+                    }
+                }
+            }
+            selectItems(selectedIds, relatedDataById);
             closeSelectModal();
         },
-        [selectItems, closeSelectModal],
+        [selectItems, closeSelectModal, relationInfo],
     );
 
     const handleRemoveItem = useCallback(
@@ -998,13 +1117,40 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         (item: M2MDisplayItem): string => {
             if (!relationInfo) return String(item.id ?? "");
 
-            // For M2M, related data is nested under the junction field
-            const relatedData = item[relationInfo.junctionField.field] as
+            // For M2M, related data is nested under the junction field. A
+            // locally staged pick has only the reference there, so fall back
+            // to the display-only cache the hook kept for it.
+            const nested = item[relationInfo.junctionField.field] as
                 | Record<string, unknown>
                 | undefined;
+            const relatedPkField = relationInfo.relatedPrimaryKeyField?.field || "id";
+            const stagedKey = nested?.[relatedPkField] as string | number | undefined;
+            const staged =
+                stagedKey !== undefined && stagedKey !== null
+                    ? stagedRelatedData?.[stagedKey]
+                    : undefined;
+            const relatedData =
+                nested && staged ? { ...staged, ...nested } : (nested ?? staged);
 
             if (resolvedTemplate && relatedData && typeof relatedData === "object") {
-                return renderTemplate(resolvedTemplate, relatedData);
+                // Templates come in both conventions: junction-relative
+                // ("{{role_id.name}}") and related-relative ("{{name}}", which
+                // the related collection's display_template and the "{{ pk }}"
+                // bootstrap always produce). Resolve against the junction item
+                // with the related fields spread LAST, so a bare path finds the
+                // related item's value — including "{{ id }}", which means the
+                // related PK — while "{{role_id.name}}" still resolves through
+                // item's own junction key. Junction-only columns (sort, the
+                // reverse FK) stay reachable but never shadow a related field.
+                return renderTemplate(resolvedTemplate, {
+                    ...item,
+                    ...relatedData,
+                    // Also expose the merged related data under the junction
+                    // key, so a junction-relative path resolves against the
+                    // full record rather than the reference-only stub a
+                    // locally staged pick carries.
+                    [relationInfo.junctionField.field]: relatedData,
+                });
             }
 
             // Fallback: show first available field value
@@ -1017,7 +1163,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
 
             return String(item.id ?? "");
         },
-        [relationInfo, resolvedTemplate, fields],
+        [relationInfo, resolvedTemplate, fields, stagedRelatedData],
     );
 
     // ── Selection filter for select modal ───────────────────────────
@@ -1083,7 +1229,12 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         // via selectItems rather than createItem (which would deep-create a
         // second related item).
         if (isCreatingNew && data?.id != null) {
-            selectItems([data.id as string | number]);
+            const newId = data.id as string | number;
+            // `data` is the full record CollectionForm just created. It is
+            // passed as DISPLAY data only — selectItems keeps the staged
+            // payload reference-only, so the junction row still links to the
+            // existing record rather than deep-creating a second one.
+            selectItems([newId], { [newId]: data });
         }
 
         // After editing a related item, reload to show updated data
@@ -1096,6 +1247,13 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 const resolved = f === "id" && relatedPkField !== "id" ? relatedPkField : f;
                 return `${relationInfo.junctionField.field}.${resolved}`;
             });
+            // See the matching comment in the load-items effect above.
+            for (const templateField of splitJunctionTemplateFields(
+                resolvedTemplate,
+                relationInfo.junctionField.field,
+            ).junction) {
+                if (!queryFields.includes(templateField)) queryFields.push(templateField);
+            }
             queryFields.push(relationInfo.junctionPrimaryKeyField.field);
             if (relationInfo.sortField) queryFields.push(relationInfo.sortField);
 
@@ -1121,6 +1279,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         enableSearchFilter,
         filter,
         loadItems,
+        resolvedTemplate,
     ]);
 
     // ── Render: Error states ────────────────────────────────────────
@@ -1501,6 +1660,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                         {/* Junction field section at top (if configured) */}
                         {!isCreatingNew &&
                             currentlyEditing &&
+                            currentlyEditing.$type !== "created" &&
                             junctionFieldLocation === "top" && (
                                 <>
                                     <Text size="sm" fw={500} c="dimmed">
@@ -1531,6 +1691,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                         {/* Junction field section at bottom (if configured) */}
                         {!isCreatingNew &&
                             currentlyEditing &&
+                            currentlyEditing.$type !== "created" &&
                             junctionFieldLocation === "bottom" && (
                                 <>
                                     <Divider />
@@ -1564,6 +1725,10 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                         <CollectionList
                             collection={relationInfo.relatedCollection.collection}
                             enableSelection
+                            // Load whatever the row-display template needs, so a
+                            // picked row already carries it and the staged label
+                            // resolves without a second fetch.
+                            fields={relatedItemFields}
                             filter={selectionFilter}
                             bulkActions={[
                                 {
