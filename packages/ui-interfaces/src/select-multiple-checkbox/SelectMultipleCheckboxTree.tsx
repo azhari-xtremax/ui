@@ -45,6 +45,14 @@ export interface TreeChoice {
 // resetting each TreeNode's local `expanded` state back to its default.
 interface KeyedTreeChoice extends Omit<TreeChoice, 'children'> {
   __key: string;
+  /**
+   * Position in the UNFILTERED sibling array. `__key` mixes this with the
+   * value for React reconciliation; `__index` is the same stability without
+   * the value, so a data-testid path stays short and keeps the documented
+   * `0-2-1` shape. Sibling indices are already distinct, so index-only path
+   * segments satisfy the S4.8 collision scoping on their own.
+   */
+  __index: number;
   children?: KeyedTreeChoice[];
 }
 
@@ -100,7 +108,12 @@ interface TreeNodeProps {
   color: string;
   /** Values whose subtree contains a search/selection match — force-expanded regardless of prior manual collapse (S4.9) */
   autoExpandValues: Set<string | number | boolean> | null;
-  /** Index path from the root (e.g. "0-2-1") — scopes data-testid so stringify-colliding sibling values don't share one testid (S4.8) */
+  /**
+   * Index path from the root (e.g. "0-2-1"), built from each node's position
+   * in the UNFILTERED sibling array so it does not shift when search or
+   * "Show Selected" changes which siblings are visible. Scopes data-testid so
+   * stringify-colliding sibling values don't share one testid (S4.8).
+   */
   nodePath: string;
 }
 
@@ -322,6 +335,7 @@ export function SelectMultipleCheckboxTree({
     const annotateKeys = (node: TreeChoice, origIndex: number, depth: number): KeyedTreeChoice => ({
       ...node,
       __key: `${origIndex}-${String(node.value)}`,
+      __index: origIndex,
       children:
         depth > MAX_TREE_DEPTH
           ? undefined
@@ -349,6 +363,7 @@ export function SelectMultipleCheckboxTree({
           return {
             ...choice,
             __key: `${origIndex}-${String(choice.value)}`,
+            __index: origIndex,
             children: choice.children ? filterTree(choice.children, depth + 1) : undefined,
           };
         });
@@ -556,7 +571,7 @@ export function SelectMultipleCheckboxTree({
         {/* Tree content */}
         <ScrollArea h="200px" p="sm">
           <Stack gap="xs">
-            {filteredChoices.map((choice, index) => (
+            {filteredChoices.map((choice) => (
               <TreeNode
                 key={choice.__key}
                 choice={choice}
@@ -570,7 +585,12 @@ export function SelectMultipleCheckboxTree({
                 level={0}
                 color={normalizedColor}
                 autoExpandValues={autoExpandValues}
-                nodePath={String(index)}
+                // V3-7: derived from the stable __key (origIndex-in-the-
+                // unfiltered-array + value), not the filtered position —
+                // testids used to shift under search/showSelectionOnly
+                // filtering even though __key itself (the React key) was
+                // already stable.
+                nodePath={String(choice.__index)}
               />
             ))}
           </Stack>
@@ -630,12 +650,33 @@ function TreeNode({
   autoExpandValues,
   nodePath,
 }: TreeNodeProps) {
-  const [manuallyExpanded, setManuallyExpanded] = useState(true);
   const hasChildren = choice.children && choice.children.length > 0;
+
+  // V3-7: an explicit chevron click must always visibly toggle, even on an
+  // auto-expanded ancestor — previously the toggle only flipped a
+  // `manuallyExpanded` boolean, so collapsing an auto-expanded node recomputed
+  // back to `true` through the OR below and the click was a silent no-op.
+  //
+  // The user's choice is stored together with the auto-expand context it was
+  // made in, so it wins for exactly as long as that context holds. Deriving it
+  // this way (rather than a separate override flag reset by an effect) means
+  // there is no second state to keep in sync, and no way to reset it for one
+  // input that drives auto-expansion while forgetting the other: BOTH
+  // `searchQuery` and `showSelectionOnly` feed `autoExpandValues`, and an
+  // earlier form of this fix keyed only on `searchQuery` — which left a
+  // user-collapsed node collapsed when "Show Selected" was clicked, hiding
+  // the very selection that mode exists to reveal (S4.9).
+  const autoExpandContext = `${searchQuery} ${showSelectionOnly}`;
+  const [userChoice, setUserChoice] = useState<{ context: string; expanded: boolean } | null>(null);
+
   // Force-expanded while this node's subtree holds a search/selection match,
   // regardless of a prior manual collapse — otherwise the match stays hidden
   // under a collapsed ancestor (S4.9).
-  const expanded = autoExpandValues?.has(choice.value) || manuallyExpanded;
+  const autoExpanded = autoExpandValues?.has(choice.value) ?? false;
+  const expanded =
+    userChoice && userChoice.context === autoExpandContext
+      ? userChoice.expanded
+      : autoExpanded || (userChoice?.expanded ?? true);
 
   // Calculate checkbox state based on selection and children
   const { checked, indeterminate } = useMemo(() => {
@@ -646,11 +687,17 @@ function TreeNode({
     }
 
     // For parent nodes, check children state
+    // Disabled descendants are excluded, matching `getChildrenValues` — the
+    // cascade toggle deliberately refuses to select them (S4.7), so counting
+    // them here put values in the denominator that the numerator could never
+    // reach: with valueCombining='all', a single disabled descendant left the
+    // parent permanently indeterminate and every further click re-emitted the
+    // identical selection. The 'leaf' branch below already carries this fix.
     const allChildValues: (string | number | boolean)[] = [];
     const collectChildValues = (nodes: TreeChoice[], depth: number) => {
       if (depth > MAX_TREE_DEPTH) return;
       for (const node of nodes) {
-        allChildValues.push(node.value);
+        if (!node.disabled) allChildValues.push(node.value);
         if (node.children) {
           collectChildValues(node.children, depth + 1);
         }
@@ -733,7 +780,7 @@ function TreeNode({
 
   const toggleExpanded = () => {
     if (hasChildren) {
-      setManuallyExpanded(!expanded);
+      setUserChoice({ context: autoExpandContext, expanded: !expanded });
     }
   };
 
@@ -784,7 +831,7 @@ function TreeNode({
       {hasChildren && (
         <Collapse in={expanded}>
           <Stack gap="xs" ml="md" mt="xs">
-            {choice.children!.map((child, childIndex) => (
+            {choice.children!.map((child) => (
               <TreeNode
                 key={child.__key}
                 choice={child}
@@ -798,7 +845,9 @@ function TreeNode({
                 level={level + 1}
                 color={color}
                 autoExpandValues={autoExpandValues}
-                nodePath={`${nodePath}-${childIndex}`}
+                // V3-7: same stable child.__key used for the React key, not
+                // the filtered-position childIndex.
+                nodePath={`${nodePath}-${child.__index}`}
               />
             ))}
           </Stack>

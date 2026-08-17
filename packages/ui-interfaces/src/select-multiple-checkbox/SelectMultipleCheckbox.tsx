@@ -218,18 +218,41 @@ export function SelectMultipleCheckbox({
   };
 
   // Get other values that are in the current selection. Excludes any value
-  // already backed by a live `otherValues` input row (S7.3) — without this,
-  // committing a custom value via that row made it match here too, so it
-  // rendered a second time as a separate read-only checked checkbox above
-  // the row that still owned it.
+  // already backed by a live, CHECKED `otherValues` input row (S7.3) —
+  // without this, committing a custom value via that row made it match here
+  // too, so it rendered a second time as a separate read-only checked
+  // checkbox above the row that still owned it.
+  //
+  // V3-7: matching by `String(v)` against every row's typed text (regardless
+  // of whether that row was even checked) hid a genuinely separate, already-
+  // stored numeric value whenever any row's in-progress text happened to
+  // share the same digits (e.g. stored number 5, an unrelated new row mid-
+  // typing "5"). Only a row that's actually checked — i.e. its exact typed
+  // string is itself a member of `normalizedValue` via strict equality — is
+  // the one truly backing that entry; a mid-typed but unchecked row, or a
+  // stored value of a different type with the same digits, must not exclude it.
   const otherValuesInSelection = useMemo(() => {
     if (!allowOther) {
       return [];
     }
 
     const choiceValues = choices.map(c => c.value);
-    const rowValues = new Set(otherValues.map(item => item.value));
-    return normalizedValue.filter(v => !choiceValues.includes(v) && !rowValues.has(String(v)));
+    // A row backs an entry only if it is CHECKED — i.e. its own typed string is
+    // itself in the selection. Matching every row regardless (the previous
+    // behaviour) hid a genuinely separate stored value whenever an unrelated,
+    // still-being-typed row happened to share its digits.
+    const checkedRowValues = new Set(
+      otherValues.filter(item => normalizedValue.includes(item.value)).map(item => item.value),
+    );
+    // Compare by string. `otherValues[].value` is always a string (it is the
+    // row's typed text), so a strict-equality test can never match a stored
+    // NUMBER or BOOLEAN — the row that genuinely owns `5` would fail to
+    // exclude it and the entry would render twice, once read-only and once as
+    // the row. The checked-row filter above is what keeps this from
+    // over-matching the way a bare String() comparison did.
+    return normalizedValue.filter(
+      v => !choiceValues.includes(v) && !checkedRowValues.has(String(v)),
+    );
   }, [normalizedValue, choices, allowOther, otherValues]);
 
   // Show choices validation message
