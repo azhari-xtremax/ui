@@ -395,6 +395,12 @@ export interface MappedIconProps {
   stroke?: number | string;
   style?: React.CSSProperties;
   'aria-hidden'?: boolean;
+  /**
+   * Tabler renders this as a real `<svg><title>…</title></svg>` — the canonical
+   * accessible SVG tooltip, which reaches assistive tech rather than being
+   * hover-only. Declaring it here avoids wrapping icons in a `<span title>`.
+   */
+  title?: string;
 }
 
 /**
@@ -675,12 +681,19 @@ const ICON_MAP: Record<string, React.ComponentType<MappedIconProps>> = {
   highlight: IconHighlight,
 };
 
+// S5.7: SelectIcon's own trigger (`renderIcon` below) and this read-only
+// companion used two different "unknown icon" glyphs (IconQuestionMark vs
+// IconUsersGroup) for the exact same condition — a stored name with no
+// ICON_MAP entry. Both now default to the same glyph so an unmapped icon
+// looks the same everywhere it's rendered.
+export const DEFAULT_UNKNOWN_ICON: React.ComponentType<MappedIconProps> = IconQuestionMark;
+
 export interface IconDisplayProps {
   /** Material Design icon name as stored on the entity (e.g. `role.icon`, `policy.icon`). */
   icon?: string | null;
   /** Icon size in px. Default: 20. */
   size?: number;
-  /** Tabler icon component rendered when the name is unknown/empty. Default: `IconUsersGroup`. */
+  /** Tabler icon component rendered when the name is unknown/empty. Default: `DEFAULT_UNKNOWN_ICON`. */
   fallback?: React.ComponentType<MappedIconProps>;
   /** Stroke width passed to the Tabler icon. Default: 1.5. */
   stroke?: number;
@@ -694,7 +707,7 @@ export interface IconDisplayProps {
 export const IconDisplay: React.FC<IconDisplayProps> = ({
   icon,
   size = 20,
-  fallback: Fallback = IconUsersGroup,
+  fallback: Fallback = DEFAULT_UNKNOWN_ICON,
   stroke = 1.5,
 }) => {
   const Component = (icon && ICON_MAP[icon]) || Fallback;
@@ -728,7 +741,53 @@ export interface SelectIconProps {
   'data-testid'?: string;
   /** Accessible name for the trigger button, used when no visible `label` is set */
   'aria-label'?: string;
+  /** Autofocus the trigger button on mount */
+  autoFocus?: boolean;
+  /**
+   * Lowercase alias for `autoFocus`. This is the spelling the form pipeline
+   * sends (VForm → FormField → FormFieldInterface), so it must be accepted here
+   * or the feature never fires for the only caller that matters — and the
+   * unmatched key would otherwise reach the DOM as an invalid attribute.
+   */
+  autofocus?: boolean;
+
+  // DaaS schema metadata props — declared so they can be destructured and
+  // discarded below, preventing them from being forwarded to DOM elements
+  // (which causes React unknown-prop warnings). Mirrors the same guard in
+  // input/Input.tsx. `type` in particular MUST NOT reach the trigger: it is a
+  // DaaS abstract type ('string', 'uuid', …), never a valid button type, and an
+  // invalid button@type falls back to "submit".
+  /** DaaS field type. Discarded — never forwarded to the trigger. */
+  type?: string;
+  /** Owning collection. Discarded. */
+  collection?: string;
+  /** Field key. Discarded. */
+  field?: string;
+  /** Record primary key. Discarded. */
+  primaryKey?: string | number | null;
+  /** Column max length. Discarded. */
+  maxLength?: number | null;
+  /** Column nullability. Discarded. */
+  nullable?: boolean;
+  /** Column default. Discarded. */
+  defaultValue?: unknown;
 }
+
+/**
+ * Extra props forwarded verbatim to the Mantine `Button` trigger.
+ *
+ * Deliberately a typed rest rather than an index signature: an
+ * `[key: string]: unknown` on the props interface disables excess-property
+ * checking, so every prop typo (`valeu`, `onChagne`) would compile and then
+ * ship to the DOM. `data-*` attributes do NOT need it — TypeScript always
+ * permits non-identifier JSX attribute names.
+ *
+ * `type` is excluded: it is pinned to "button" after the spread.
+ */
+export type SelectIconTriggerProps = Omit<
+  React.ComponentPropsWithoutRef<'button'>,
+  'value' | 'onChange' | 'type' | 'defaultValue'
+>;
 
 /**
  * SelectIcon - Icon selection interface component
@@ -759,7 +818,25 @@ export function SelectIcon({
   width,
   'data-testid': testId,
   'aria-label': ariaLabel,
-}: SelectIconProps) {
+  autoFocus = false,
+  autofocus,
+  // DaaS schema metadata props — destructured and discarded to prevent them
+  // from being forwarded to DOM elements (which causes React unknown-prop
+  // warnings, and for `type` would turn the trigger into a submit button).
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  type: _type,
+  collection: _collection,
+  field: _field,
+  primaryKey: _primaryKey,
+  maxLength: _maxLength,
+  nullable: _nullable,
+  defaultValue: _defaultValue,
+  /* eslint-enable @typescript-eslint/no-unused-vars */
+  ...rest
+}: SelectIconProps & SelectIconTriggerProps) {
+  // Accept either spelling: the form pipeline sends lowercase `autofocus`,
+  // while a direct consumer would reach for React's camelCase `autoFocus`.
+  const shouldAutoFocus = autoFocus || autofocus === true;
   // Neutralise the emitter so neither picking an icon nor clearing can mutate
   // the value while read-only.
   const onChange = disabled || readOnly ? undefined : onChangeProp;
@@ -826,16 +903,34 @@ export function SelectIcon({
     searchInputRef.current?.focus();
   }, []);
 
-  // Render icon component
-  const renderIcon = useCallback((iconName: unknown, size = 20) => {
+  // Render icon component.
+  //
+  // `showRawName` surfaces the stored name as the icon's own SVG <title> when
+  // the name has no ICON_MAP entry. Only the trigger passes it: the picker grid
+  // cell already carries a formatted `title`, and an inner title would shadow it
+  // on hover with the raw snake_case name.
+  const renderIcon = useCallback((iconName: unknown, size = 20, showRawName = false) => {
     const IconComponent = typeof iconName === 'string' ? ICON_MAP[iconName] : undefined;
-    
+
     if (IconComponent) {
       return <IconComponent size={size} />;
     }
-    
-    // Fallback to question mark for unmapped icons
-    return <IconQuestionMark size={size} />;
+
+    // S5.7: same fallback glyph IconDisplay defaults to, for the same
+    // "unknown/unmapped" condition — and with the same stroke and aria-hidden
+    // IconDisplay applies, so the two renderings are genuinely identical
+    // rather than merely sharing a component. S5.1: the picker itself is a
+    // fixed curated set (Material has thousands of icon names — mapping all
+    // of them isn't bounded), so a stored name outside it stays unpickable;
+    // this at least surfaces the raw name instead of a bare '?'.
+    return (
+      <DEFAULT_UNKNOWN_ICON
+        size={size}
+        stroke={1.5}
+        aria-hidden
+        title={showRawName && typeof iconName === 'string' ? iconName : undefined}
+      />
+    );
   }, []);
 
   return (
@@ -863,6 +958,12 @@ export function SelectIcon({
         >
           <Menu.Target>
             <Button
+              // Forwarded props come FIRST: everything this component owns is
+              // declared below and therefore wins. The rule is "rest may add,
+              // never override" — which prop of two adjacent ones wins should
+              // not be accidental, and the pipeline injects admin-authored
+              // meta.options into this spread unfiltered.
+              {...rest}
               variant="default"
               justify="space-between"
               fullWidth
@@ -875,9 +976,16 @@ export function SelectIcon({
                   }}
                 />
               }
+              // `type` above all: Mantine's UnstyledButton applies its own
+              // `type: "button"` default *before* its rest spread, so a
+              // forwarded `type` would win — and any invalid button@type value
+              // falls back to "submit", which inside CollectionForm's <form>
+              // would save the record when the user clicks to open the picker.
+              type="button"
               disabled={disabled}
               data-testid="select-icon-trigger"
               aria-label={!label ? (ariaLabel || 'Select an icon') : undefined}
+              autoFocus={shouldAutoFocus}
               styles={{
                 root: {
                   fontWeight: 400,
@@ -894,7 +1002,7 @@ export function SelectIcon({
               <Group gap="xs">
                 {value ? (
                   <>
-                    {renderIcon(value, 18)}
+                    {renderIcon(value, 18, true)}
                     <Text size="sm">{formatTitle(value)}</Text>
                   </>
                 ) : (
