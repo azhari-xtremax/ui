@@ -688,6 +688,29 @@ const ICON_MAP: Record<string, React.ComponentType<MappedIconProps>> = {
 // looks the same everywhere it's rendered.
 export const DEFAULT_UNKNOWN_ICON: React.ComponentType<MappedIconProps> = IconQuestionMark;
 
+/**
+ * Strip a `var(--mantine-color-X-6)` wrapper down to the bare palette name `X`.
+ *
+ * Only for props that require a PALETTE NAME and cannot accept a CSS value —
+ * in practice, string interpolation that rebuilds a var() name. Do NOT use it
+ * for Mantine's `color` prop or for `ColorSwatch`:
+ *
+ *   - `color` already accepts any CSS value (parseThemeColor returns a
+ *     non-palette string untouched), so `var(--mantine-color-blue-3)` works
+ *     as-is, while normalizing it yields `blue-3` — not a palette reference
+ *     and not valid CSS, so the checked state computes to transparent.
+ *   - `ColorSwatch` never theme-resolves; it assigns `color` straight to
+ *     backgroundColor, so a bare palette name renders no colour at all.
+ *
+ * Returns the input unchanged unless it matches the exact var() shape, and
+ * anchors the shade suffix so a palette name containing `-6` (e.g. `brand-600`)
+ * is not silently mangled.
+ */
+export function paletteNameFromColor(color: string): string {
+  const match = /^var\(--mantine-color-(.+?)(?:-\d+)?\)$/.exec(color.trim());
+  return match ? match[1] : color;
+}
+
 export interface IconDisplayProps {
   /** Material Design icon name as stored on the entity (e.g. `role.icon`, `policy.icon`). */
   icon?: string | null;

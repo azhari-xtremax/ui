@@ -403,8 +403,8 @@ describe('SelectMultipleCheckbox per-option disabled', () => {
 });
 
 describe('SelectMultipleCheckbox per-choice icon and color (S7.2)', () => {
-  it('renders a choice icon as a glyph and still exposes the label text', () => {
-    render(
+  it('renders a choice icon as a glyph and still exposes the label text', async () => {
+    const { container } = render(
       <TestWrapper>
         <SelectMultipleCheckbox
           choices={[
@@ -415,6 +415,13 @@ describe('SelectMultipleCheckbox per-choice icon and color (S7.2)', () => {
       </TestWrapper>
     );
 
+    // Assert the GLYPH, not just the label: the aria-label is derived from
+    // item.text and is present with or without icon support, so asserting on
+    // it alone passes against a component that renders no icon at all.
+    // The icon module is loaded on demand, hence findBy.
+    await waitFor(() =>
+      expect(container.querySelector('svg.tabler-icon-lock')).not.toBeNull()
+    );
     expect(screen.getByLabelText('Select Locked')).toBeInTheDocument();
     expect(screen.getByLabelText('Select Open')).toBeInTheDocument();
     // The raw icon name is never printed as text.
@@ -422,15 +429,43 @@ describe('SelectMultipleCheckbox per-choice icon and color (S7.2)', () => {
   });
 
   it('renders a color swatch for a choice with color but no icon', () => {
-    render(
+    const { container } = render(
       <TestWrapper>
         <SelectMultipleCheckbox choices={[{ text: 'Red', value: 'red', color: '#ff0000' }]} />
       </TestWrapper>
     );
 
-    const checkbox = screen.getByLabelText('Select Red');
-    const root = checkbox.closest('.mantine-Checkbox-root');
-    expect(root?.querySelector('.mantine-ColorSwatch-root')).toBeInTheDocument();
+    const overlay = container.querySelector(
+      '.mantine-ColorSwatch-root [class*="colorOverlay"]'
+    ) as HTMLElement | null;
+    expect(overlay).not.toBeNull();
+    // jsdom normalizes hex to rgb().
+    expect(overlay!.style.backgroundColor).toBe('rgb(255, 0, 0)');
+  });
+
+  // ColorSwatch assigns `color` straight to backgroundColor with no theme
+  // resolution, so a palette-normalized `var(--mantine-color-blue-6)` arrives
+  // as the bare name `blue` — which is a CSS named colour (#0000FF), a
+  // visibly different blue from the Mantine one the adjacent checkbox uses.
+  //
+  // Asserted in the negative because jsdom refuses to store a var() in
+  // backgroundColor at all: the raw value leaves the style empty, while the
+  // normalized one leaves a literal `blue`. Seeing `blue` here therefore means
+  // the value was normalized on its way to the swatch.
+  it('does not palette-normalize the colour it hands the swatch', () => {
+    const { container } = render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[{ text: 'Blue', value: 'blue', color: 'var(--mantine-color-blue-6)' }]}
+        />
+      </TestWrapper>
+    );
+
+    const overlay = container.querySelector(
+      '.mantine-ColorSwatch-root [class*="colorOverlay"]'
+    ) as HTMLElement | null;
+    expect(overlay).not.toBeNull();
+    expect(overlay!.style.backgroundColor).not.toBe('blue');
   });
 
   it('applies per-choice color to the Checkbox itself, overriding the group default', () => {
@@ -447,5 +482,38 @@ describe('SelectMultipleCheckbox per-choice icon and color (S7.2)', () => {
     // Mantine sets the resolved color as a CSS custom property on the root.
     const root = checkbox.closest('.mantine-Checkbox-root') as HTMLElement;
     expect(root.style.getPropertyValue('--checkbox-color')).toContain('red');
+  });
+
+  // A non-6 shade must survive to the DOM as valid CSS. Palette-normalizing it
+  // yields `blue-3`, which is neither a Mantine palette reference nor a valid
+  // colour, so the checked box computes to transparent.
+  it('preserves a non-shade-6 choice colour as valid CSS', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[{ text: 'Shade', value: 'shade', color: 'var(--mantine-color-blue-3)' }]}
+        />
+      </TestWrapper>
+    );
+
+    const root = (screen.getByLabelText('Select Shade') as HTMLInputElement)
+      .closest('.mantine-Checkbox-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--checkbox-color')).toBe('var(--mantine-color-blue-3)');
+  });
+
+  // The fix the changeset leads with is the GROUP-level colour, which was
+  // being wiped entirely by wrapperProps.style clobbering Mantine's computed
+  // style. Pinned directly so it cannot regress if the per-choice feature
+  // above is ever reworked.
+  it('applies the group-level color prop to the checkbox root', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox color="grape" choices={[{ text: 'Alpha', value: 'a' }]} />
+      </TestWrapper>
+    );
+
+    const root = (screen.getByLabelText('Select Alpha') as HTMLInputElement)
+      .closest('.mantine-Checkbox-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--checkbox-color')).toBe('var(--mantine-color-grape-filled)');
   });
 });
