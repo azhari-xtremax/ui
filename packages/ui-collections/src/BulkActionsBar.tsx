@@ -16,6 +16,8 @@ import type { BulkAction } from "./CollectionList";
 
 export interface BulkActionsBarProps {
   selectedIds: (string | number)[];
+  /** The selected rows themselves, forwarded to bulk actions that need their fields */
+  selectedRows?: Record<string, unknown>[];
   enableDelete: boolean;
   deleteAllowed: boolean;
   createAllowed: boolean;
@@ -27,6 +29,7 @@ export interface BulkActionsBarProps {
 
 export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
   selectedIds,
+  selectedRows,
   enableDelete,
   deleteAllowed,
   createAllowed,
@@ -79,7 +82,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
                 action.requiredPermission === "create" ? <IconPlus size={16} /> :
                 null
               )}
-              onClick={() => permAllowed && action.action(selectedIds)}
+              onClick={() => permAllowed && action.action(selectedIds, selectedRows)}
               disabled={!permAllowed}
               data-testid={`bulk-action-${index}`}
             >

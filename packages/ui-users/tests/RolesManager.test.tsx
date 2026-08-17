@@ -74,6 +74,37 @@ describe('RolesManager', () => {
     );
   });
 
+  // IconDisplay's default fallback is the generic unknown-icon glyph, which
+  // reads as broken data for the ordinary case of a role with no icon set.
+  // This column passes an explicit users-group fallback instead — the same
+  // reasoning behind the policy surfaces passing IconShield.
+  it('renders a users-group glyph, not the unknown-icon glyph, for a role with no icon', async () => {
+    fetchRolesMock.mockResolvedValue({
+      roles: [{ id: 'role-no-icon', name: 'No Icon Role', icon: null }],
+      total: 1,
+      totalPages: 1,
+    });
+
+    const { container } = renderManager();
+    await waitFor(() => expect(screen.getByText('No Icon Role')).toBeInTheDocument());
+
+    expect(container.querySelector('svg.tabler-icon-users-group')).not.toBeNull();
+    expect(container.querySelector('svg.tabler-icon-question-mark')).toBeNull();
+  });
+
+  it('still renders the mapped glyph for a role that does have an icon', async () => {
+    fetchRolesMock.mockResolvedValue({
+      roles: [{ id: 'role-shield', name: 'Shielded', icon: 'shield' }],
+      total: 1,
+      totalPages: 1,
+    });
+
+    const { container } = renderManager();
+    await waitFor(() => expect(screen.getByText('Shielded')).toBeInTheDocument());
+
+    expect(container.querySelector('svg.tabler-icon-shield')).not.toBeNull();
+  });
+
   it('surfaces a load failure as an error empty state plus a toast (not "no roles yet")', async () => {
     const show = vi.spyOn(notifications, 'show').mockImplementation(() => '');
     fetchRolesMock.mockRejectedValue(new Error('service unavailable'));

@@ -97,6 +97,12 @@ type PermissionLevel = 'all' | 'custom' | 'none';
 export interface SystemPermissionsProps {
   primaryKey?: string | null;
   disabled?: boolean;
+  /**
+   * Permissions are visible but not modifiable. Enforced at the
+   * `emitAlterations` chokepoint plus pointer suppression on the matrix — the
+   * ~25 affordances below were all gated on `disabled` alone.
+   */
+  readOnly?: boolean;
   value?: PermissionAlterations | number[] | null;
   onChange?: (value: PermissionAlterations | null) => void;
   appAccess?: boolean;
@@ -383,6 +389,7 @@ function PermissionsRow({
 export const SystemPermissions = forwardRef<HTMLDivElement, SystemPermissionsProps>(({
   primaryKey,
   disabled = false,
+  readOnly = false,
   value,
   onChange,
   appAccess = false,
@@ -564,12 +571,13 @@ export const SystemPermissions = forwardRef<HTMLDivElement, SystemPermissionsPro
 
   // --- Emit changes ---
   const emitAlterations = useCallback((newAlts: PermissionAlterations) => {
+    if (disabled || readOnly) return;
     if (newAlts.create.length === 0 && newAlts.update.length === 0 && newAlts.delete.length === 0) {
       onChange?.(null);
     } else {
       onChange?.(newAlts);
     }
-  }, [onChange]);
+  }, [onChange, disabled, readOnly]);
 
   // --- CRUD operations ---
   const createPermission = useCallback((...items: Partial<Permission>[]) => {
