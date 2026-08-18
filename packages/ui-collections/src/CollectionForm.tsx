@@ -34,7 +34,10 @@ import {
 import { FieldsService, ItemsService, PermissionsService, apiRequest } from "@buildpad/services";
 import type { CollectionActionAccess, CollectionAccess } from "@buildpad/services";
 import type { Field, FormDefinition } from "@buildpad/types";
-import { buildFieldsFromDefinition } from "@buildpad/utils";
+import {
+  buildFieldsFromDefinition,
+  getDefaultValuesFromFields,
+} from "@buildpad/utils";
 import { VForm } from "@buildpad/ui-form";
 import { IconAlertCircle, IconCheck, IconTrash, IconX } from "@tabler/icons-react";
 import React, {
@@ -440,10 +443,34 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
 
         // Apply permission presets as defaults on create
         if (mode === "create") {
+          // Seed each field's own schema-level default (e.g. a column's
+          // `DEFAULT 'active'`).
+          //
+          // Only fields the user can actually WRITE and actually SEE are
+          // seeded. Everything in formData is sent on create, so seeding a
+          // field outside the role's write permission puts it in the payload
+          // for the role to be rejected on, and seeding a condition-hidden
+          // field writes a value the user was never shown.
+          const seedableFields = editableFields.filter(
+            (f) =>
+              f.meta?.readonly !== true &&
+              f.meta?.hidden !== true &&
+              (!writeFields || writeFields.includes(f.field)),
+          );
+          const schemaDefaults = getDefaultValuesFromFields(seedableFields);
+
           const presets = actionAccess?.presets;
           if (presets && typeof presets === "object") {
             initialData = { ...presets, ...initialData };
           }
+
+          // Applied LAST so it sits at the BOTTOM of the precedence chain:
+          // a column default is the weakest signal, and both a permission
+          // preset (which is how a role forces status/owner/tenant on create)
+          // and an explicit `defaultValues` prop must win over it. Merging it
+          // before the presets folded it into `initialData`, which then beat
+          // the preset it was supposed to lose to.
+          initialData = { ...schemaDefaults, ...initialData };
         }
 
         // If editing, load the existing item
@@ -561,10 +588,13 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
 
   // Update form field - used by VForm's onUpdate callback
   const handleFormUpdate = useCallback((values: Record<string, unknown>) => {
-    setFormData((prev) => ({
-      ...prev,
-      ...values,
-    }));
+    // Replace, don't merge. VForm always emits the COMPLETE model — including
+    // when it drops a key because the value returned to its initial/default
+    // (handleFieldChange) or was unset (handleFieldUnset). Merging kept the
+    // dropped key at its stale value, so re-selecting a field's default
+    // visibly snapped the control back to the previous choice and submitted
+    // that instead.
+    setFormData(values);
     setSuccess(false);
     setFieldErrors({}); // Clear field errors when user edits
   }, []);

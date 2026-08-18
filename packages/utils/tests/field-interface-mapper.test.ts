@@ -7,7 +7,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { getFieldInterface } from '../src/field-interface-mapper';
+import {
+  getFieldInterface,
+  getFieldDefault,
+  getDefaultValuesFromFields,
+} from '../src/field-interface-mapper';
 import type { Field } from '@buildpad/types';
 
 function makeField(overrides: Partial<Field> = {}): Field {
@@ -64,5 +68,137 @@ describe('getFieldInterface — explicit "input" interface', () => {
 
     expect(config.type).toBe('input');
     expect(config.props?.type).toBe('string');
+  });
+});
+
+describe('getFieldDefault', () => {
+  const withDefault = (default_value: unknown, type = 'string') =>
+    makeField({ type, schema: { default_value } as Field['schema'] });
+
+  // Postgres appends the column's type to a literal default. The type name is
+  // not just words: it carries length/precision, array dimensions, schema
+  // qualification and quoted identifiers, and casts can chain. Anything the
+  // strip misses is returned as raw SQL text and — since CollectionForm seeds
+  // create-mode form data from this — written to the row.
+  it.each([
+    ["'active'::character varying", 'active'],
+    ["'active'::character varying(255)", 'active'],
+    ["'2024-01-01'::date", '2024-01-01'],
+    ["'{}'::text[]", '{}'],
+    ["'USD'::public.currency_code", 'USD'],
+    ['\'active\'::"OrderStatus"', 'active'],
+    ["'Y'::bpchar", 'Y'],
+    ["'x'::timestamp with time zone", 'x'],
+    ["'en-US'", 'en-US'],
+    ['auto', 'auto'],
+    ["''::text", ''],
+  ])('parses %j as %j', (defaultValue, expected) => {
+    expect(getFieldDefault(withDefault(defaultValue))).toBe(expected);
+  });
+
+  // The generated-default guard used to test for a bare "(" anywhere, which
+  // rejected every ordinary literal whose TEXT contains a parenthesis and
+  // every parameterized cast — the exact defaults it was meant to let through.
+  it.each([
+    ["'Acme (US)'::character varying", 'Acme (US)'],
+    ["'(pending)'::text", '(pending)'],
+    ["'Hello (world)'::text", 'Hello (world)'],
+  ])('keeps %j, which merely contains a parenthesis', (defaultValue, expected) => {
+    expect(getFieldDefault(withDefault(defaultValue))).toBe(expected);
+  });
+
+  // SQL escapes an embedded quote by doubling it.
+  it('unescapes a doubled single quote', () => {
+    expect(getFieldDefault(withDefault("'It''s'::character varying"))).toBe("It's");
+    expect(getFieldDefault(withDefault("'O''Brien'"))).toBe("O'Brien");
+  });
+
+  // Defaults the database evaluates per row are not form values. The keyword
+  // spellings carry no parentheses, so a paren test cannot see them.
+  it.each([
+    'gen_random_uuid()',
+    'now()',
+    "nextval('users_id_seq'::regclass)",
+    'CURRENT_TIMESTAMP',
+    'current_timestamp',
+    'CURRENT_DATE',
+    'CURRENT_USER',
+    'NULL',
+    'NULL::character varying',
+  ])('returns undefined for the generated default %j', (defaultValue) => {
+    expect(getFieldDefault(withDefault(defaultValue))).toBeUndefined();
+  });
+
+  // Only null/undefined mean "no default". A falsy test dropped the rest, so a
+  // column defaulting to false behaved differently from one defaulting to true.
+  it.each([
+    [null, undefined],
+    [undefined, undefined],
+    [0, 0],
+    [false, false],
+    ['', ''],
+  ])('treats a %j default as %j', (defaultValue, expected) => {
+    expect(getFieldDefault(withDefault(defaultValue, 'integer'))).toBe(expected);
+  });
+
+  // Some backends return the default already parsed instead of as SQL text;
+  // stringifying those produced "[object Object]" and turned [] into 0.
+  it('passes an already-parsed default through untouched', () => {
+    expect(getFieldDefault(withDefault([], 'json'))).toEqual([]);
+    expect(getFieldDefault(withDefault({ a: 1 }, 'json'))).toEqual({ a: 1 });
+  });
+
+  // The parse is directed by the field's declared type, not by the shape of
+  // the text — guessing from shape turned a varchar default of 007 into 7.
+  describe('type-directed coercion', () => {
+    it('parses a json default into a value, not a string', () => {
+      expect(getFieldDefault(withDefault("'{}'::jsonb", 'json'))).toEqual({});
+      expect(getFieldDefault(withDefault("'[1,2]'::jsonb", 'json'))).toEqual([1, 2]);
+      expect(getFieldDefault(withDefault('\'{"theme":"dark"}\'::jsonb', 'json'))).toEqual({
+        theme: 'dark',
+      });
+    });
+
+    it('returns numbers for numeric columns, including quoted and negative ones', () => {
+      expect(getFieldDefault(withDefault('0::integer', 'integer'))).toBe(0);
+      expect(getFieldDefault(withDefault("'-1'::integer", 'integer'))).toBe(-1);
+      expect(getFieldDefault(withDefault('0::numeric(10,2)', 'decimal'))).toBe(0);
+      expect(getFieldDefault(withDefault('1.5', 'float'))).toBe(1.5);
+      // Trailing zeros do not survive a round-trip through Number, so a
+      // declared numeric type is what makes this a number rather than text.
+      expect(getFieldDefault(withDefault('0.50', 'decimal'))).toBe(0.5);
+    });
+
+    it('leaves a numeric-looking string column as a string', () => {
+      expect(getFieldDefault(withDefault("'007'::character varying"))).toBe('007');
+      expect(getFieldDefault(withDefault("'1e3'::character varying"))).toBe('1e3');
+      expect(getFieldDefault(withDefault("'0x10'::character varying"))).toBe('0x10');
+      expect(getFieldDefault(withDefault("'0'::character varying"))).toBe('0');
+    });
+
+    it('does not silently shift an integer past the safe range', () => {
+      expect(getFieldDefault(withDefault('9007199254740993', 'bigInteger'))).toBe(
+        '9007199254740993',
+      );
+    });
+
+    it('parses boolean columns from either spelling', () => {
+      expect(getFieldDefault(withDefault('true', 'boolean'))).toBe(true);
+      expect(getFieldDefault(withDefault('false', 'boolean'))).toBe(false);
+      expect(getFieldDefault(withDefault("'true'::boolean", 'boolean'))).toBe(true);
+    });
+  });
+});
+
+describe('getDefaultValuesFromFields', () => {
+  it('keys usable defaults by field name and omits the rest', () => {
+    const fields = [
+      makeField({ field: 'status', schema: { default_value: "'active'::character varying" } as Field['schema'] }),
+      makeField({ field: 'created', schema: { default_value: 'now()' } as Field['schema'] }),
+      makeField({ field: 'title', schema: { default_value: null } as Field['schema'] }),
+      makeField({ field: 'retries', type: 'integer', schema: { default_value: 0 } as Field['schema'] }),
+    ];
+
+    expect(getDefaultValuesFromFields(fields)).toEqual({ status: 'active', retries: 0 });
   });
 });
