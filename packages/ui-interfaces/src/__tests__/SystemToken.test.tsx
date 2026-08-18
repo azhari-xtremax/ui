@@ -112,12 +112,71 @@ describe('SystemToken', () => {
       expect(screen.getByPlaceholderText('Value Securely Saved')).toBeInTheDocument();
     });
 
-    it('shows no placeholder when disabled and no value', () => {
+    // The empty-state text names the Generate control, which is hidden for a
+    // disabled or read-only field. Suppressing the text entirely left a blank
+    // box with no indication of state at all; say what is true instead.
+    it.each([
+      ['disabled', { disabled: true }],
+      ['read-only', { readOnly: true }],
+    ])('states that no token is set when %s', (_name, props) => {
       renderWithProvider(
-        <SystemToken disabled onChange={mockOnChange} data-testid="token" />
+        <SystemToken {...props} onChange={mockOnChange} data-testid="token" />
       );
       const input = screen.getByTestId('token') as HTMLInputElement;
-      expect(input.placeholder).toBe('');
+      expect(input.placeholder).toBe('No token set');
+    });
+
+    // Naming a control the user cannot see is worse than saying nothing.
+    it.each([
+      ['disabled', { disabled: true }],
+      ['read-only', { readOnly: true }],
+    ])('does not tell a %s user to click Generate', (_name, props) => {
+      renderWithProvider(
+        <SystemToken {...props} onChange={mockOnChange} data-testid="token" />
+      );
+      const input = screen.getByTestId('token') as HTMLInputElement;
+      expect(input.placeholder).not.toMatch(/Generate/);
+      expect(screen.queryByLabelText(/Generate token/i)).not.toBeInTheDocument();
+    });
+
+    // "The token went away" arrives as a plain null now that the container
+    // stopped re-masking it, so the fresh-token flag has to clear on that
+    // route too — otherwise the credential input stays type="text".
+    it('re-masks the input when the value is cleared after generating', async () => {
+      const { rerender } = renderWithProvider(
+        <SystemToken value={null} onChange={mockOnChange} data-testid="token"
+          generate={() => 'fresh-token-value'} />
+      );
+      fireEvent.click(screen.getByLabelText(/Generate token/i));
+      await waitFor(() => {
+        expect((screen.getByTestId('token') as HTMLInputElement).type).toBe('text');
+      });
+
+      // The container picks the generated token up through onChange...
+      rerender(
+        <MantineProvider>
+          <SystemToken value="fresh-token-value" onChange={mockOnChange} data-testid="token"
+            generate={() => 'fresh-token-value'} />
+        </MantineProvider>
+      );
+      // ...then Discard restores the stored state, which for a tokenless user
+      // is a plain null rather than the mask.
+      rerender(
+        <MantineProvider>
+          <SystemToken value={null} onChange={mockOnChange} data-testid="token"
+            generate={() => 'fresh-token-value'} />
+        </MantineProvider>
+      );
+      expect((screen.getByTestId('token') as HTMLInputElement).type).toBe('password');
+    });
+
+    // FormField renders the visible label itself and withholds `label` from
+    // the leaf, so aria-label is the input's only accessible name.
+    it('uses aria-label as the accessible name when no label is rendered', () => {
+      renderWithProvider(
+        <SystemToken aria-label="Token" onChange={mockOnChange} />
+      );
+      expect(screen.getByLabelText('Token')).toBeInTheDocument();
     });
   });
 

@@ -191,3 +191,58 @@ export function resolveRelationFields(
     const merged = new Set([pkField, ...fromTemplate, ...fromProp]);
     return Array.from(merged);
 }
+
+/** A template path is only usable as an API field if it's a plain dotted path. */
+function isPlainFieldPath(key: string): boolean {
+    return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/.test(key);
+}
+
+/**
+ * Split a junction display template's field references into the two scopes an
+ * M2M query needs.
+ *
+ * M2M templates come from three rungs with MIXED conventions: an explicit
+ * `template` prop may be written junction-relative (`{{tag_id.name}}`) or
+ * related-relative (`{{name}}` — what the prop docs imply), while the related
+ * collection's `display_template` and the `{{ pk }}` bootstrap are always
+ * related-relative. Sending a related-relative path into the junction query
+ * asks the junction table for a column it doesn't have, which errors the whole
+ * request rather than merely rendering a blank label.
+ *
+ * Returns:
+ *  - `junction`: paths ready for the junction collection's `fields=`, i.e.
+ *    related-relative paths prefixed with the junction field.
+ *  - `related`: the same references relative to the related collection, for
+ *    querying it directly.
+ *
+ * The bare junction-field root that `extractFieldsFromTemplate` emits
+ * alongside a dotted path (`tag_id.name` -> also `tag_id`) is dropped: asking
+ * for a relational field bare collapses it to the scalar FK, which breaks the
+ * nested-object shape the renderer expects. Keys that aren't plain dotted
+ * paths (e.g. a `{{ name | upper }}` filter expression) are skipped rather
+ * than sent as column names.
+ */
+export function splitJunctionTemplateFields(
+    displayTemplate: string,
+    junctionField: string,
+): { junction: string[]; related: string[] } {
+    const junction = new Set<string>();
+    const related = new Set<string>();
+
+    for (const key of extractFieldsFromTemplate(displayTemplate)) {
+        if (!isPlainFieldPath(key)) continue;
+        // The bare junction root carries no information of its own.
+        if (key === junctionField) continue;
+
+        if (key.startsWith(`${junctionField}.`)) {
+            const rest = key.slice(junctionField.length + 1);
+            junction.add(key);
+            related.add(rest);
+        } else {
+            junction.add(`${junctionField}.${key}`);
+            related.add(key);
+        }
+    }
+
+    return { junction: [...junction], related: [...related] };
+}

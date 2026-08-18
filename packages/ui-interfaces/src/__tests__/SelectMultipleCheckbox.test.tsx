@@ -223,6 +223,64 @@ describe('SelectMultipleCheckbox', () => {
     expect(screen.getByLabelText('Custom value checkbox: custom_value')).toBeChecked();
   });
 
+  // V3-7: the S7.3 exclusion matched a row against a stored value by
+  // stringified digits (`rowValues.has(String(v))`), not by actual value
+  // identity. A stored NUMBER 5 was hidden entirely whenever an unrelated
+  // new row's in-progress (unchecked) text happened to be the STRING "5" —
+  // neither the row itself (checked via strict equality, so "5" !== 5 never
+  // matched) nor the read-only fallback (wrongly excluded) rendered it.
+  it('does not hide a stored numeric custom value when an unrelated row is mid-typing the same digits', async () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox choices={mockChoices} value={[5]} allowOther />
+      </TestWrapper>
+    );
+
+    expect(screen.getByLabelText('Selected custom value: 5')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Other'));
+    const input = await screen.findByPlaceholderText('Enter custom value');
+    fireEvent.change(input, { target: { value: '5' } });
+
+    // The stored number 5 must still render — the new row is a different,
+    // unchecked, string-typed entry, not the thing backing it.
+    expect(screen.getByLabelText('Selected custom value: 5')).toBeInTheDocument();
+  });
+
+  // The other half of the same predicate: once the row IS checked, it is the
+  // thing backing that entry and the read-only copy must disappear. Comparing
+  // by strict equality alone cannot see this — a row's typed text is always a
+  // string, so it can never strictly equal a stored NUMBER, and the value
+  // would render twice (once read-only, once as the row).
+  it('hides the read-only copy once a row backing the same value is checked', async () => {
+    const Host = () => {
+      const [value, setValue] = React.useState<(string | number | boolean)[]>([5]);
+      return (
+        <SelectMultipleCheckbox
+          choices={mockChoices}
+          value={value}
+          onChange={(v) => setValue(v as (string | number | boolean)[])}
+          allowOther
+        />
+      );
+    };
+
+    render(
+      <TestWrapper>
+        <Host />
+      </TestWrapper>
+    );
+
+    fireEvent.click(screen.getByText('Other'));
+    const input = await screen.findByPlaceholderText('Enter custom value');
+    fireEvent.change(input, { target: { value: '5' } });
+
+    // Check the row — it now owns the "5" entry.
+    fireEvent.click(screen.getByLabelText('Custom value checkbox: 5'));
+
+    expect(screen.queryByLabelText('Selected custom value: 5')).not.toBeInTheDocument();
+  });
+
   it('is disabled when disabled prop is true', () => {
     render(
       <TestWrapper>
@@ -399,5 +457,121 @@ describe('SelectMultipleCheckbox per-option disabled', () => {
 
     expect(screen.getByLabelText('Locked')).toBeDisabled();
     expect(screen.getByLabelText('Open')).not.toBeDisabled();
+  });
+});
+
+describe('SelectMultipleCheckbox per-choice icon and color (S7.2)', () => {
+  it('renders a choice icon as a glyph and still exposes the label text', async () => {
+    const { container } = render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[
+            { text: 'Locked', value: 'locked', icon: 'lock' },
+            { text: 'Open', value: 'open' },
+          ]}
+        />
+      </TestWrapper>
+    );
+
+    // Assert the GLYPH, not just the label: the aria-label is derived from
+    // item.text and is present with or without icon support, so asserting on
+    // it alone passes against a component that renders no icon at all.
+    // The icon module is loaded on demand, hence findBy.
+    await waitFor(() =>
+      expect(container.querySelector('svg.tabler-icon-lock')).not.toBeNull()
+    );
+    expect(screen.getByLabelText('Select Locked')).toBeInTheDocument();
+    expect(screen.getByLabelText('Select Open')).toBeInTheDocument();
+    // The raw icon name is never printed as text.
+    expect(screen.queryByText('lock')).not.toBeInTheDocument();
+  });
+
+  it('renders a color swatch for a choice with color but no icon', () => {
+    const { container } = render(
+      <TestWrapper>
+        <SelectMultipleCheckbox choices={[{ text: 'Red', value: 'red', color: '#ff0000' }]} />
+      </TestWrapper>
+    );
+
+    const overlay = container.querySelector(
+      '.mantine-ColorSwatch-root [class*="colorOverlay"]'
+    ) as HTMLElement | null;
+    expect(overlay).not.toBeNull();
+    // jsdom normalizes hex to rgb().
+    expect(overlay!.style.backgroundColor).toBe('rgb(255, 0, 0)');
+  });
+
+  // ColorSwatch assigns `color` straight to backgroundColor with no theme
+  // resolution, so a palette-normalized `var(--mantine-color-blue-6)` arrives
+  // as the bare name `blue` — which is a CSS named colour (#0000FF), a
+  // visibly different blue from the Mantine one the adjacent checkbox uses.
+  //
+  // Asserted in the negative because jsdom refuses to store a var() in
+  // backgroundColor at all: the raw value leaves the style empty, while the
+  // normalized one leaves a literal `blue`. Seeing `blue` here therefore means
+  // the value was normalized on its way to the swatch.
+  it('does not palette-normalize the colour it hands the swatch', () => {
+    const { container } = render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[{ text: 'Blue', value: 'blue', color: 'var(--mantine-color-blue-6)' }]}
+        />
+      </TestWrapper>
+    );
+
+    const overlay = container.querySelector(
+      '.mantine-ColorSwatch-root [class*="colorOverlay"]'
+    ) as HTMLElement | null;
+    expect(overlay).not.toBeNull();
+    expect(overlay!.style.backgroundColor).not.toBe('blue');
+  });
+
+  it('applies per-choice color to the Checkbox itself, overriding the group default', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          color="blue"
+          choices={[{ text: 'Custom', value: 'custom', color: 'red' }]}
+        />
+      </TestWrapper>
+    );
+
+    const checkbox = screen.getByLabelText('Select Custom') as HTMLInputElement;
+    // Mantine sets the resolved color as a CSS custom property on the root.
+    const root = checkbox.closest('.mantine-Checkbox-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--checkbox-color')).toContain('red');
+  });
+
+  // A non-6 shade must survive to the DOM as valid CSS. Palette-normalizing it
+  // yields `blue-3`, which is neither a Mantine palette reference nor a valid
+  // colour, so the checked box computes to transparent.
+  it('preserves a non-shade-6 choice colour as valid CSS', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox
+          choices={[{ text: 'Shade', value: 'shade', color: 'var(--mantine-color-blue-3)' }]}
+        />
+      </TestWrapper>
+    );
+
+    const root = (screen.getByLabelText('Select Shade') as HTMLInputElement)
+      .closest('.mantine-Checkbox-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--checkbox-color')).toBe('var(--mantine-color-blue-3)');
+  });
+
+  // The fix the changeset leads with is the GROUP-level colour, which was
+  // being wiped entirely by wrapperProps.style clobbering Mantine's computed
+  // style. Pinned directly so it cannot regress if the per-choice feature
+  // above is ever reworked.
+  it('applies the group-level color prop to the checkbox root', () => {
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckbox color="grape" choices={[{ text: 'Alpha', value: 'a' }]} />
+      </TestWrapper>
+    );
+
+    const root = (screen.getByLabelText('Select Alpha') as HTMLInputElement)
+      .closest('.mantine-Checkbox-root') as HTMLElement;
+    expect(root.style.getPropertyValue('--checkbox-color')).toBe('var(--mantine-color-grape-filled)');
   });
 });

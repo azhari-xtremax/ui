@@ -5,10 +5,19 @@
  * Includes field interface mapping, value formatting, and validation helpers.
  */
 
+// Concealed values (hash / conceal specials)
+export {
+  CONCEALED_PLACEHOLDER,
+  isConcealedValue,
+  isConcealedField,
+  concealingInterface,
+} from './conceal';
+
 // Field Interface Mapper
 export {
   getFieldInterface,
   getFieldDefault,
+  getDefaultValuesFromFields,
   getFieldValidation,
   formatFieldValue,
   isFieldReadOnly,
@@ -88,6 +97,10 @@ export {
   provisionableInterfacesForType,
   CHOICE_INTERFACES,
   interfaceRequiresChoices,
+  resolveChoiceLabel,
+  parseChoiceValues,
+  splitCsvValue,
+  type InterfaceChoice,
   type ProvisionableInterface,
   type ProvisionableInterfaceGroup,
 } from './interface-catalog';

@@ -198,6 +198,11 @@ export interface FileProps {
   field?: string;
   placeholder?: string;
   readonly?: boolean;
+  /**
+   * camelCase alias for `readonly`. This is the casing @buildpad/ui-form passes,
+   * so it must be accepted here or the read-only render branch is unreachable.
+   */
+  readOnly?: boolean;
   label?: string;
   accept?: string;
   fromUser?: boolean;
@@ -216,13 +221,16 @@ export const File: React.FC<FileProps> = ({
   folder,
   // collection and field are kept for API parity with DaaS interfaces
   placeholder = "No file selected",
-  readonly = false,
+  readonly: readonlyProp = false,
+  readOnly: readOnlyProp = false,
   label,
   accept,
   fromUser = true,
   fromUrl = true,
   fromLibrary = true,
 }) => {
+  // Accept either casing — @buildpad/ui-form passes camelCase `readOnly`.
+  const readonly = readonlyProp || readOnlyProp;
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<FileUpload | null>(null);
   const [editDrawerActive, setEditDrawerActive] = useState(false);

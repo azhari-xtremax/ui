@@ -165,6 +165,101 @@ describe('SelectIcon', () => {
       });
     }
   });
+
+  // S5.5: forward extra props to the trigger.
+  it('forwards arbitrary extra props to the trigger button', () => {
+    renderWithMantine(<SelectIcon data-extra="probe" />);
+    expect(screen.getByTestId('select-icon-trigger')).toHaveAttribute('data-extra', 'probe');
+  });
+
+  // The form pipeline (VForm → FormField → FormFieldInterface) sends the
+  // lowercase spelling; a direct consumer reaches for React's camelCase one.
+  // Both must work, or the feature is dead on whichever path isn't covered.
+  it.each([
+    ['camelCase autoFocus', { autoFocus: true }],
+    ['lowercase autofocus (the spelling the form pipeline sends)', { autofocus: true }],
+  ])('autofocuses the trigger via %s', (_label, props) => {
+    renderWithMantine(<SelectIcon {...(props as Record<string, unknown>)} />);
+    expect(screen.getByTestId('select-icon-trigger')).toHaveFocus();
+  });
+
+  // The trigger must never become a submit button. FormFieldInterface passes
+  // `type: field.type` ('string', 'uuid', …) to every leaf; an invalid
+  // button@type falls back to "submit", and CollectionForm renders fields
+  // inside a <form onSubmit={handleSave}> — so a forwarded `type` would save
+  // the record when the user merely clicks to open the picker.
+  it('keeps type="button" even when the pipeline forwards a DaaS field type', () => {
+    renderWithMantine(<SelectIcon {...({ type: 'string' } as Record<string, unknown>)} />);
+    expect(screen.getByTestId('select-icon-trigger')).toHaveAttribute('type', 'button');
+  });
+
+  it('does not submit an enclosing form when the trigger is clicked', () => {
+    const onSubmit = jest.fn((e: React.FormEvent) => e.preventDefault());
+    renderWithMantine(
+      <form onSubmit={onSubmit}>
+        <SelectIcon {...({ type: 'string' } as Record<string, unknown>)} />
+      </form>,
+    );
+
+    fireEvent.click(screen.getByTestId('select-icon-trigger'));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  // DaaS schema metadata reaches every leaf from FormFieldInterface. None of it
+  // is a valid DOM attribute; forwarding it produces React console errors and,
+  // for `type`, the submit bug above.
+  it('does not leak DaaS schema metadata onto the trigger', () => {
+    renderWithMantine(
+      <SelectIcon
+        {...({
+          collection: 'articles',
+          field: 'icon',
+          primaryKey: '1',
+          maxLength: 255,
+          nullable: true,
+          defaultValue: null,
+        } as Record<string, unknown>)}
+      />,
+    );
+
+    const trigger = screen.getByTestId('select-icon-trigger');
+    for (const attr of ['collection', 'field', 'primarykey', 'maxlength', 'nullable']) {
+      expect(trigger).not.toHaveAttribute(attr);
+    }
+  });
+
+  // S5.1/S5.7: a stored name outside the curated ICON_MAP can't be fixed by
+  // expanding the picker (Material has thousands of names), but the trigger's
+  // fallback must match IconDisplay's (S5.7) and surface the raw name rather
+  // than a silent bare '?' (S5.1).
+  it('surfaces the raw stored name on the fallback glyph for an unmapped value', () => {
+    renderWithMantine(<SelectIcon value="not_a_real_icon" />);
+    // Tabler renders `title` as a real <svg><title>, so this asserts the
+    // behaviour rather than the element used to achieve it.
+    expect(screen.getByTitle('not_a_real_icon')).toBeInTheDocument();
+  });
+
+  // The actual S5.7 invariant: the trigger fallback and IconDisplay's default
+  // must be indistinguishable, not merely share a component. Sharing the
+  // component alone still left them at different stroke weights.
+  it('renders the unknown-icon fallback identically to IconDisplay', () => {
+    const { container: trigger } = renderWithMantine(<SelectIcon value="not_a_real_icon" />);
+    const { container: display } = renderWithMantine(
+      <IconDisplay icon="not_a_real_icon" size={18} />,
+    );
+
+    const describe_ = (root: HTMLElement) => {
+      const svg = root.querySelector('svg.tabler-icon-question-mark');
+      return svg && {
+        stroke: svg.getAttribute('stroke-width'),
+        ariaHidden: svg.getAttribute('aria-hidden'),
+        width: svg.getAttribute('width'),
+      };
+    };
+
+    expect(describe_(trigger)).not.toBeNull();
+    expect(describe_(trigger)).toEqual(describe_(display));
+  });
 });
 
 describe('IconDisplay', () => {
@@ -179,8 +274,11 @@ describe('IconDisplay', () => {
   });
 
   it('falls back to the provided component for unknown or empty names', () => {
+    // S5.7: the default fallback is now IconQuestionMark — the same glyph
+    // SelectIcon's own trigger (renderIcon) uses for the same condition, so
+    // "unknown icon" looks identical everywhere it's rendered.
     const { container } = renderWithMantine(<IconDisplay icon="not_a_real_icon" />);
-    expect(container.querySelector('svg.tabler-icon-users-group')).not.toBeNull();
+    expect(container.querySelector('svg.tabler-icon-question-mark')).not.toBeNull();
 
     const { container: second } = renderWithMantine(
       <IconDisplay icon={null} fallback={IconShield} />
