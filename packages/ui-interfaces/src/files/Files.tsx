@@ -35,6 +35,11 @@ export interface FilesProps {
   placeholder?: string;
   disabled?: boolean;
   readonly?: boolean;
+  /**
+   * camelCase alias for `readonly`. This is the casing @buildpad/ui-form passes,
+   * so it must be accepted here or the read-only affordances are unreachable.
+   */
+  readOnly?: boolean;
   enableCreate?: boolean;
   enableSelect?: boolean;
   folder?: string;
@@ -57,7 +62,8 @@ export const Files: React.FC<FilesProps> = ({
   label,
   placeholder = 'No items',
   disabled = false,
-  readonly = false,
+  readonly: readonlyProp = false,
+  readOnly: readOnlyProp = false,
   enableCreate = true,
   enableSelect = true,
   folder,
@@ -67,6 +73,8 @@ export const Files: React.FC<FilesProps> = ({
   primaryKey,
   junctionConfig,
 }) => {
+  // Accept either casing — @buildpad/ui-form passes camelCase `readOnly`.
+  const readonly = readonlyProp || readOnlyProp;
   // Local state for hydrated files
   const [files, setFiles] = useState<FileUpload[]>([]);
   const [loading, setLoading] = useState(false);

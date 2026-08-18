@@ -28,6 +28,12 @@ export interface SelectRadioProps {
   iconOn?: string;
   iconOff?: string;
   color?: string;
+  /**
+   * Value is visible but not editable. Unlike `disabled` this keeps the control
+   * in the tab order and un-greyed; Mantine's Radio has no native readOnly, so
+   * it is enforced by gating the handlers and suppressing pointer events.
+   */
+  readOnly?: boolean;
   'aria-label'?: string;
 }
 
@@ -36,6 +42,7 @@ export function SelectRadio({
   onChange,
   label,
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   choices = [],
@@ -139,6 +146,7 @@ export function SelectRadio({
 
   // Handle radio button change
   const handleChange = (newValue: string) => {
+    if (disabled || readOnly) return;
     if (newValue === '__other__') {
       setShowOtherInput(true);
       if (otherValue) {
@@ -153,6 +161,7 @@ export function SelectRadio({
 
   // Handle other input change
   const handleOtherChange = (newOtherValue: string) => {
+    if (disabled || readOnly) return;
     setOtherValue(newOtherValue);
     if (showOtherInput || usesOtherValue) {
       onChange?.(newOtherValue);
@@ -206,6 +215,10 @@ export function SelectRadio({
         required={required}
         size="sm"
         aria-label={!label ? ariaLabel : undefined}
+        {...(readOnly && {
+          style: { pointerEvents: 'none' as const, opacity: 0.8 },
+          'aria-readonly': true,
+        })}
       >
         <Stack gap="sm" mt={label ? "xs" : 0} style={gridStyle}>
           {dedupedChoices.map((choice) => (
@@ -289,11 +302,12 @@ export function SelectRadio({
                       color="red"
                       size="sm"
                       onClick={() => {
+                        if (disabled || readOnly) return;
                         setOtherValue('');
                         setShowOtherInput(false);
                         onChange?.(null);
                       }}
-                      disabled={disabled}
+                      disabled={disabled || readOnly}
                     >
                       <IconX size={16} />
                     </ActionIcon>

@@ -18,6 +18,11 @@ export interface InputHashProps {
   disabled?: boolean;
   /** Whether field is readonly / non-editable */
   readonly?: boolean;
+  /**
+   * camelCase alias for `readonly`. This is the casing @buildpad/ui-form passes,
+   * so it must be accepted here or the read-only path below is unreachable.
+   */
+  readOnly?: boolean;
   /** Whether field is required */
   required?: boolean;
   /** Error message */
@@ -39,7 +44,8 @@ export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
   placeholder,
   masked = false,
   disabled = false,
-  readonly = false,
+  readonly: readonlyProp = false,
+  readOnly: readOnlyProp = false,
   required = false,
   error,
   description,
@@ -47,6 +53,10 @@ export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
   'data-testid': testId,
   'aria-label': ariaLabel,
 }, ref) => {
+  // Accept either casing. @buildpad/ui-form passes camelCase `readOnly`; this
+  // component historically read only the lowercase form, so a readonly password
+  // field stayed fully typeable and overwrote the stored credential on save.
+  const readonly = readonlyProp || readOnlyProp;
   const isHashed = !!(value && value.length > 0);
   const [localValue, setLocalValue] = useState<string>('');
 
@@ -64,6 +74,10 @@ export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
     : placeholder;
 
   const handleChange = (newValue: string) => {
+    // Native readOnly on the control below stops typing in a browser, but this
+    // is a stored credential — gate the handler too so no programmatic or
+    // synthetic change path can overwrite it.
+    if (disabled || readonly) return;
     setLocalValue(newValue);
     onChange?.(newValue || null);
   };

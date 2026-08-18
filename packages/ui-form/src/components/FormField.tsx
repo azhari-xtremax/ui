@@ -12,7 +12,7 @@ import { IconAlertCircle } from '@tabler/icons-react';
 import type { FormField as TFormField, ValidationError } from '../types';
 import { FormFieldInterface } from './FormFieldInterface';
 import { FormFieldLabel } from './FormFieldLabel';
-import { isFieldReadOnly, isNewItem, getFieldDisplayName } from '@buildpad/utils';
+import { isFieldReadOnly, isNewItem, getFieldDisplayName, getFieldDefault } from '@buildpad/utils';
 
 export interface FormFieldProps {
   /** Field definition */
@@ -72,14 +72,24 @@ export const FormField: React.FC<FormFieldProps> = ({
     return isNewItem(primaryKey) ? 'create' : 'edit';
   }, [primaryKey]);
 
-  // Determine if field is disabled using @buildpad/utils isFieldReadOnly
-  const isDisabled = useMemo(() => {
-    if (disabled) return true;
-    
+  // `disabled` is now ONLY the explicit prop. Everything isFieldReadOnly()
+  // reports — meta.readonly, auto-increment, auto-generated UUID PKs, generated
+  // defaults — is semantically read-only ("value visible, not editable"), not
+  // disabled, so it is routed to `readonly` below instead.
+  //
+  // This is the layer S2.6 actually lives at: folding isFieldReadOnly into
+  // `disabled` here meant a meta.readonly field reached the leaf as
+  // disabled=true/readOnly=false no matter what FormFieldInterface computed,
+  // which is why dropping readonly from `disabled` downstream changed nothing.
+  const isDisabled = disabled;
+
+  const isReadOnly = useMemo(() => {
+    if (readonly) return true;
+
     // Use the comprehensive isFieldReadOnly from @buildpad/utils
     // This handles: auto-increment, UUID PKs, meta.readonly, generated defaults, etc.
     return isFieldReadOnly(field, { context, primaryKey });
-  }, [disabled, field, context, primaryKey]);
+  }, [readonly, field, context, primaryKey]);
 
   // Determine if field is required
   const isRequired = useMemo(() => {
@@ -91,7 +101,11 @@ export const FormField: React.FC<FormFieldProps> = ({
   // Get effective value (use value or default)
   const effectiveValue = useMemo(() => {
     if (value !== undefined) return value;
-    if (field.schema?.default_value !== undefined) return field.schema.default_value;
+    // Parse the column default rather than passing the raw SQL text: a
+    // Postgres default arrives as `'active'::character varying`, which was
+    // rendered verbatim here while the form model held the parsed value.
+    const schemaDefault = getFieldDefault(field);
+    if (schemaDefault !== undefined) return schemaDefault;
     // Hash/conceal fields are often genuinely omitted from the fetched item
     // (write-only columns, e.g. a password never round-tripped on read) —
     // coercing that straight to `null` here would look identical to an
@@ -194,7 +208,7 @@ export const FormField: React.FC<FormFieldProps> = ({
           value={effectiveValue}
           onChange={onChange}
           disabled={isDisabled}
-          readonly={readonly}
+          readonly={isReadOnly}
           nonEditable={nonEditable}
           loading={loading}
           required={isRequired}

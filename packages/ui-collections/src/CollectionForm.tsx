@@ -34,7 +34,10 @@ import {
 import { FieldsService, ItemsService, PermissionsService, apiRequest } from "@buildpad/services";
 import type { CollectionActionAccess, CollectionAccess } from "@buildpad/services";
 import type { Field, FormDefinition } from "@buildpad/types";
-import { buildFieldsFromDefinition } from "@buildpad/utils";
+import {
+  buildFieldsFromDefinition,
+  getDefaultValuesFromFields,
+} from "@buildpad/utils";
 import { VForm } from "@buildpad/ui-form";
 import { IconAlertCircle, IconCheck, IconTrash, IconX } from "@tabler/icons-react";
 import React, {
@@ -150,6 +153,12 @@ interface M2MJunctionInfo {
   reverseJunctionField: string;
   /** FK in junction pointing to the related collection (e.g. "tags_id") */
   junctionField: string;
+  /**
+   * The junction table's own primary key column. NOT always "id" — the M2M
+   * hook resolves it from the schema and keys its staged update entries by
+   * it, so reading a hardcoded `.id` here silently skipped every update.
+   */
+  junctionPrimaryKeyField: string;
 }
 
 /** Narrow-check: is value a staged M2M changes object? */
@@ -402,9 +411,27 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
                   junctionCollection: rel.collection,
                   reverseJunctionField: rel.field,
                   junctionField: rel.meta.junction_field,
+                  // Resolved below from the junction collection's own fields.
+                  junctionPrimaryKeyField: "id",
                 };
               }
             }
+            // Resolve each junction's real PK column. The M2M hook keys its
+            // staged update entries by this field, so a hardcoded "id" here
+            // silently dropped every update on junctions keyed otherwise.
+            await Promise.all(
+              Object.values(junctionMap).map(async (info) => {
+                try {
+                  const fieldsResp = await apiRequest<{
+                    data?: Array<{ field: string; schema?: { is_primary_key?: boolean } | null }>;
+                  }>(`/api/fields/${info.junctionCollection}`);
+                  const pk = (fieldsResp.data ?? []).find((f) => f.schema?.is_primary_key);
+                  if (pk?.field) info.junctionPrimaryKeyField = pk.field;
+                } catch {
+                  // Keep the "id" default; the update path throws on mismatch.
+                }
+              }),
+            );
             setM2mJunctionMap(junctionMap);
           } catch {
             // Non-fatal: M2M save falls back to including in PATCH body
@@ -416,10 +443,34 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
 
         // Apply permission presets as defaults on create
         if (mode === "create") {
+          // Seed each field's own schema-level default (e.g. a column's
+          // `DEFAULT 'active'`).
+          //
+          // Only fields the user can actually WRITE and actually SEE are
+          // seeded. Everything in formData is sent on create, so seeding a
+          // field outside the role's write permission puts it in the payload
+          // for the role to be rejected on, and seeding a condition-hidden
+          // field writes a value the user was never shown.
+          const seedableFields = editableFields.filter(
+            (f) =>
+              f.meta?.readonly !== true &&
+              f.meta?.hidden !== true &&
+              (!writeFields || writeFields.includes(f.field)),
+          );
+          const schemaDefaults = getDefaultValuesFromFields(seedableFields);
+
           const presets = actionAccess?.presets;
           if (presets && typeof presets === "object") {
             initialData = { ...presets, ...initialData };
           }
+
+          // Applied LAST so it sits at the BOTTOM of the precedence chain:
+          // a column default is the weakest signal, and both a permission
+          // preset (which is how a role forces status/owner/tenant on create)
+          // and an explicit `defaultValues` prop must win over it. Merging it
+          // before the presets folded it into `initialData`, which then beat
+          // the preset it was supposed to lose to.
+          initialData = { ...schemaDefaults, ...initialData };
         }
 
         // If editing, load the existing item
@@ -537,10 +588,13 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
 
   // Update form field - used by VForm's onUpdate callback
   const handleFormUpdate = useCallback((values: Record<string, unknown>) => {
-    setFormData((prev) => ({
-      ...prev,
-      ...values,
-    }));
+    // Replace, don't merge. VForm always emits the COMPLETE model — including
+    // when it drops a key because the value returned to its initial/default
+    // (handleFieldChange) or was unset (handleFieldUnset). Merging kept the
+    // dropped key at its stale value, so re-selecting a field's default
+    // visibly snapped the control back to the previous choice and submitted
+    // that instead.
+    setFormData(values);
     setSuccess(false);
     setFieldErrors({}); // Clear field errors when user edits
   }, []);
@@ -587,7 +641,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
     }>,
   ) => {
     for (const { junctionInfo, changes } of m2mEntries) {
-      const { junctionCollection, reverseJunctionField, junctionField } = junctionInfo;
+      const { junctionCollection, reverseJunctionField, junctionField, junctionPrimaryKeyField } = junctionInfo;
       const junctionService = new ItemsService(junctionCollection);
 
       for (const entry of changes.create) {
@@ -616,10 +670,19 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
       }
 
       for (const entry of changes.update) {
-        const junctionId = entry.id as string | number | undefined;
-        if (junctionId != null) {
-          await junctionService.updateOne(junctionId, entry);
+        // The hook keys update entries by the junction's real PK column, which
+        // is not always "id". Reading a hardcoded `.id` here meant every
+        // staged update was skipped for such junctions while the save still
+        // reported success — a silent data loss (a reorder would visibly
+        // apply, then snap back on the next reload). Throw rather than skip so
+        // a future key mismatch surfaces instead of vanishing.
+        const junctionId = entry[junctionPrimaryKeyField] as string | number | undefined;
+        if (junctionId == null) {
+          throw new Error(
+            `Cannot update junction row in "${junctionCollection}": staged entry has no "${junctionPrimaryKeyField}" value.`,
+          );
         }
+        await junctionService.updateOne(junctionId, entry);
       }
 
       for (const junctionId of changes.delete) {

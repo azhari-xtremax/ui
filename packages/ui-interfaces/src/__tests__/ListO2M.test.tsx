@@ -118,6 +118,9 @@ const flush = () =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // clearAllMocks resets calls but NOT implementations — reset apiRequest
+  // fully so a describe-level mockImplementation can't leak into later tests.
+  (apiRequest as jest.Mock).mockReset();
   (globalThis as any).__formName = "New";
   (globalThis as any).__pickIds = ["p9"];
   (useRelationO2M as jest.Mock).mockReturnValue({
@@ -288,6 +291,150 @@ describe("ListO2M — Add Existing on an already-saved parent", () => {
     // API either — it was never linked server-side to begin with.
     expect(hookReturn.removeItem).not.toHaveBeenCalled();
     expect(hookReturn.deleteItem).not.toHaveBeenCalled();
+  });
+});
+
+describe("ListO2M — saved parent stage→unstage→save revert hole (V3)", () => {
+  // Regression: staging a link on a saved parent and then un-staging it
+  // again (change of mind) used to emit `[]` once an emit had already
+  // happened, because the preserve-fetch was gated on
+  // `changeset.link.length > 0` alone. `[]` reaches the relation writer's
+  // empty-array branch, which unlinks/deletes every other child. The revert
+  // must instead re-preserve the full current id set (a no-op re-link).
+
+  /** What the preserve fetch sees as currently linked server-side. */
+  let serverLinked: { id: string }[];
+  /** Makes the preserve fetch reject (the pick fetch keeps working). */
+  let failPreserve: boolean;
+
+  beforeEach(() => {
+    serverLinked = [{ id: "p1" }];
+    failPreserve = false;
+    (apiRequest as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes("category_id")) {
+        // preserve-fetch: everything currently linked server-side
+        if (failPreserve) return Promise.reject(new Error("network down"));
+        return Promise.resolve({ data: [...serverLinked] });
+      }
+      // the "Add Existing" pick fetch
+      return Promise.resolve({ data: [{ id: "p9", name: "Picked post" }] });
+    });
+  });
+
+  function renderSaved(onChange: jest.Mock) {
+    setHookItems([{ id: "p1", name: "Existing post" }], 1);
+    return render(
+      wrap(
+        <ListO2M
+          {...BASE_PROPS}
+          primaryKey="cat-1"
+          value={[{ id: "p1", name: "Existing post" }]}
+          onChange={onChange}
+        />,
+      ),
+    );
+  }
+
+  async function stageP9(onChange: jest.Mock) {
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(screen.getByTestId("o2m-remove-p9")).toBeInTheDocument());
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+  }
+
+  it("re-preserves the full current id set instead of emitting [] on revert", async () => {
+    const onChange = jest.fn();
+    renderSaved(onChange);
+
+    await stageP9(onChange);
+    // Pin the STAGE-TIME payload too: the staged reference plus the
+    // preserved sibling. Asserting only the revert would let the
+    // `changeset.link.length > 0` gate arm (the original N1 fix) be
+    // deleted without any test failing — first-stage saves would then ship
+    // a links-only payload that deselects every other child.
+    expect(onChange.mock.calls.at(-1)![0]).toEqual([
+      { id: "p9", category_id: "cat-1" },
+      "p1",
+    ]);
+
+    fireEvent.click(screen.getByTestId("o2m-remove-p9"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("o2m-remove-p9")).not.toBeInTheDocument(),
+    );
+    await flush();
+
+    const lastPayload = onChange.mock.calls.at(-1)![0];
+    expect(lastPayload).not.toEqual([]);
+    expect(lastPayload).toEqual(["p1"]);
+  });
+
+  it("emits the revert synchronously from the cached id set (no fetch round-trip window)", async () => {
+    const onChange = jest.fn();
+    renderSaved(onChange);
+    await stageP9(onChange);
+
+    // From here on the preserve fetch hangs. The revert emit must not wait
+    // on it: the parent form snapshots field values at Save-click time, so
+    // an emit delayed by a round-trip lets a Save inside that window submit
+    // the payload that still contains the reverted link.
+    (apiRequest as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    fireEvent.click(screen.getByTestId("o2m-remove-p9"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("o2m-remove-p9")).not.toBeInTheDocument(),
+    );
+
+    expect(onChange.mock.calls.at(-1)![0]).toEqual(["p1"]);
+  });
+
+  it("withholds the emit and offers a retry when the preserve fetch fails with no cache", async () => {
+    failPreserve = true;
+    const onChange = jest.fn();
+    renderSaved(onChange);
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(screen.getByTestId("o2m-remove-p9")).toBeInTheDocument());
+    await flush();
+
+    // No known-good id set exists, so emitting would be a links-only
+    // payload — the writer answers that by deselecting every other child.
+    // The emit must be withheld and the failure surfaced to the user.
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId("o2m-preserve-error")).toBeInTheDocument();
+
+    failPreserve = false;
+    fireEvent.click(screen.getByTestId("o2m-preserve-retry"));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    expect(onChange.mock.calls.at(-1)![0]).toEqual([
+      { id: "p9", category_id: "cat-1" },
+      "p1",
+    ]);
+    await waitFor(() =>
+      expect(screen.queryByTestId("o2m-preserve-error")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("re-emits without a child removed through the direct API path", async () => {
+    const onChange = jest.fn();
+    renderSaved(onChange);
+    await stageP9(onChange);
+    expect(onChange.mock.calls.at(-1)![0]).toEqual([
+      { id: "p9", category_id: "cat-1" },
+      "p1",
+    ]);
+
+    // Trash the real (already-linked) child on the saved parent: this goes
+    // through the immediate removeItem API path, which never touches the
+    // changeset — without invalidation the retained payload would still
+    // carry "p1" and saving the parent would re-link it.
+    serverLinked = [];
+    fireEvent.click(screen.getByTestId("o2m-remove-p1"));
+    await waitFor(() => {
+      expect(onChange.mock.calls.at(-1)![0]).toEqual([
+        { id: "p9", category_id: "cat-1" },
+      ]);
+    });
   });
 });
 

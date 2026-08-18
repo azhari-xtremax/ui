@@ -220,6 +220,12 @@ export interface ColorProps {
   
   /** Whether the color picker is disabled */
   disabled?: boolean;
+  /**
+   * Value is visible but not editable. Mantine's ColorPicker/swatches have no
+   * native readOnly, so this is enforced by neutralising `onChange` for every
+   * mutation path below plus pointer suppression on the picker surface.
+   */
+  readOnly?: boolean;
   
   /** Whether the field is required */
   required?: boolean;
@@ -265,6 +271,7 @@ export interface ColorProps {
 export const Color: React.FC<ColorProps> = ({
   value,
   disabled = false,
+  readOnly = false,
   required = false,
   label,
   placeholder,
@@ -272,8 +279,12 @@ export const Color: React.FC<ColorProps> = ({
   error,
   opacity = false,
   presets = DEFAULT_PRESETS,
-  onChange,
+  onChange: onChangeProp,
 }) => {
+  // Neutralise the emitter rather than gating each of the ~8 call sites below
+  // (hex, RGB/HSL sliders, eyedropper, presets, clear) — a new call site cannot
+  // then bypass the guard by accident.
+  const onChange = disabled || readOnly ? undefined : onChangeProp;
   const [opened, setOpened] = useState(false);
   const [colorFormat, setColorFormat] = useState<ColorFormat>(opacity ? 'RGBA' : 'RGB');
   const hiddenColorInput = useRef<HTMLInputElement>(null);
@@ -410,6 +421,7 @@ export const Color: React.FC<ColorProps> = ({
             onChange={(event) => handleHexChange(event.currentTarget.value)}
             placeholder={placeholder || '#000000'}
             disabled={disabled}
+            readOnly={readOnly}
             maxLength={opacity ? 9 : 7}
             pattern={opacity ? '#([a-fA-F0-9]{6}|[a-fA-F0-9]{8})' : '#[a-fA-F0-9]{6}'}
             onFocus={() => setOpened(true)}

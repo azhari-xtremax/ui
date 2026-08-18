@@ -15,20 +15,34 @@ import { MantineProvider } from '@mantine/core';
 
 // Probe leaf: records the value prop it receives and emits a fixed array on
 // click, exactly like the real multi-select leaves (which always emit arrays).
-const received: { value: unknown }[] = [];
-jest.mock('@buildpad/ui-interfaces', () => ({
-    SelectMultipleCheckbox: ({ value, onChange, readOnly }: any) => {
+const received: { value: unknown; readOnly?: boolean }[] = [];
+// Defined inside the factory: it is *called* at factory time (unlike `received`,
+// which is only touched when a probe renders), so a module-scope binding would
+// still be in its temporal dead zone here.
+jest.mock('@buildpad/ui-interfaces', () => {
+    const Probe = ({ value, onChange, readOnly }: any) => {
         received.push({ value, readOnly });
         return (
             <button data-testid="probe-emit" onClick={() => onChange?.(['a', 'b'])}>
                 emit
             </button>
         );
-    },
-}));
+    };
+    return {
+        SelectMultipleCheckbox: Probe,
+        SelectMultipleCheckboxTree: Probe,
+        SelectMultipleDropdown: Probe,
+    };
+});
 
+// Which interface id getFieldInterface resolves to, so the same assertions can
+// be run against each multi-select leaf.
+const resolved = { type: 'select-multiple-checkbox' };
 jest.mock('@buildpad/utils', () => ({
-    getFieldInterface: () => ({ type: 'select-multiple-checkbox', props: {} }),
+    // Spread the real module: only the interface resolution is stubbed here,
+    // and blanking the rest hides every other util the component calls.
+    ...jest.requireActual('@buildpad/utils'),
+    getFieldInterface: () => ({ type: resolved.type, props: {} }),
 }));
 
 import { FormFieldInterface } from '../components/FormFieldInterface';
@@ -45,6 +59,7 @@ const baseField = {
 
 beforeEach(() => {
     received.length = 0;
+    resolved.type = 'select-multiple-checkbox';
     jest.clearAllMocks();
 });
 
@@ -110,6 +125,36 @@ describe('FormFieldInterface csv normalization', () => {
         expect(received.at(-1)?.value).toEqual(['x']);
         fireEvent.click(screen.getByTestId('probe-emit'));
         expect(onChange).toHaveBeenCalledWith(['a', 'b']);
+    });
+});
+
+/**
+ * The normalization above is keyed off MULTI_SELECT_INTERFACE_TYPES, and every
+ * assertion in the block above resolves to `select-multiple-checkbox`. Nothing
+ * pinned the other two members, so dropping one from that set silently
+ * reintroduced substring reads, a `.filter is not a function` crash and array
+ * writes into a comma-string column, with a fully green suite.
+ */
+describe.each([
+    'select-multiple-checkbox-tree',
+    'select-multiple-dropdown',
+])('FormFieldInterface csv normalization — %s', (interfaceType) => {
+    it('is a member of MULTI_SELECT_INTERFACE_TYPES: csv in, comma-string out', () => {
+        resolved.type = interfaceType;
+        const onChange = jest.fn();
+        render(
+            wrap(
+                <FormFieldInterface
+                    field={{ ...baseField, type: 'csv' }}
+                    value="alpha, beta"
+                    onChange={onChange}
+                />,
+            ),
+        );
+
+        expect(received.at(-1)?.value).toEqual(['alpha', 'beta']);
+        fireEvent.click(screen.getByTestId('probe-emit'));
+        expect(onChange).toHaveBeenCalledWith('a,b');
     });
 });
 

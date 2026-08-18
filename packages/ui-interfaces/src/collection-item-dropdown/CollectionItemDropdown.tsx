@@ -229,6 +229,17 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
     // Collection selection state
     const [collectionsLoading, setCollectionsLoading] = useState(false);
     const [availableCollections, setAvailableCollections] = useState<CollectionInfo[]>([]);
+    // Whether the collection list has been successfully resolved at least
+    // once. `availableCollections` alone can't distinguish "loaded, and there
+    // genuinely are none" from "not loaded yet" or "the fetch failed" — and
+    // validating a typed name against an unloaded list rejects valid input.
+    const [collectionsKnown, setCollectionsKnown] = useState(false);
+    // The collection most recently committed to the parent. `selectedCollection`
+    // cannot serve this purpose: under a controlled prop that does not echo
+    // `onCollectionChange` back (the form pipeline never passes that callback
+    // at all), it never updates, so blur would see the draft still differing
+    // from it and commit a second time.
+    const lastCommittedCollectionRef = React.useRef<string>(selectedCollectionProp || '');
     const [collectionMenuOpened, setCollectionMenuOpened] = useState(false);
 
     // Sync internal collection with prop
@@ -297,6 +308,7 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
                     filtered = filtered.filter(c => !c.meta?.singleton);
                 }
                 setAvailableCollections(filtered);
+                setCollectionsKnown(true);
                 return;
             }
 
@@ -316,6 +328,7 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
                 }
                 
                 setAvailableCollections(collections);
+                setCollectionsKnown(true);
             } catch (err) {
                 console.error('Failed to fetch collections:', err);
             } finally {
@@ -328,12 +341,32 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
 
     // Handle collection selection
     const handleCollectionSelect = useCallback((collection: string) => {
+        // V3-7: retyping the CURRENT collection character-by-character
+        // (backspace + retype the same value) re-matched `availableCollections`
+        // and ran through here again, unconditionally clearing the item
+        // selection even though the collection never actually changed. A
+        // real no-op for the collection itself must not wipe anything.
+        // V3-7: retyping the CURRENT collection character-by-character
+        // (backspace + retype the same value) re-matched `availableCollections`
+        // and ran through here again, unconditionally clearing the item
+        // selection even though the collection never actually changed.
+        //
+        // Only the DESTRUCTIVE half is skipped. The pick is still reported:
+        // "value unchanged" and "user made no choice" are different events, and
+        // a parent that has lost its collection (form reset, record switch)
+        // relies on this callback to learn the user re-confirmed one. The
+        // internal fallback is still synced too, so it cannot strand a stale
+        // value that later wins over a cleared prop.
+        const unchanged = collection === selectedCollection;
+        lastCommittedCollectionRef.current = collection;
         setInternalCollection(collection);
         onCollectionChange?.(collection);
         setCollectionMenuOpened(false);
-        // Clear item selection when collection changes
-        onChange?.(null);
-    }, [onCollectionChange, onChange]);
+        if (!unchanged) {
+            // Clear item selection when the collection actually changes
+            onChange?.(null);
+        }
+    }, [selectedCollection, onCollectionChange, onChange]);
 
     // Free-text collection input: only commit (and clear the item selection)
     // once the typed value resolves to a real collection or the field blurs
@@ -346,10 +379,30 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
     }, [availableCollections, handleCollectionSelect]);
 
     const handleCollectionInputBlur = useCallback(() => {
-        if (collectionDraft !== selectedCollection) {
-            handleCollectionSelect(collectionDraft.trim());
+        const trimmed = collectionDraft.trim();
+        if (trimmed === selectedCollection || trimmed === lastCommittedCollectionRef.current) {
+            // Still normalize the displayed text, so stray whitespace doesn't
+            // leave the input rendering something the selection isn't.
+            setCollectionDraft(selectedCollection);
+            return;
         }
-    }, [collectionDraft, selectedCollection, handleCollectionSelect]);
+        // V3-7: commit only a value that actually resolves to a real
+        // collection — an unvalidated partial string (the user typed
+        // something and clicked away without picking from the menu) used to
+        // commit as-is, wiping the item selection and leaving selectedCollection
+        // set to a collection that doesn't exist. Revert the draft instead.
+        //
+        // Only when the list is actually KNOWN, though: it starts empty and is
+        // filled by an async fetch that can also fail outright, and treating
+        // "we haven't loaded it yet" the same as "that isn't a collection"
+        // silently discarded a perfectly valid typed name — removing the
+        // free-text escape hatch precisely when the menu can't offer one.
+        if (!collectionsKnown || availableCollections.some((c) => c.collection === trimmed)) {
+            handleCollectionSelect(trimmed);
+        } else {
+            setCollectionDraft(selectedCollection);
+        }
+    }, [collectionDraft, selectedCollection, handleCollectionSelect, availableCollections, collectionsKnown]);
 
     // Separate user and system collections
     const { userCollections, systemCollections } = React.useMemo(() => {
