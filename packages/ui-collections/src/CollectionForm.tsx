@@ -996,7 +996,11 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
                 onUpdate={handleFormUpdate}
                 primaryKey={primaryKey}
                 disabled={saving || !saveAllowed}
-                loading={saving}
+                // NOT `loading={saving}`: VForm renders a skeleton while
+                // loading, which unmounts every field and remounts them when
+                // the save resolves — re-firing mount-time autofocus and
+                // scrolling the user back to that field, losing their place.
+                // `disabled` above already blocks input during the save.
                 showNoVisibleFields={false}
               />
               {/* Per-field validation errors */}
