@@ -77,6 +77,8 @@ export interface RichTextMarkdownProps {
   placeholder?: string;
   /** Whether the editor is disabled */
   disabled?: boolean;
+  /** Content is visible but not editable — covers both the WYSIWYG and source views. */
+  readOnly?: boolean;
   /** Whether the field is required */
   required?: boolean;
   /** Error message */
@@ -130,6 +132,7 @@ export function RichTextMarkdown({
   label,
   placeholder = 'Start typing...',
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   toolbar = defaultToolbar,
@@ -187,7 +190,7 @@ export function RichTextMarkdown({
       const markdown = editor.storage.markdown.getMarkdown();
       onChange?.(markdown);
     },
-    editable: !disabled && viewMode === 'editor',
+    editable: !disabled && !readOnly && viewMode === 'editor',
     immediatelyRender: false,
     shouldRerenderOnTransaction: true,
     editorProps: {
@@ -212,6 +215,13 @@ export function RichTextMarkdown({
   viewModeRef.current = viewMode;
   const sourceTextRef = useRef(sourceText);
   sourceTextRef.current = sourceText;
+
+  // `editable` above is only read at construction time, and it also depends on
+  // viewMode — which changes after mount. Keep it in sync on every change.
+  useEffect(() => {
+    editor?.setEditable(!disabled && !readOnly && viewMode === 'editor');
+  }, [editor, disabled, readOnly, viewMode]);
+
   useEffect(() => {
     if (!editor) return;
     if (viewModeRef.current === 'source') {
@@ -507,6 +517,7 @@ export function RichTextMarkdown({
                 onChange?.(text);
               }}
               disabled={disabled}
+              readOnly={readOnly}
               autosize
               minRows={8}
               aria-label={label ? `${label} (Markdown source)` : 'Markdown source'}

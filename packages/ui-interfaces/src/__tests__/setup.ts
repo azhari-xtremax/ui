@@ -22,6 +22,12 @@ global.ResizeObserver = jest.fn().mockImplementation(() => ({
   disconnect: jest.fn(),
 }));
 
+// jsdom does not implement scrollIntoView, but Mantine's combobox calls it
+// on every highlight move — without this, any test that arrow-keys through
+// a dropdown throws, which makes keyboard interaction untestable across the
+// whole Select* family.
+Element.prototype.scrollIntoView = jest.fn();
+
 // Mock getComputedStyle for Mantine
 const originalGetComputedStyle = window.getComputedStyle;
 window.getComputedStyle = (element: Element) => {

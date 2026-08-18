@@ -42,6 +42,7 @@ export interface CollectionListToolbarProps {
   /* Selection / Bulk actions */
   enableSelection: boolean;
   selectedIds: (string | number)[];
+  selectedRows?: Record<string, unknown>[];
   enableDelete: boolean;
   deleteAllowed: boolean;
   createAllowed: boolean;
@@ -69,6 +70,7 @@ export const CollectionListToolbar: React.FC<CollectionListToolbarProps> = ({
   onRefresh,
   enableSelection,
   selectedIds,
+  selectedRows,
   enableDelete,
   deleteAllowed,
   createAllowed,
@@ -170,6 +172,7 @@ export const CollectionListToolbar: React.FC<CollectionListToolbarProps> = ({
         {showBulkActions && (
           <BulkActionsBar
             selectedIds={selectedIds}
+            selectedRows={selectedRows}
             enableDelete={enableDelete}
             deleteAllowed={deleteAllowed}
             createAllowed={createAllowed}

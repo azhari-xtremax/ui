@@ -391,6 +391,62 @@ function collectFileHashes(registry) {
  *   2. registry.json is otherwise stale (version bumped / files added but the
  *      artifact was never regenerated).
  */
+/**
+ * Every relative import in a shipped file must resolve to something the
+ * consumer will actually have: another file in the SAME entry, or a component
+ * named in `registryDependencies`.
+ *
+ * The sourceSha256 check below compares file hashes against version bumps and
+ * has no notion of an import graph, so a cross-component import could be added
+ * with nothing declared and the CLI would emit a file importing a component it
+ * never installs — a TS2307 the consumer discovers, not CI.
+ */
+function collectUndeclaredImports(registry) {
+  const problems = [];
+  // Only a directory that is itself a registry component can be a missing
+  // registryDependency. Shared helper directories (lib/, utils/) ship by other
+  // means and are not installable components, so flagging them would be noise.
+  const componentNames = new Set(
+    (registry.components ?? registry.items ?? []).map((c) => c.name).filter(Boolean),
+  );
+  const RELATIVE_IMPORT = /(?:^|\n)\s*(?:import|export)[^'"\n]*from\s+['"](\.[^'"]+)['"]/g;
+
+  for (const component of registry.components ?? registry.items ?? []) {
+    const files = component.files ?? [];
+    const ownSources = files.map((f) => f.source).filter(Boolean);
+    const declared = new Set(component.registryDependencies ?? []);
+
+    for (const file of files) {
+      if (!file.source) continue;
+      const fullPath = join(PACKAGES_DIR, file.source);
+      if (!existsSync(fullPath)) continue;
+      const text = readFileSync(fullPath, 'utf8');
+      const dir = file.source.split('/').slice(0, -1);
+
+      for (const match of text.matchAll(RELATIVE_IMPORT)) {
+        const spec = match[1];
+        const segments = [...dir];
+        for (const part of spec.split('/')) {
+          if (part === '.' || part === '') continue;
+          if (part === '..') segments.pop();
+          else segments.push(part);
+        }
+        const resolved = segments.join('/');
+        // Same-entry import: a file this entry already ships.
+        if (ownSources.some((src) => src === resolved || src.startsWith(`${resolved}.`) || src.startsWith(`${resolved}/`))) {
+          continue;
+        }
+        // Cross-component: by convention the directory under the package is
+        // the component name (e.g. ui-interfaces/src/select-icon/... ).
+        const needs = segments[2];
+        if (!needs || !componentNames.has(needs) || declared.has(needs)) continue;
+        problems.push({ component: component.name, file: file.source, spec, needs });
+      }
+    }
+  }
+  return problems;
+}
+
 function checkRegistry() {
   const outPath = join(PACKAGES_DIR, 'registry.json');
   if (!existsSync(outPath)) {
@@ -399,6 +455,18 @@ function checkRegistry() {
   }
 
   const committed = JSON.parse(readFileSync(outPath, 'utf8'));
+
+  const undeclared = collectUndeclaredImports(committed);
+  if (undeclared.length > 0) {
+    console.error('\n✗ A shipped file imports a component its entry does not declare:\n');
+    for (const u of undeclared) {
+      console.error(`    ${u.component}: ${u.file} imports '${u.spec}'`);
+      console.error(`      → add "${u.needs}" to that entry's registryDependencies`);
+    }
+    console.error('');
+    process.exit(1);
+  }
+
   const fresh = buildRegistry();
   const committedHashes = collectFileHashes(committed);
 

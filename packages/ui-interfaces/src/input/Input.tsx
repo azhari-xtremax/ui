@@ -20,6 +20,13 @@ export interface InputProps {
   disabled?: boolean;
   /** Whether field is readonly */
   readonly?: boolean;
+  /**
+   * camelCase alias for `readonly`. @buildpad/ui-form passes this casing; it
+   * previously reached the Mantine control only by riding the `...props` rest
+   * spread, which left the clear button below gated on the always-false
+   * lowercase flag.
+   */
+  readOnly?: boolean;
   /** Error message */
   error?: string;
   /** Left section icon */
@@ -64,7 +71,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   type = 'string',
   required = false,
   disabled = false,
-  readonly = false,
+  readonly: readonlyProp = false,
+  readOnly: readOnlyProp = false,
   error,
   iconLeft,
   iconRight,
@@ -93,13 +101,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
   defaultValue: _defaultValue,
   ...props
 }, ref) => {
+  // Accept either casing — @buildpad/ui-form passes camelCase `readOnly`.
+  const readonly = readonlyProp || readOnlyProp;
   const [showPassword, { toggle }] = useDisclosure(false);
-  
+
   // Determine if this is a numeric type
   const isNumeric = ['bigInteger', 'integer', 'float', 'decimal'].includes(type);
-  
+
   // Handle value changes with type-specific transformations
   const handleChange = (newValue: string | number | null | undefined) => {
+    if (disabled || readonly) return;
     let processedValue = newValue;
     
     if (typeof processedValue === 'string') {

@@ -449,6 +449,94 @@ describe('SelectMultipleCheckboxTree search edge cases', () => {
     const groupItemDuringSearch = screen.getByText('Group').closest('[role="treeitem"]') as HTMLElement;
     expect(groupItemDuringSearch.getAttribute('aria-expanded')).toBe('true');
   });
+
+  // V3-7: clicking the chevron to collapse an auto-expanded ancestor used to
+  // be a silent no-op — toggling `manuallyExpanded` recomputed `expanded`
+  // back to true anyway since autoExpandValues still had this node.
+  it('lets the user explicitly collapse an ancestor that was auto-expanded to reveal a search match', async () => {
+    const choices: TreeChoice[] = [
+      {
+        text: 'Group',
+        value: 'group',
+        children: [{ text: 'Uniquematch', value: 'group-child' }],
+      },
+      ...Array.from({ length: 12 }, (_, i) => ({ text: `Filler ${i}`, value: `f${i}` })),
+    ];
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={choices} value={[]} onChange={jest.fn()} />
+      </TestWrapper>
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search...');
+    fireEvent.change(searchInput, { target: { value: 'Uniquematch' } });
+    await waitFor(
+      () => expect(screen.queryByText('Filler 0')).not.toBeInTheDocument(),
+      { timeout: 1500 },
+    );
+
+    const groupItem = screen.getByText('Group').closest('[role="treeitem"]') as HTMLElement;
+    expect(groupItem.getAttribute('aria-expanded')).toBe('true');
+
+    fireEvent.click(within(groupItem).getAllByLabelText('Collapse')[0]);
+
+    expect(groupItem.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // The user's explicit collapse is scoped to the auto-expand context it was
+  // made in. `showSelectionOnly` feeds `autoExpandValues` just as `searchQuery`
+  // does, so a fix that only re-armed on search left a collapsed node collapsed
+  // when the user asked to see their selection — hiding the very thing that
+  // mode exists to reveal (S4.9).
+  it('re-expands a user-collapsed node when Show Selected is switched on', () => {
+    const choices: TreeChoice[] = [
+      { text: 'Group', value: 'group', children: [{ text: 'Child', value: 'child' }] },
+      { text: 'Other', value: 'other' },
+    ];
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={choices} value={['child']} onChange={jest.fn()} />
+      </TestWrapper>
+    );
+
+    const groupItem = () => screen.getByText('Group').closest('[role="treeitem"]') as HTMLElement;
+
+    fireEvent.click(within(groupItem()).getAllByLabelText('Collapse')[0]);
+    expect(groupItem().getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(screen.getByText('Show Selected'));
+    expect(groupItem().getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('keeps a node\'s data-testid stable across a search that shifts its filtered position', async () => {
+    const choices: TreeChoice[] = [
+      ...Array.from({ length: 12 }, (_, i) => ({ text: `Filler ${i}`, value: `f${i}` })),
+      { text: 'Group', value: 'group' },
+    ];
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={choices} value={[]} onChange={jest.fn()} />
+      </TestWrapper>
+    );
+
+    const before = screen.getByText('Group').closest('[role="treeitem"]') as HTMLElement;
+    const testIdBefore = before.querySelector('[data-testid^="checkbox-"]')!.getAttribute('data-testid');
+
+    const searchInput = screen.getByPlaceholderText('Search...');
+    fireEvent.change(searchInput, { target: { value: 'Group' } });
+    await waitFor(
+      () => expect(screen.queryByText('Filler 0')).not.toBeInTheDocument(),
+      { timeout: 1500 },
+    );
+
+    const after = screen.getByText('Group').closest('[role="treeitem"]') as HTMLElement;
+    const testIdAfter = after.querySelector('[data-testid^="checkbox-"]')!.getAttribute('data-testid');
+
+    expect(testIdAfter).toBe(testIdBefore);
+  });
 });
 
 describe('SelectMultipleCheckboxTree leaf mode fully-selected parent (S4.5)', () => {
@@ -464,7 +552,7 @@ describe('SelectMultipleCheckboxTree leaf mode fully-selected parent (S4.5)', ()
       </TestWrapper>
     );
 
-    const frontendCheckbox = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    const frontendCheckbox = screen.getByLabelText('Frontend') as HTMLInputElement;
     expect(frontendCheckbox.checked).toBe(true);
     expect(frontendCheckbox.indeterminate).toBe(false);
   });
@@ -481,7 +569,7 @@ describe('SelectMultipleCheckboxTree leaf mode fully-selected parent (S4.5)', ()
       </TestWrapper>
     );
 
-    const frontendCheckbox = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    const frontendCheckbox = screen.getByLabelText('Frontend') as HTMLInputElement;
     expect(frontendCheckbox.checked).toBe(false);
     expect(frontendCheckbox.indeterminate).toBe(true);
   });
@@ -543,11 +631,68 @@ describe('SelectMultipleCheckboxTree cascade toggle skips disabled descendants (
       </TestWrapper>
     );
 
-    fireEvent.click(screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement);
+    fireEvent.click(screen.getByLabelText('Frontend') as HTMLInputElement);
 
     expect(handleChange).toHaveBeenCalledWith(expect.arrayContaining(['frontend', 'react']));
     const emitted = handleChange.mock.calls[0][0] as string[];
     expect(emitted).not.toContain('vue');
+  });
+});
+
+describe('SelectMultipleCheckboxTree toggle survives a cyclic choices tree (S4.10)', () => {
+  // A node whose own `children` array contains itself — e.g. a malformed API
+  // response reusing a shared object reference.
+  const makeCyclic = (refs: number): TreeChoice => {
+    const node: TreeChoice = { text: 'Cyclic', value: 'cyclic', children: [] };
+    node.children = Array.from({ length: refs }, () => node);
+    return node;
+  };
+
+  // Ordering matters and is asserted both ways on purpose: the lookup this
+  // replaces was a depth-first search, so a cyclic node placed AFTER the
+  // target was never reached and the test passed even unguarded. Covering
+  // both orders means reordering the fixture cannot quietly disarm this.
+  it.each([
+    ['cyclic sibling first', (c: TreeChoice): TreeChoice[] => [c, { text: 'Target', value: 'target' }]],
+    ['cyclic sibling last', (c: TreeChoice): TreeChoice[] => [{ text: 'Target', value: 'target' }, c]],
+  ])('toggles a healthy sibling with a %s', (_label, build) => {
+    const handleChange = jest.fn();
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree choices={build(makeCyclic(1))} value={[]} onChange={handleChange} />
+      </TestWrapper>
+    );
+
+    // Assert the toggle actually WORKED, not merely that nothing threw:
+    // React routes an event-handler throw through reportGlobalError rather
+    // than rethrowing, so `.not.toThrow()` does not discriminate here, and a
+    // change that bails into the `if (!toggledChoice) return` path would
+    // satisfy it while the checkbox does nothing.
+    fireEvent.click(screen.getByLabelText('Target'));
+
+    expect(handleChange).toHaveBeenCalledWith(['target']);
+  });
+
+  // A depth cap only bounds how long a cycle spins. A node listed TWICE in its
+  // own children fans out 2^depth and exhausts memory long before any cap
+  // bites, so the traversal has to detect the revisit itself.
+  it('toggles a healthy sibling when the cyclic node references itself twice', () => {
+    const handleChange = jest.fn();
+
+    render(
+      <TestWrapper>
+        <SelectMultipleCheckboxTree
+          choices={[makeCyclic(2), { text: 'Target', value: 'target' }]}
+          value={[]}
+          onChange={handleChange}
+        />
+      </TestWrapper>
+    );
+
+    fireEvent.click(screen.getByLabelText('Target'));
+
+    expect(handleChange).toHaveBeenCalledWith(['target']);
   });
 });
 
@@ -564,7 +709,7 @@ describe('SelectMultipleCheckboxTree custom color normalization (S4.11)', () => 
       </TestWrapper>
     );
 
-    const input = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    const input = screen.getByLabelText('Alpha') as HTMLInputElement;
     const root = input.closest('.mantine-Checkbox-root') as HTMLElement;
     expect(root.style.getPropertyValue('--checkbox-color')).toContain('teal');
   });
@@ -593,7 +738,7 @@ describe('SelectMultipleCheckboxTree leaf mode with disabled leaves (S4.5 × S4.
       </TestWrapper>
     );
 
-    const parent = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    const parent = screen.getByLabelText('Parent') as HTMLInputElement;
     expect(parent.checked).toBe(true);
     expect(parent.indeterminate).toBe(false);
   });
@@ -618,7 +763,7 @@ describe('SelectMultipleCheckboxTree leaf mode with disabled leaves (S4.5 × S4.
       </TestWrapper>
     );
 
-    const parent = screen.getByTestId('checkbox-0').querySelector('input') as HTMLInputElement;
+    const parent = screen.getByLabelText('Parent') as HTMLInputElement;
     expect(parent.checked).toBe(false);
     expect(parent.indeterminate).toBe(true);
   });

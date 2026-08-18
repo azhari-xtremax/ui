@@ -254,4 +254,40 @@ describe('InputHash', () => {
       expect(screen.getByTestId('my-hash-lock-icon')).toBeInTheDocument();
     });
   });
+
+  // A stored credential's steady state is the server mask, so a reset that
+  // only fires on null/undefined could never fire for the case it exists to
+  // handle: typed plaintext survived Discard, stayed visible in the input,
+  // and was re-submitted on the next save.
+  describe('Reset on a concealed value', () => {
+    it('clears typed plaintext when the value returns to the mask', () => {
+      const { rerender } = renderWithProvider(
+        <InputHash value={null} onChange={mockOnChange} data-testid="hash" />
+      );
+      const input = screen.getByTestId('hash') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'hunter2' } });
+      expect((screen.getByTestId('hash') as HTMLInputElement).value).toBe('hunter2');
+
+      // Discard: the container restores the field, which reads back masked.
+      rerender(
+        <MantineProvider>
+          <InputHash value="**********" onChange={mockOnChange} data-testid="hash" />
+        </MantineProvider>
+      );
+      expect((screen.getByTestId('hash') as HTMLInputElement).value).toBe('');
+    });
+
+    it('treats any run of asterisks as concealed, not just ten', () => {
+      renderWithProvider(
+        <InputHash value="**************" onChange={mockOnChange} data-testid="hash" />
+      );
+      expect(screen.getByPlaceholderText('Value securely stored')).toBeInTheDocument();
+    });
+
+    // The accessible name FormField relies on, since it withholds `label`.
+    it('uses aria-label as the accessible name when no label is rendered', () => {
+      renderWithProvider(<InputHash aria-label="Password" onChange={mockOnChange} />);
+      expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    });
+  });
 });
