@@ -1,4 +1,5 @@
 import React, { forwardRef, useState, useEffect, useCallback } from 'react';
+import { isConcealedValue } from '@buildpad/utils';
 import { TextInput, ActionIcon, Alert, Group, Loader } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconCopy, IconPlus, IconRefresh, IconX, IconKey } from '@tabler/icons-react';
@@ -33,10 +34,9 @@ export interface SystemTokenProps {
   error?: string;
   /** data-testid for testing */
   'data-testid'?: string;
+  /** Accessible name, used when no visible `label` is rendered */
+  'aria-label'?: string;
 }
-
-/** Regex to detect masked/asterisk tokens from the server */
-const MASKED_REGEX = /^\*+$/;
 
 export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
   value,
@@ -48,6 +48,7 @@ export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
   description,
   error,
   'data-testid': testId,
+  'aria-label': ariaLabel,
 }, ref) => {
   const [localValue, setLocalValue] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -64,21 +65,30 @@ export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
   useEffect(() => {
     if (!value) {
       setLocalValue(null);
+      // Also clear the fresh-token flag. It used to be reset only on the
+      // masked branch, which was safe while every "token is gone" arrived as
+      // the mask; a plain null now takes this path, and a stale flag left the
+      // credential input rendering as type="text" instead of a password.
+      setIsNewTokenGenerated(false);
       return;
     }
 
     // If the server sends back masked asterisks, clear local display
-    if (MASKED_REGEX.test(value)) {
+    if (isConcealedValue(value)) {
       setLocalValue(null);
       setIsNewTokenGenerated(false);
     }
   }, [value]);
 
-  const placeholder = disabled && !value
-    ? undefined
-    : value
-      ? 'Value Securely Saved'
-      : 'Click "Generate Token" to create a new static access token';
+  // The empty-state text names the Generate control, which is hidden for a
+  // disabled or read-only field — so only offer that instruction when the
+  // control is actually there, and still say something when it is not.
+  const canGenerate = !disabled && !readOnly;
+  const placeholder = value
+    ? 'Value Securely Saved'
+    : canGenerate
+      ? 'Click "Generate Token" to create a new static access token'
+      : 'No token set';
 
   const applyGeneratedToken = useCallback((token: string) => {
     setLocalValue(token);
@@ -141,6 +151,11 @@ export const SystemToken = forwardRef<HTMLInputElement, SystemTokenProps>(({
         disabled={disabled}
         readOnly
         label={label}
+        // FormField renders the visible label itself and withholds `label`
+        // from the leaf, so without this the token input had no accessible
+        // name at all — an axe "label" failure on the one field this
+        // component exists for.
+        aria-label={label ? undefined : ariaLabel}
         description={description}
         error={error}
         data-testid={testId}

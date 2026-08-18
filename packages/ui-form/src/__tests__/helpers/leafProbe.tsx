@@ -17,6 +17,10 @@
  */
 
 export interface ProbeRecord {
+    /** The value the container resolved for this field. */
+    value: unknown;
+    /** The accessible name the container passed (leaves have no visible label). */
+    ariaLabel: unknown;
     disabled: unknown;
     readOnly: unknown;
     required: unknown;
@@ -45,8 +49,10 @@ export function lastLockState(): { disabled: unknown; readOnly: unknown } | unde
 }
 
 export function makeInterfacesMock() {
-    const Probe = ({ disabled, readOnly, required, autofocus, onChange }: any) => {
+    const Probe = ({ value, disabled, readOnly, required, autofocus, onChange, ...rest }: any) => {
         received.push({
+            value,
+            ariaLabel: rest['aria-label'],
             disabled,
             readOnly,
             required,
@@ -65,13 +71,24 @@ export function makeInterfacesMock() {
         );
     };
 
-    // Every interface name the tests may resolve to maps onto the same probe, so
-    // a test can change field type without touching the mock.
-    return new Proxy(
-        { Input: Probe },
-        {
-            get: (target: any, prop: string) =>
-                prop in target ? target[prop] : typeof prop === 'string' && /^[A-Z]/.test(prop) ? Probe : undefined,
-        },
-    );
+    // Every interface name FormFieldInterface can resolve to maps onto the same
+    // probe, so a test can change field type without touching the mock.
+    //
+    // A plain object, not a Proxy: FormFieldInterface uses `import * as` and
+    // TypeScript's interop COPIES the module's own enumerable keys, so a
+    // Proxy's `get` trap never fires for anything its `ownKeys` does not list.
+    // Only `Input` used to resolve; every other leaf silently came back
+    // undefined and rendered the "component not found" alert instead.
+    const leaves: Record<string, typeof Probe> = {};
+    for (const name of INTERFACE_COMPONENT_NAMES) leaves[name] = Probe;
+    return leaves;
 }
+
+/**
+ * Component names in FormFieldInterface's `interfaceComponentMap`. Keep in
+ * sync with that map — a missing name renders the not-found alert rather than
+ * the probe, which reads as an assertion failure with no obvious cause.
+ */
+const INTERFACE_COMPONENT_NAMES = [
+    'AutocompleteAPI','Boolean','CollectionItemDropdown','Color','DateTime','Divider','File','FileImage','Files','GroupAccordion','GroupDetail','GroupRaw','Input','InputBlockEditor','InputCode','InputHash','Map','Notice','RichTextHTML','RichTextMarkdown','SelectDropdown','SelectIcon','SelectMultipleCheckbox','SelectMultipleCheckboxTree','SelectMultipleDropdown','SelectRadio','Slider','SystemPermissions','SystemToken','Tags','Textarea','Toggle','WorkflowButton',
+] as const;

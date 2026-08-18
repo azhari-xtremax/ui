@@ -37,6 +37,7 @@ import type { Field, FormDefinition } from "@buildpad/types";
 import {
   buildFieldsFromDefinition,
   getDefaultValuesFromFields,
+  isConcealedValue,
 } from "@buildpad/utils";
 import { VForm } from "@buildpad/ui-form";
 import { IconAlertCircle, IconCheck, IconTrash, IconX } from "@tabler/icons-react";
@@ -814,6 +815,14 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
         if (afterSave === "copy") {
           const copyData = { ...dataToSave };
           delete copyData[resolvedPk];
+          // A concealed column reads back as a mask, never as the secret, and
+          // formData holds that mask verbatim. Copying it would write the
+          // literal asterisks into the new row — a guessable static token, or
+          // a password hashed from "**********". Omit those keys so the new
+          // record starts with no secret rather than a known one.
+          for (const [key, val] of Object.entries(copyData)) {
+            if (isConcealedValue(val)) delete copyData[key];
+          }
           const copyResult = await itemsService.createOne(copyData);
           onSuccess?.({ ...copyData, id: copyResult?.[resolvedPk] });
           return;

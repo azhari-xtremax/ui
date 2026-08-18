@@ -887,7 +887,9 @@
         "@mantine/core",
         "@tabler/icons-react"
       ],
-      "internalDependencies": [],
+      "internalDependencies": [
+        "utils"
+      ],
       "interface": {
         "id": "input-hash",
         "name": "Hash",
@@ -925,7 +927,8 @@
       ],
       "internalDependencies": [
         "services",
-        "hooks"
+        "hooks",
+        "utils"
       ],
       "interface": {
         "id": "system-token",
@@ -2303,7 +2306,9 @@
         "rich-text-html",
         "rich-text-markdown",
         "map",
-        "workflow-button"
+        "workflow-button",
+        "input-hash",
+        "system-token"
       ]
     },
     {
