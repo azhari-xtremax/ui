@@ -15,6 +15,9 @@ import {
   provisionableInterfacesForType,
   CHOICE_INTERFACES,
   interfaceRequiresChoices,
+  resolveChoiceLabel,
+  parseChoiceValues,
+  splitCsvValue,
 } from '../src/interface-catalog';
 import { getFieldInterface } from '../src/field-interface-mapper';
 
@@ -211,5 +214,95 @@ describe('CHOICE_INTERFACES / interfaceRequiresChoices (S4.4/S8.4)', () => {
     for (const value of CHOICE_INTERFACES) {
       expect(provisionable.has(value)).toBe(true);
     }
+  });
+});
+
+// These two are the shared half of the choice-label resolution: the list, the
+// form and any consumer that installs them from the registry must all agree on
+// what a stored value means, so they are pinned here rather than only through
+// the component that happens to call them today.
+describe('resolveChoiceLabel', () => {
+  const choices = [
+    { text: 'Draft', value: 'draft' },
+    { text: 'Number one', value: 1 },
+    { text: 'Enabled', value: true },
+  ];
+
+  it('resolves a value to its configured label', () => {
+    expect(resolveChoiceLabel(choices, 'draft')).toBe('Draft');
+    expect(resolveChoiceLabel(choices, 1)).toBe('Number one');
+    expect(resolveChoiceLabel(choices, true)).toBe('Enabled');
+  });
+
+  // Backends report the same column as a number or a string depending on the
+  // driver, so a stored 1 has to find a choice authored as "1" and vice versa.
+  it('falls back to a stringified comparison', () => {
+    expect(resolveChoiceLabel(choices, '1')).toBe('Number one');
+    expect(resolveChoiceLabel([{ text: 'One', value: '1' }], 1)).toBe('One');
+  });
+
+  // The loose pass must never pre-empt an exact one, or two choices that
+  // stringify alike resolve to whichever was authored first.
+  it('prefers an exact match over a stringified match earlier in the list', () => {
+    const ambiguous = [
+      { text: 'String one', value: '1' },
+      { text: 'Number one', value: 1 },
+    ];
+    expect(resolveChoiceLabel(ambiguous, 1)).toBe('Number one');
+    expect(resolveChoiceLabel(ambiguous, '1')).toBe('String one');
+  });
+
+  it('returns undefined when nothing matches, so callers can tell it apart from an empty label', () => {
+    expect(resolveChoiceLabel(choices, 'archived')).toBeUndefined();
+    expect(resolveChoiceLabel([{ text: '', value: 'x' }], 'x')).toBe('');
+  });
+});
+
+describe('parseChoiceValues', () => {
+  const choices = [
+    { text: 'Draft', value: 'draft' },
+    { text: 'In review', value: 'review' },
+  ];
+
+  it('reads every storage shape a multi-select arrives in', () => {
+    expect(parseChoiceValues(['draft', 'review'], choices)).toEqual(['draft', 'review']);
+    expect(parseChoiceValues('["draft","review"]', choices)).toEqual(['draft', 'review']);
+    expect(parseChoiceValues('draft,review', choices)).toEqual(['draft', 'review']);
+    expect(parseChoiceValues(' draft , review ', choices)).toEqual(['draft', 'review']);
+  });
+
+  it('returns null for a single choice rather than a one-entry array', () => {
+    expect(parseChoiceValues('draft', choices)).toBeNull();
+    expect(parseChoiceValues(1, choices)).toBeNull();
+    expect(parseChoiceValues(null, choices)).toBeNull();
+  });
+
+  // A configured value may itself contain a comma; splitting before matching
+  // would make that choice permanently unresolvable.
+  it('does not split a value that is itself a configured choice', () => {
+    const withComma = [{ text: 'Amsterdam', value: 'Amsterdam, NL' }];
+    expect(parseChoiceValues('Amsterdam, NL', withComma)).toBeNull();
+  });
+
+  it('falls back to csv when a bracketed string is not valid json', () => {
+    expect(parseChoiceValues('[draft,review', choices)).toEqual(['[draft', 'review']);
+  });
+
+  // A json object is not a collection of choices, and must not be mistaken
+  // for one just because it parses.
+  it('returns null for json that is not an array', () => {
+    expect(parseChoiceValues('{"a":1}', choices)).toBeNull();
+  });
+
+  it('preserves an empty array so callers can distinguish it from a single value', () => {
+    expect(parseChoiceValues([], choices)).toEqual([]);
+  });
+});
+
+describe('splitCsvValue', () => {
+  it('trims entries and drops empty ones', () => {
+    expect(splitCsvValue('a, b ,,c,')).toEqual(['a', 'b', 'c']);
+    expect(splitCsvValue('')).toEqual([]);
+    expect(splitCsvValue(' , ')).toEqual([]);
   });
 });

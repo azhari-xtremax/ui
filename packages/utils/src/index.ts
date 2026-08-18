@@ -88,6 +88,10 @@ export {
   provisionableInterfacesForType,
   CHOICE_INTERFACES,
   interfaceRequiresChoices,
+  resolveChoiceLabel,
+  parseChoiceValues,
+  splitCsvValue,
+  type InterfaceChoice,
   type ProvisionableInterface,
   type ProvisionableInterfaceGroup,
 } from './interface-catalog';

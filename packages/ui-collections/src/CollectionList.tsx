@@ -35,6 +35,12 @@ import {
   PermissionsService,
   apiRequest,
 } from "@buildpad/services";
+import {
+  interfaceRequiresChoices,
+  parseChoiceValues,
+  resolveChoiceLabel,
+  type InterfaceChoice,
+} from "@buildpad/utils";
 import type { CollectionActionAccess } from "@buildpad/services";
 import type { AnyItem, Field } from "@buildpad/types";
 import type { Alignment, Header, HeaderRaw, Sort } from "@buildpad/ui-table";
@@ -588,6 +594,27 @@ export const CollectionList: React.FC<CollectionListProps> = ({
   // in the combined load effect above, so permittedFields === allFields)
   const permittedFields = useMemo<Field[]>(() => allFields, [allFields]);
 
+  // Choice-authoring fields, resolved once per field-set rather than per cell.
+  // Without this the label lookup is a linear scan inside every rendered cell:
+  // a 100-row list over a 50-choice column is thousands of comparisons per
+  // render, each miss allocating two throwaway strings.
+  //
+  // Keyed on the field's INTERFACE, not on the presence of `options.choices`.
+  // Those are different axes, and keying on the latter made a uuid (or any
+  // other) field that merely carries choices lose its own renderer.
+  const choicesByField = useMemo(() => {
+    const map = new Map<string, InterfaceChoice[]>();
+    for (const f of permittedFields) {
+      if (!interfaceRequiresChoices(f.meta?.interface ?? "")) continue;
+      const raw = f.meta?.options?.choices;
+      // A non-array here (a backend that stringified meta.options) would
+      // otherwise pass a `.length > 0` guard and then throw inside the row.
+      if (!Array.isArray(raw) || raw.length === 0) continue;
+      map.set(f.field, raw as InterfaceChoice[]);
+    }
+    return map;
+  }, [permittedFields]);
+
   // =========================================================================
   // Build VTable headers from field metadata
   // =========================================================================
@@ -797,6 +824,80 @@ export const CollectionList: React.FC<CollectionListProps> = ({
 
       const fieldType = fieldMeta.type;
 
+      // ---------- Choice-authoring interfaces (resolve to label, not raw value) ----------
+      // Deliberately BEFORE the type chain below. This dispatches on the
+      // field's interface, a different axis from the column type the rest of
+      // the chain switches on, so its reachability must not depend on which
+      // type branches happen to sit above it. Placed inside the chain, a
+      // numeric or boolean choice field never reached it at all — the numeric
+      // branch even re-formatted the value through toLocaleString(), showing
+      // "1,000" for a choice valued 1000: neither the label nor the raw value.
+      const fieldChoices = choicesByField.get(header.value);
+      if (fieldChoices) {
+        // Storage shape is inferred from the observed value, not the declared
+        // type: some backends report the underlying column type instead of the
+        // abstract "csv" one, so a multi-select can arrive as an array, as a
+        // JSON array still encoded as a string, or as csv.
+        const arrayValue = parseChoiceValues(value, fieldChoices);
+
+        if (arrayValue) {
+          // Nullish entries are dropped rather than stringified: the top-level
+          // value is already guarded this way, and without it a json array
+          // holding a null rendered a badge reading the literal text "null".
+          const entries = arrayValue.filter((v) => v !== null && v !== undefined);
+          if (entries.length === 0) return null;
+          return (
+            <Group gap={4} wrap="nowrap">
+              {entries.slice(0, 3).map((v, i) => (
+                <Badge
+                  key={i}
+                  variant="light"
+                  size="sm"
+                  color="gray"
+                  style={{ textTransform: "none", minWidth: 0 }}
+                >
+                  {resolveChoiceLabel(fieldChoices, v) ?? String(v ?? "")}
+                </Badge>
+              ))}
+              {entries.length > 3 && (
+                // Never the element that gets clipped: it is last in a
+                // nowrap row, so in a narrow column the count of what is
+                // hidden would itself be the first thing hidden.
+                <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                  +{entries.length - 3}
+                </Text>
+              )}
+            </Group>
+          );
+        }
+
+        const label = resolveChoiceLabel(fieldChoices, value);
+        if (label !== undefined) {
+          // An empty label would render a blank cell, indistinguishable from a
+          // rendering failure; defer to the table's own placeholder instead.
+          if (label === "") return null;
+          return (
+            <Text size="sm" truncate="end">
+              {label}
+            </Text>
+          );
+        }
+
+        // Nothing here reads as a configured choice. A json column keeps the
+        // JSON badge the type chain below gives it — stringifying an
+        // unrecognised payload would print raw JSON into the cell. Every other
+        // type falls back to showing the value as stored.
+        if (fieldType !== "json") {
+          const raw = String(value);
+          if (raw === "") return null;
+          return (
+            <Text size="sm" truncate="end">
+              {raw}
+            </Text>
+          );
+        }
+      }
+
       // ---------- Boolean ----------
       if (fieldType === "boolean") {
         return value ? (
@@ -848,51 +949,6 @@ export const CollectionList: React.FC<CollectionListProps> = ({
           );
         }
         return null;
-      }
-
-      // ---------- Choice-authoring interfaces (resolve to label, not raw value) ----------
-      // A select-dropdown/radio/multi-select field's `meta.options.choices` is the
-      // same `{text, value}` shape authored via the choices editor. Without this,
-      // the list showed the raw stored value (e.g. "draft") instead of the label
-      // an admin configured (e.g. "Draft"), and a multi-select's array value fell
-      // through to the generic "JSON" badge below with no content at all (S8.3).
-      const choices = fieldMeta.meta?.options?.choices as
-        | Array<{ text: string; value: string | number | boolean }>
-        | undefined;
-      if (choices && choices.length > 0) {
-        const resolveLabel = (raw: unknown): string => {
-          const match = choices.find((c) => c.value === raw || String(c.value) === String(raw));
-          return match ? match.text : String(raw);
-        };
-        // csv-typed multi-select fields deliver a raw comma-string, not an
-        // array — split it the same way the multi-select leaves themselves do.
-        const arrayValue = Array.isArray(value)
-          ? value
-          : fieldType === "csv" && typeof value === "string"
-            ? value.split(",").map((s) => s.trim()).filter(Boolean)
-            : null;
-        if (arrayValue) {
-          if (arrayValue.length === 0) return null;
-          return (
-            <Group gap={4} wrap="nowrap">
-              {arrayValue.slice(0, 3).map((v, i) => (
-                <Badge key={i} variant="light" size="sm" color="gray" style={{ textTransform: "none" }}>
-                  {resolveLabel(v)}
-                </Badge>
-              ))}
-              {arrayValue.length > 3 && (
-                <Text size="xs" c="dimmed">
-                  +{arrayValue.length - 3}
-                </Text>
-              )}
-            </Group>
-          );
-        }
-        return (
-          <Text size="sm" truncate="end">
-            {resolveLabel(value)}
-          </Text>
-        );
       }
 
       // ---------- JSON (display as badge) ----------
@@ -958,7 +1014,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
       // ---------- Default: let VTable handle it ----------
       return null;
     },
-    [permittedFields],
+    [permittedFields, choicesByField],
   );
 
   const renderHeaderAppend = useCallback(() => {

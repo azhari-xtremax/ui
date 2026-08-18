@@ -780,11 +780,309 @@ describe("CollectionList", () => {
 
       const statusCell = await screen.findByTestId("cell-0-status");
       expect(statusCell).toHaveTextContent("archived");
+      // Assert the CELL RENDERER produced this, not the table's own fallback:
+      // with the resolution reverted, `status` falls through to `return null`
+      // and the test double prints the raw value itself, so a text-content
+      // assertion alone passes either way.
+      expect(statusCell.querySelector('[data-component="Text"]')).toBeInTheDocument();
+    });
+
+    // The resolution keys on the field's interface, not its column type, so it
+    // has to work for every column type that interface is declared for.
+    // interface-catalog declares select-dropdown for string, integer,
+    // bigInteger, float and decimal; placed inside the type chain, the numeric
+    // branch returned first and none of those resolved.
+    it.each([
+      ["integer", 2, [{ text: "Low", value: 1 }, { text: "High", value: 2 }], "High"],
+      ["bigInteger", 1, [{ text: "Low", value: 1 }], "Low"],
+      ["float", 0.5, [{ text: "Half", value: 0.5 }], "Half"],
+      ["decimal", 10, [{ text: "Ten", value: 10 }], "Ten"],
+      ["boolean", true, [{ text: "Enabled", value: true }], "Enabled"],
+    ])("resolves a %s-typed choice field to its label", async (type, stored, choices, expected) => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "status",
+          type,
+          meta: {
+            interface: "select-dropdown",
+            sort: 1,
+            hidden: false,
+            options: { choices },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, status: stored }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const statusCell = await screen.findByTestId("cell-0-status");
+      expect(statusCell).toHaveTextContent(expected as string);
+    });
+
+    // An exact match anywhere must beat a stringified match earlier in the
+    // list, or the list and the form disagree about which choice a value means.
+    it("prefers an exact value match over an earlier stringified one", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "status",
+          type: "integer",
+          meta: {
+            interface: "select-dropdown",
+            sort: 1,
+            hidden: false,
+            options: {
+              choices: [
+                { text: "STRING-ONE", value: "1" },
+                { text: "NUMBER-ONE", value: 1 },
+              ],
+            },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, status: 1 }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const statusCell = await screen.findByTestId("cell-0-status");
+      expect(statusCell).toHaveTextContent("NUMBER-ONE");
+    });
+
+    // The three storage shapes a multi-select arrives in: a real array, a
+    // JSON array still encoded as a string, and csv.
+    it.each([
+      ["a real array", "json", ["draft", "review"]],
+      ["a json array encoded as a string", "json", '["draft","review"]'],
+      ["a csv string", "csv", "draft,review"],
+    ])("renders labels for a multi-select stored as %s", async (_name, type, stored) => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "tags",
+          type,
+          meta: {
+            interface: "select-multiple-checkbox",
+            sort: 1,
+            hidden: false,
+            options: {
+              choices: [
+                { text: "Draft", value: "draft" },
+                { text: "In Review", value: "review" },
+              ],
+            },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, tags: stored }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const cell = await screen.findByTestId("cell-0-tags");
+      expect(cell).toHaveTextContent("Draft");
+      expect(cell).toHaveTextContent("In Review");
+      // Never the encoding itself.
+      expect(cell).not.toHaveTextContent("[");
+      expect(cell).not.toHaveTextContent("draft,review");
+    });
+
+    // A choice value that itself contains a comma must not be split apart.
+    it("does not split a single choice whose value contains a comma", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "tags",
+          type: "csv",
+          meta: {
+            interface: "select-dropdown",
+            sort: 1,
+            hidden: false,
+            options: { choices: [{ text: "Amsterdam", value: "Amsterdam, NL" }] },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, tags: "Amsterdam, NL" }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const cell = await screen.findByTestId("cell-0-tags");
+      expect(cell).toHaveTextContent("Amsterdam");
+      expect(cell).not.toHaveTextContent("NL");
+    });
+
+    // Only three badges are shown; the rest are reported as a count.
+    it("counts the entries beyond the first three", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "tags",
+          type: "json",
+          meta: {
+            interface: "select-multiple-checkbox",
+            sort: 1,
+            hidden: false,
+            options: {
+              choices: [1, 2, 3, 4, 5].map((n) => ({ text: `Tag ${n}`, value: `t${n}` })),
+            },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, tags: ["t1", "t2", "t3", "t4", "t5"] }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const cell = await screen.findByTestId("cell-0-tags");
+      expect(cell).toHaveTextContent("Tag 3");
+      expect(cell).toHaveTextContent("+2");
+      expect(cell).not.toHaveTextContent("Tag 4");
+      // That the counter also survives a narrow column is a flex-shrink
+      // property; jsdom does no layout and the Mantine test double drops
+      // style, so it is not assertable here.
+    });
+
+    // Empty and nullish entries must not render as badges reading "null".
+    it.each([
+      ["an empty array", []],
+      ["entries that are all nullish", [null, undefined]],
+    ])("renders no badges for %s", async (_name, stored) => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "tags",
+          type: "json",
+          meta: {
+            interface: "select-multiple-checkbox",
+            sort: 1,
+            hidden: false,
+            options: { choices: [{ text: "Draft", value: "draft" }] },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, tags: stored }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const cell = await screen.findByTestId("cell-0-tags");
+      expect(cell.querySelector('[data-component="Badge"]')).toBeNull();
+      expect(cell).not.toHaveTextContent("null");
+      expect(cell).not.toHaveTextContent("[]");
+      // No empty badge row either: the renderer has to hand the cell back to
+      // the table so it paints its own placeholder, not emit a Group holding
+      // nothing. Both are visually blank, so assert on the structure.
+      expect(cell.querySelector('[data-component="Group"]')).toBeNull();
+    });
+
+    // An unrecognised json payload keeps the JSON badge it had before the
+    // resolution existed, rather than spilling raw JSON into the cell.
+    it("leaves an unresolvable json payload to the JSON badge", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "tags",
+          type: "json",
+          meta: {
+            interface: "select-multiple-checkbox",
+            sort: 1,
+            hidden: false,
+            options: { choices: [{ text: "Draft", value: "draft" }] },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, tags: '{"nested":{"a":1}}' }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const cell = await screen.findByTestId("cell-0-tags");
+      expect(cell).toHaveTextContent("JSON");
+      expect(cell).not.toHaveTextContent("nested");
+    });
+
+    // A field that merely carries options.choices but is not a choice
+    // interface must keep its own renderer.
+    it("leaves a non-choice interface's rendering alone even if it carries choices", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0, hidden: false } },
+        {
+          field: "status",
+          type: "string",
+          meta: {
+            interface: "input",
+            sort: 1,
+            hidden: false,
+            options: { choices: [{ text: "Draft", value: "draft" }] },
+          },
+        },
+      ]);
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) return Promise.resolve(makeCountResponse(1));
+        return Promise.resolve({
+          data: [{ id: 1, status: "draft" }],
+          meta: { page: 1, limit: 25, total: 1 },
+        });
+      });
+
+      renderList();
+
+      const statusCell = await screen.findByTestId("cell-0-status");
+      expect(statusCell).toHaveTextContent("draft");
+      expect(statusCell).not.toHaveTextContent("Draft");
     });
   });
 });
 
 describe("relational-field exclusion in the items query", () => {
+  // Top-level sibling of the CollectionList describe, so that block's
+  // beforeEach never runs here: without this the shared mock still holds
+  // every call from the preceding tests, the "did we fetch?" gate is
+  // already satisfied by those leftovers, and the assertion reads a stale
+  // URL — which is why this file failed intermittently.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupDefaultMocks();
+  });
+
   it("omits O2M/M2M/M2A fields from fields= even when their type is not alias", async () => {
     mockFieldsReadAll.mockResolvedValue([
       ...SAMPLE_FIELDS,
