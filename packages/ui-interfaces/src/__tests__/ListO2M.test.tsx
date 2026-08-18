@@ -30,14 +30,23 @@ jest.mock("@buildpad/hooks", () => ({
 jest.mock("@buildpad/ui-collections", () => {
   const R = require("react");
   return {
-    CollectionForm: ({ onSuccess, defaultValues, id }: any) => {
+    CollectionForm: ({ onSuccess, defaultValues, id, mode }: any) => {
       (globalThis as any).__lastFormDefaults = defaultValues;
       (globalThis as any).__lastFormId = id;
+      (globalThis as any).__lastFormMode = mode;
       return R.createElement(
         "button",
         {
           "data-testid": "mock-form-save",
-          onClick: () => onSuccess({ name: (globalThis as any).__formName ?? "New" }),
+          onClick: () =>
+            onSuccess({
+              ...((globalThis as any).__formData ?? {}),
+              name: (globalThis as any).__formName ?? "New",
+              // The real CollectionForm merges a literal `id` into every
+              // onSuccess payload — echoing it here is what keeps this stub
+              // honest about the shape production actually emits.
+              id: id ?? (globalThis as any).__newId ?? "srv-new",
+            }),
         },
         "save",
       );
@@ -139,6 +148,11 @@ beforeEach(() => {
   (apiRequest as jest.Mock).mockReset();
   (globalThis as any).__formName = "New";
   (globalThis as any).__pickIds = ["p9"];
+  (globalThis as any).__formData = undefined;
+  (globalThis as any).__newId = undefined;
+  (globalThis as any).__lastFormId = undefined;
+  (globalThis as any).__lastFormMode = undefined;
+  (globalThis as any).__lastFormDefaults = undefined;
   (useRelationO2M as jest.Mock).mockReturnValue({
     relationInfo: RELATION_INFO,
     loading: false,
@@ -513,12 +527,17 @@ describe("ListO2M — PK-name-agnostic select-all / edit-modal / staged emits (R
 
     await waitFor(() => expect(onChange).toHaveBeenCalled());
     const lastPayload = onChange.mock.calls.at(-1)![0] as Record<string, unknown>[];
+    // The relation writer resolves records via `itemObj[manyPrimary]`, and
+    // `many_primary` is `NOT NULL DEFAULT 'id'` and hardcoded to "id" at
+    // every DaaS write site — so the entry must carry the resolved real PK
+    // *value* under a literal `id` key. Re-keying it by the related PK
+    // column name makes the lookup miss and INSERTs a duplicate.
     expect(lastPayload).toContainEqual(
-      expect.objectContaining({ slug: "post-z" }),
+      expect.objectContaining({ id: "post-z" }),
     );
-    // Never the wrong key — the relation writer looks records up by the
-    // real PK column name, not a literal "id".
-    expect(lastPayload.some((e) => "id" in e)).toBe(false);
+    expect(
+      lastPayload.some((e) => typeof e === "object" && e !== null && "slug" in e),
+    ).toBe(false);
   });
 
   it("keys a staged-update payload entry by the resolved real PK field, not literal id", async () => {
@@ -550,10 +569,74 @@ describe("ListO2M — PK-name-agnostic select-all / edit-modal / staged emits (R
     const lastPayload = onChange.mock.calls.at(-1)![0] as Record<string, unknown>[];
     expect(
       lastPayload.some(
-        (e) => e["slug"] === "post-a" && e["name"] === "Renamed",
+        (e) => e["id"] === "post-a" && e["name"] === "Renamed",
       ),
     ).toBe(true);
-    expect(lastPayload.some((e) => "id" in e)).toBe(false);
+    // The staged edit must also be visible on the row: staged links are
+    // appended after the update overlay, so they need the overlay applied
+    // too or the user sees their edit silently discarded.
+    expect(screen.getByText("Renamed")).toBeInTheDocument();
+  });
+
+  it("keeps a user's edit to the PK column instead of reasserting the staged PK", async () => {
+    (apiRequest as jest.Mock).mockResolvedValue({
+      data: [{ slug: "post-a", name: "Post A" }],
+    });
+    (globalThis as any).__pickIds = ["post-a"];
+    (globalThis as any).__formName = "Post A";
+    (globalThis as any).__formData = { slug: "post-a-v2" };
+    setHookItems([]);
+
+    const onChange = jest.fn();
+    render(
+      wrap(<ListO2M {...BASE_PROPS} primaryKey="+" value={[]} onChange={onChange} />),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(screen.getByTestId("o2m-edit-post-a")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("o2m-edit-post-a"));
+    fireEvent.click(await screen.findByTestId("mock-form-save"));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const lastPayload = onChange.mock.calls.at(-1)![0] as Record<string, unknown>[];
+    // Re-keying the entry by the PK column would overwrite the rename with
+    // the pre-edit value and silently discard the user's change.
+    expect(
+      lastPayload.some((e) => e["slug"] === "post-a-v2"),
+    ).toBe(true);
+  });
+
+  it("drops a staged update when the same row is un-staged", async () => {
+    (apiRequest as jest.Mock).mockResolvedValue({
+      data: [{ slug: "post-a", name: "Post A" }],
+    });
+    (globalThis as any).__pickIds = ["post-a"];
+    (globalThis as any).__formName = "Renamed";
+    setHookItems([]);
+
+    const onChange = jest.fn();
+    render(
+      wrap(<ListO2M {...BASE_PROPS} primaryKey="+" value={[]} onChange={onChange} />),
+    );
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() => expect(screen.getByTestId("o2m-edit-post-a")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId("o2m-edit-post-a"));
+    fireEvent.click(await screen.findByTestId("mock-form-save"));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByTestId("o2m-remove-post-a"));
+
+    await waitFor(() => {
+      const payload = onChange.mock.calls.at(-1)![0] as Record<string, unknown>[];
+      // The removed record must not still be handed to the parent form —
+      // the writer would update and re-link it on save.
+      expect(payload.some((e) => e && (e as any)["id"] === "post-a")).toBe(false);
+    });
   });
 });
 
@@ -561,6 +644,7 @@ describe("ListO2M — staged creates on an unsaved parent", () => {
   /** create → open edit (re-memoizes handleFormSuccess) → create */
   async function stageTwoCreatesAroundAnEdit() {
     (globalThis as any).__formName = "First";
+    (globalThis as any).__newId = "srv-1";
     fireEvent.click(await screen.findByTestId("o2m-create-btn"));
     fireEvent.click(await screen.findByTestId("mock-form-save"));
     await waitFor(() => expect(screen.getByTestId("o2m-remove-$temp_0")).toBeInTheDocument());
@@ -569,6 +653,7 @@ describe("ListO2M — staged creates on an unsaved parent", () => {
     await flush();
 
     (globalThis as any).__formName = "Second";
+    (globalThis as any).__newId = "srv-2";
     fireEvent.click(screen.getByTestId("o2m-create-btn"));
     fireEvent.click(screen.getByTestId("mock-form-save"));
     await waitFor(() => expect(screen.getByTestId("o2m-remove-$temp_1")).toBeInTheDocument());
@@ -583,8 +668,8 @@ describe("ListO2M — staged creates on an unsaved parent", () => {
 
     expect(screen.getByTestId("o2m-remove-$temp_0")).toBeInTheDocument();
     expect(onChange.mock.calls.at(-1)![0]).toEqual([
-      { name: "First", category_id: "+" },
-      { name: "Second", category_id: "+" },
+      { name: "First", category_id: "+", id: "srv-1" },
+      { name: "Second", category_id: "+", id: "srv-2" },
     ]);
   });
 
@@ -611,7 +696,9 @@ describe("ListO2M — staged creates on an unsaved parent", () => {
     fireEvent.click(await screen.findByTestId("mock-form-save"));
     await waitFor(() => expect(screen.getByTestId("o2m-remove-$temp_0")).toBeInTheDocument());
 
-    expect(onEmit.mock.calls.at(-1)![0]).toEqual([{ name: "Only", category_id: "+" }]);
+    expect(onEmit.mock.calls.at(-1)![0]).toEqual([
+      { name: "Only", category_id: "+", id: "srv-new" },
+    ]);
     const callsAfterStage = onEmit.mock.calls.length;
 
     fireEvent.click(screen.getByTestId("o2m-remove-$temp_0"));
