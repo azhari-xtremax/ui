@@ -2842,7 +2842,8 @@
       ],
       "internalDependencies": [
         "types",
-        "services"
+        "services",
+        "utils"
       ],
       "registryDependencies": [
         "vtable",

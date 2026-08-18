@@ -139,3 +139,82 @@ export const CHOICE_INTERFACES: ReadonlySet<string> = new Set([
 export function interfaceRequiresChoices(interfaceValue: string): boolean {
   return CHOICE_INTERFACES.has(interfaceValue);
 }
+
+/** A single authored choice: display `text`, stored `value`. */
+export interface InterfaceChoice {
+  text: string;
+  value: string | number | boolean;
+}
+
+/**
+ * Resolve a stored value to its authored choice label.
+ *
+ * Two passes on purpose. An exact match anywhere in the list must beat a
+ * stringified match earlier in it: a single `find` whose predicate ORs both
+ * forms returns index 0's loose hit before index 1's exact one, so
+ * `[{value:'1'},{value:1}]` resolves a stored number 1 to the STRING choice.
+ *
+ * The loose pass is still needed rather than optional — the choices editor
+ * only ever authors string values, so every stored number or boolean reaches
+ * its label through stringification — but it must run second.
+ *
+ * Returns `undefined` when nothing matches, so callers can decide between a
+ * raw-value fallback and an empty-cell placeholder.
+ */
+export function resolveChoiceLabel(
+  choices: readonly InterfaceChoice[],
+  value: unknown,
+): string | undefined {
+  const exact = choices.find((c) => c.value === value);
+  if (exact) return exact.text;
+  const loose = choices.find((c) => String(c.value) === String(value));
+  return loose ? loose.text : undefined;
+}
+
+/**
+ * Normalise a stored multi-select value into the individual choice values it
+ * holds, or null when the value is a single choice rather than a collection.
+ *
+ * The same interface is persisted three different ways depending on the column
+ * type it is attached to: a real array (json columns), a JSON array that
+ * arrives still encoded as a string, and a comma-separated string (csv
+ * columns). Callers should not have to know which one they were handed.
+ */
+export function parseChoiceValues(
+  value: unknown,
+  choices: readonly InterfaceChoice[],
+): unknown[] | null {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // Not JSON after all — read it as csv below rather than giving up.
+    }
+  }
+
+  // A whole-string match wins over splitting: a configured choice value may
+  // itself contain a comma, and splitting first would make it unfindable.
+  if (resolveChoiceLabel(choices, value) !== undefined) return null;
+
+  return value.includes(",") ? splitCsvValue(value) : null;
+}
+
+/**
+ * Split a csv-stored multi-value into its parts, trimming each and dropping
+ * empties.
+ *
+ * `type === 'csv'` is the documented signal, but some backends report the
+ * underlying column type instead, so an observed string is trusted too —
+ * matching what the multi-select leaves do rather than gating on type alone.
+ */
+export function splitCsvValue(value: string): string[] {
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
