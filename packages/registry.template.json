@@ -96,6 +96,10 @@
           "target": "lib/buildpad/field-interface-mapper.ts"
         },
         {
+          "source": "utils/src/conceal.ts",
+          "target": "lib/buildpad/conceal.ts"
+        },
+        {
           "source": "utils/src/interface-types.ts",
           "target": "lib/buildpad/interface-types.ts"
         },

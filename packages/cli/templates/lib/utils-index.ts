@@ -12,6 +12,14 @@ export { cn, formatFileSize, getFileCategory, getAssetUrl, slugify, slugify as g
 // New item detection
 export { isNewItem, isExistingItem } from '../is-new-item';
 
+// Concealed values (hash / conceal specials)
+export {
+  CONCEALED_PLACEHOLDER,
+  isConcealedValue,
+  isConcealedField,
+  concealingInterface,
+} from '../conceal';
+
 // Form definition overlay merge (drives the dynamic form builder runtime)
 export { buildFieldsFromDefinition } from '../build-fields-from-definition';
 
@@ -29,8 +37,11 @@ export {
   provisionableInterfacesForType,
   CHOICE_INTERFACES,
   interfaceRequiresChoices,
+  resolveChoiceLabel,
+  parseChoiceValues,
   type ProvisionableInterface,
   type ProvisionableInterfaceGroup,
+  type InterfaceChoice,
 } from '../interface-catalog';
 
 // Field interface mapping (from @buildpad/utils)
@@ -49,6 +60,7 @@ export {
   isPresentationField,
   getFieldValidation,
   formatFieldValue,
+  getDefaultValuesFromFields,
 } from '../field-interface-mapper';
 
 // Interface type definitions
