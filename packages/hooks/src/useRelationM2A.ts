@@ -316,8 +316,19 @@ export function useRelationM2A(collection: string, field: string) {
                                 })
                                 .filter((c: CollectionInfo) => c.meta?.singleton !== true);
 
-                            // Detect actual PK fields for allowed collections
-                            const relationPrimaryKeyFields = await detectPrimaryKeyFields(allowedNames);
+                            // Detect actual PK fields for the allowed collections AND
+                            // the junction table. The junction's PK used to be
+                            // hardcoded to `id`, which made every downstream alias
+                            // (`{ ...item, id: item[junctionPKField] }`) a no-op on
+                            // exactly the junctions it was written for.
+                            const detectedPrimaryKeyFields = await detectPrimaryKeyFields([
+                                ...allowedNames,
+                                junctionCollectionName,
+                            ]);
+                            const relationPrimaryKeyFields = detectedPrimaryKeyFields;
+                            const junctionPrimaryKeyField =
+                                detectedPrimaryKeyFields[junctionCollectionName]
+                                ?? { field: 'id', type: 'integer' };
 
                             const info: M2ARelationInfo = {
                                 junctionCollection: {
@@ -337,10 +348,7 @@ export function useRelationM2A(collection: string, field: string) {
                                     field: reverseJunctionFieldName,
                                     type: 'uuid',
                                 },
-                                junctionPrimaryKeyField: {
-                                    field: 'id',
-                                    type: 'integer',
-                                },
+                                junctionPrimaryKeyField,
                                 relationPrimaryKeyFields,
                                 sortField: sortFieldName,
                                 relation: {
@@ -393,8 +401,16 @@ export function useRelationM2A(collection: string, field: string) {
                             })
                             .filter(c => c.meta?.singleton !== true); // Exclude singletons
 
-                        // Detect actual PK fields for allowed collections
-                        const relationPrimaryKeyFields = await detectPrimaryKeyFields(allowedCollectionNames);
+                        // Detect actual PK fields for the allowed collections AND
+                        // the junction table (see the note at the first call site).
+                        const detectedPrimaryKeyFields = await detectPrimaryKeyFields([
+                            ...allowedCollectionNames,
+                            junctionCollectionFb,
+                        ]);
+                        const relationPrimaryKeyFields = detectedPrimaryKeyFields;
+                        const junctionPrimaryKeyField =
+                            detectedPrimaryKeyFields[junctionCollectionFb]
+                            ?? { field: 'id', type: 'integer' };
 
                         const info: M2ARelationInfo = {
                             junctionCollection: {
@@ -414,10 +430,7 @@ export function useRelationM2A(collection: string, field: string) {
                                 field: reverseJunctionFieldName,
                                 type: 'uuid',
                             },
-                            junctionPrimaryKeyField: {
-                                field: 'id',
-                                type: 'integer',
-                            },
+                            junctionPrimaryKeyField,
                             relationPrimaryKeyFields,
                             sortField: sortFieldName,
                             relation: {

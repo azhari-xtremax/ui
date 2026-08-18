@@ -131,24 +131,32 @@ function ProductTags({ productId }: { productId: string }) {
   const { relationInfo, loading } = useRelationM2M('products', 'tags');
   
   // Manage items
-  const { 
-    items, 
-    loadItems, 
-    addItem, 
-    removeItem, 
-    reorderItems,
-    loading: itemsLoading 
+  const {
+    items,
+    loadItems,
+    createJunctionItem,
+    selectItems,
+    removeItem,
+    updateSortOrder,
+    loading: itemsLoading
   } = useRelationM2MItems(relationInfo, productId);
 
+  useEffect(() => {
+    loadItems({ limit: 25, page: 1, fields: ['name'] });
+  }, [loadItems]);
+
   const handleAddTag = (tagId: string) => {
-    addItem({ id: tagId });
+    // Creates the junction row linking productId -> tagId.
+    createJunctionItem(tagId);
   };
 
   return (
     <div>
-      {items.map(tag => (
-        <Chip key={tag.id} onRemove={() => removeItem(tag.id)}>
-          {tag.name}
+      {items.map(junctionRow => (
+        // `removeItem` takes the junction ROW, not an id — it needs the
+        // junction table's primary key to build the delete URL.
+        <Chip key={junctionRow.id} onRemove={() => removeItem(junctionRow)}>
+          {(junctionRow.tag_id as { name: string }).name}
         </Chip>
       ))}
     </div>

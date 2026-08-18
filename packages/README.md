@@ -97,7 +97,8 @@ import { useRelationM2M, useRelationM2MItems } from '@buildpad/hooks';
 
 function ProductTags({ productId }) {
   const { relationInfo } = useRelationM2M('products', 'tags');
-  const { items, addItem, removeItem } = useRelationM2MItems(relationInfo, productId);
+  // `removeItem` takes a junction row from `items`, not a bare id.
+  const { items, createJunctionItem, removeItem } = useRelationM2MItems(relationInfo, productId);
   // ...
 }
 ```
