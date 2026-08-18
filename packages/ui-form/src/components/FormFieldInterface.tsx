@@ -11,7 +11,12 @@ import React, { useCallback, useMemo } from 'react';
 import { Alert, Skeleton, Text } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import type { FormField } from '../types';
-import { getFieldInterface, type InterfaceConfig, type InterfaceType } from '@buildpad/utils';
+import {
+  getFieldInterface,
+  getFieldDefault,
+  type InterfaceConfig,
+  type InterfaceType,
+} from '@buildpad/utils';
 import { InterfaceErrorBoundary } from './InterfaceErrorBoundary';
 
 // Import interface components
@@ -337,7 +342,10 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     // Schema properties
     maxLength: field.schema?.max_length,
     nullable: field.schema?.is_nullable,
-    defaultValue: field.schema?.default_value,
+    // Parsed, not the raw SQL text: the column default reaches an
+    // interface as `'active'::character varying` otherwise, so an
+    // interface that honours this prop would disagree with the model.
+    defaultValue: getFieldDefault(field),
 
     // Spread interface-specific props from InterfaceConfig (includes meta.options)
     ...interfaceConfig.props,

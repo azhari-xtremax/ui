@@ -9,6 +9,7 @@
 export {
   getFieldInterface,
   getFieldDefault,
+  getDefaultValuesFromFields,
   getFieldValidation,
   formatFieldValue,
   isFieldReadOnly,

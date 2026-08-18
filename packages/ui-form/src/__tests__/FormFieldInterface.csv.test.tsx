@@ -39,6 +39,9 @@ jest.mock('@buildpad/ui-interfaces', () => {
 // be run against each multi-select leaf.
 const resolved = { type: 'select-multiple-checkbox' };
 jest.mock('@buildpad/utils', () => ({
+    // Spread the real module: only the interface resolution is stubbed here,
+    // and blanking the rest hides every other util the component calls.
+    ...jest.requireActual('@buildpad/utils'),
     getFieldInterface: () => ({ type: resolved.type, props: {} }),
 }));
 

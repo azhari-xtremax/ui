@@ -12,7 +12,7 @@ import { IconAlertCircle } from '@tabler/icons-react';
 import type { FormField as TFormField, ValidationError } from '../types';
 import { FormFieldInterface } from './FormFieldInterface';
 import { FormFieldLabel } from './FormFieldLabel';
-import { isFieldReadOnly, isNewItem, getFieldDisplayName } from '@buildpad/utils';
+import { isFieldReadOnly, isNewItem, getFieldDisplayName, getFieldDefault } from '@buildpad/utils';
 
 export interface FormFieldProps {
   /** Field definition */
@@ -101,7 +101,11 @@ export const FormField: React.FC<FormFieldProps> = ({
   // Get effective value (use value or default)
   const effectiveValue = useMemo(() => {
     if (value !== undefined) return value;
-    if (field.schema?.default_value !== undefined) return field.schema.default_value;
+    // Parse the column default rather than passing the raw SQL text: a
+    // Postgres default arrives as `'active'::character varying`, which was
+    // rendered verbatim here while the form model held the parsed value.
+    const schemaDefault = getFieldDefault(field);
+    if (schemaDefault !== undefined) return schemaDefault;
     return null;
   }, [value, field]);
 

@@ -5,22 +5,17 @@
  */
 
 import type { Field } from '@buildpad/types';
-import { getFieldDefault } from '@buildpad/utils';
+import { getDefaultValuesFromFields as buildDefaults } from '@buildpad/utils';
 import type { FieldValues } from '../types';
 
 /**
  * Extract default values from field schema
  * Filters out database-generated defaults that shouldn't be used as form values
+ *
+ * The implementation lives in `@buildpad/utils` beside the parser it calls, so
+ * the value this form renders and the value a caller submits come from one
+ * rule rather than two copies that can drift.
  */
 export function getDefaultValuesFromFields(fields: Field[]): FieldValues {
-  const defaults: FieldValues = {};
-
-  for (const field of fields) {
-    const defaultValue = getFieldDefault(field);
-    if (defaultValue !== undefined) {
-      defaults[field.field] = defaultValue;
-    }
-  }
-
-  return defaults;
+  return buildDefaults(fields);
 }
