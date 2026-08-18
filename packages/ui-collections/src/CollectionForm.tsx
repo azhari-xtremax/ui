@@ -150,6 +150,12 @@ interface M2MJunctionInfo {
   reverseJunctionField: string;
   /** FK in junction pointing to the related collection (e.g. "tags_id") */
   junctionField: string;
+  /**
+   * The junction table's own primary key column. NOT always "id" — the M2M
+   * hook resolves it from the schema and keys its staged update entries by
+   * it, so reading a hardcoded `.id` here silently skipped every update.
+   */
+  junctionPrimaryKeyField: string;
 }
 
 /** Narrow-check: is value a staged M2M changes object? */
@@ -402,9 +408,27 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
                   junctionCollection: rel.collection,
                   reverseJunctionField: rel.field,
                   junctionField: rel.meta.junction_field,
+                  // Resolved below from the junction collection's own fields.
+                  junctionPrimaryKeyField: "id",
                 };
               }
             }
+            // Resolve each junction's real PK column. The M2M hook keys its
+            // staged update entries by this field, so a hardcoded "id" here
+            // silently dropped every update on junctions keyed otherwise.
+            await Promise.all(
+              Object.values(junctionMap).map(async (info) => {
+                try {
+                  const fieldsResp = await apiRequest<{
+                    data?: Array<{ field: string; schema?: { is_primary_key?: boolean } | null }>;
+                  }>(`/api/fields/${info.junctionCollection}`);
+                  const pk = (fieldsResp.data ?? []).find((f) => f.schema?.is_primary_key);
+                  if (pk?.field) info.junctionPrimaryKeyField = pk.field;
+                } catch {
+                  // Keep the "id" default; the update path throws on mismatch.
+                }
+              }),
+            );
             setM2mJunctionMap(junctionMap);
           } catch {
             // Non-fatal: M2M save falls back to including in PATCH body
@@ -597,7 +621,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
     }>,
   ) => {
     for (const { junctionInfo, changes } of m2mEntries) {
-      const { junctionCollection, reverseJunctionField, junctionField } = junctionInfo;
+      const { junctionCollection, reverseJunctionField, junctionField, junctionPrimaryKeyField } = junctionInfo;
       const junctionService = new ItemsService(junctionCollection);
 
       for (const entry of changes.create) {
@@ -626,10 +650,19 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
       }
 
       for (const entry of changes.update) {
-        const junctionId = entry.id as string | number | undefined;
-        if (junctionId != null) {
-          await junctionService.updateOne(junctionId, entry);
+        // The hook keys update entries by the junction's real PK column, which
+        // is not always "id". Reading a hardcoded `.id` here meant every
+        // staged update was skipped for such junctions while the save still
+        // reported success — a silent data loss (a reorder would visibly
+        // apply, then snap back on the next reload). Throw rather than skip so
+        // a future key mismatch surfaces instead of vanishing.
+        const junctionId = entry[junctionPrimaryKeyField] as string | number | undefined;
+        if (junctionId == null) {
+          throw new Error(
+            `Cannot update junction row in "${junctionCollection}": staged entry has no "${junctionPrimaryKeyField}" value.`,
+          );
         }
+        await junctionService.updateOne(junctionId, entry);
       }
 
       for (const junctionId of changes.delete) {

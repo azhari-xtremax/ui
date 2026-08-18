@@ -226,3 +226,252 @@ describe('useRelationMultipleM2M out-of-order responses', () => {
     expect(result.current.loading).toBe(false);
   });
 });
+
+describe('useRelationMultipleM2M displayItems .id alias (R6.2)', () => {
+  it('aliases the real junction PK onto .id for fetched items, not just locally-created ones', async () => {
+    // Junction PK deliberately not named "id" — matches the M2A fix
+    // (useRelationM2A.ts's `{...item, id: pk}`) so a table whose junction
+    // PK column isn't literally "id" doesn't leave `.id` undefined for
+    // every fetched row (React keys, DnD sortable ids, data-testids, and
+    // drag-end matching in ListM2M all read `item.id` directly).
+    const relationInfo = {
+      ...makeRelationInfo(),
+      junctionPrimaryKeyField: { field: 'uuid', type: 'uuid' },
+    } as M2MRelationInfo;
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    apiRequestMock.mockResolvedValueOnce({
+      data: [{ uuid: 'j-1', article_id: 1, tag_id: { id: 9 }, sort: 1 }],
+      meta: { total_count: 1 },
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+
+    await waitFor(() => expect(result.current.displayItems).toHaveLength(1));
+    expect(result.current.displayItems[0].id).toBe('j-1');
+    // the real junction PK field itself is untouched
+    expect(result.current.displayItems[0].uuid).toBe('j-1');
+  });
+});
+
+describe('useRelationMultipleM2M alias robustness (R6.2)', () => {
+  it('keeps the row\'s own id when the junction PK field is missing from the response', async () => {
+    // junctionPKField resolves to 'uuid' (schema says so) but the rows come
+    // back without it — e.g. field-level read permissions stripping the
+    // column. Writing `id: undefined` over the real id would collapse every
+    // row onto one identity: duplicate React keys, one checkbox selecting
+    // all rows, and drag-end always resolving row 0.
+    const relationInfo = {
+      ...makeRelationInfo(),
+      junctionPrimaryKeyField: { field: 'uuid', type: 'uuid' },
+    } as M2MRelationInfo;
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    apiRequestMock.mockResolvedValueOnce({
+      data: [
+        { id: 101, article_id: 1, tag_id: { id: 9 }, sort: 1 },
+        { id: 102, article_id: 1, tag_id: { id: 8 }, sort: 2 },
+      ],
+      meta: {},
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+
+    await waitFor(() => expect(result.current.displayItems).toHaveLength(2));
+    expect(result.current.displayItems.map((i) => i.id)).toEqual([101, 102]);
+  });
+
+  it('does not let a staged edit clobber the junction PK alias', async () => {
+    const relationInfo = {
+      ...makeRelationInfo(),
+      junctionPrimaryKeyField: { field: 'uuid', type: 'uuid' },
+    } as M2MRelationInfo;
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    apiRequestMock.mockResolvedValueOnce({
+      data: [{ uuid: 'j-1', article_id: 1, tag_id: { id: 9 }, sort: 1 }],
+      meta: {},
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+    await waitFor(() => expect(result.current.displayItems).toHaveLength(1));
+
+    // A consumer spreading a display item into its edits carries `.id` along;
+    // the overlay must not let that overwrite the junction PK alias.
+    act(() => {
+      result.current.updateItem(result.current.displayItems[0], { id: 999, sort: 5 });
+    });
+
+    await waitFor(() => expect(result.current.displayItems[0].sort).toBe(5));
+    expect(result.current.displayItems[0].id).toBe('j-1');
+  });
+
+  it('discards the previous record\'s staged changes when the parent key changes', async () => {
+    const relationInfo = makeRelationInfo();
+    const { result, rerender } = renderHook(
+      ({ pk }) => useRelationMultipleM2M(relationInfo, pk),
+      { initialProps: { pk: 1 as string | number } },
+    );
+
+    apiRequestMock.mockResolvedValueOnce({
+      data: [{ id: 71, article_id: 1, tag_id: { id: 9 }, sort: 1 }],
+      meta: {},
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+    await waitFor(() => expect(result.current.displayItems).toHaveLength(1));
+
+    act(() => {
+      result.current.selectItems([55]);
+      result.current.removeItem(result.current.displayItems[0]);
+    });
+    expect(result.current.getChanges().create).toHaveLength(1);
+    expect(result.current.getChanges().delete).toHaveLength(1);
+
+    // Navigating to another record must not carry record 1's staged
+    // mutations onto record 2 — saving record 2 would otherwise also
+    // create/delete junction rows belonging to record 1.
+    rerender({ pk: 2 });
+    await waitFor(() => expect(result.current.getChanges().create).toHaveLength(0));
+    expect(result.current.getChanges().delete).toHaveLength(0);
+    expect(result.current.getChanges().update).toHaveLength(0);
+  });
+
+  it('assigns distinct sort values across one multi-select batch', async () => {
+    const relationInfo = makeRelationInfo();
+    const { result } = renderHook(() => useRelationMultipleM2M(relationInfo, 1));
+
+    apiRequestMock.mockResolvedValueOnce({
+      data: [
+        { id: 1, article_id: 1, tag_id: { id: 1 }, sort: 1 },
+        { id: 2, article_id: 1, tag_id: { id: 2 }, sort: 2 },
+      ],
+      meta: {},
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+    await waitFor(() => expect(result.current.displayItems).toHaveLength(2));
+
+    act(() => {
+      result.current.selectItems([30, 40]);
+    });
+
+    const sorts = result.current.getChanges().create.map((c) => c.sort);
+    expect(sorts).toEqual([3, 4]);
+  });
+
+  it('does not strand loading when a guarded call follows an in-flight one', async () => {
+    const relationInfo = makeRelationInfo();
+    const { result, rerender } = renderHook(
+      ({ pk }) => useRelationMultipleM2M(relationInfo, pk),
+      { initialProps: { pk: 1 as string | number } },
+    );
+
+    apiRequestMock.mockResolvedValueOnce({
+      data: [{ id: 1, article_id: 1, tag_id: { id: 1 }, sort: 1 }],
+      meta: {},
+    });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+
+    // A guarded (new-item) call must not bump the request generation, which
+    // would orphan the settled fetch and leave `loading` true forever.
+    rerender({ pk: '+' });
+    await act(async () => {
+      await result.current.loadItems({ limit: 10, page: 1, fields: [] });
+    });
+
+    expect(result.current.loading).toBe(false);
+  });
+});
+
+describe('useRelationMultipleM2M selectItems display data', () => {
+  it('keeps the staged junction payload reference-only and holds display data separately', async () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    act(() => {
+      result.current.selectItems([42], {
+        42: { id: 42, name: 'Announcement', status: 'published' },
+      });
+    });
+
+    // CollectionForm distinguishes "link this existing row" from
+    // "deep-create a new one" by the junction value carrying nothing but the
+    // related PK, so display fields must never be merged into it.
+    const staged = result.current.getChanges().create[0];
+    expect(staged.tag_id).toEqual({ id: 42 });
+    expect(Object.keys(staged.tag_id as object)).toEqual(['id']);
+
+    // ...and the display data is still available for rendering.
+    expect(result.current.stagedRelatedData[42]).toEqual({
+      id: 42,
+      name: 'Announcement',
+      status: 'published',
+    });
+  });
+
+  it('preserves the caller-supplied primary key type', async () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    // The select modal supplies string ids; an API row may carry a number.
+    // The staged PK must stay what the caller passed.
+    act(() => {
+      result.current.selectItems(['42'], { 42: { id: 42, name: 'Announcement' } });
+    });
+
+    expect(result.current.getChanges().create[0].tag_id).toEqual({ id: '42' });
+  });
+
+  it('stages a reference-only payload when no display data is supplied', async () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    act(() => {
+      result.current.selectItems([7]);
+    });
+
+    expect(result.current.getChanges().create[0].tag_id).toEqual({ id: 7 });
+    expect(result.current.stagedRelatedData).toEqual({});
+  });
+});
+
+describe('useRelationMultipleM2M staged payload vs the M2M save path', () => {
+  // Mirrors CollectionForm.flushM2MChanges' select-vs-deep-create branch
+  // verbatim. Keeping a copy here is deliberate: the hook and that guard live
+  // in different packages and nothing else composes them, which is exactly
+  // how a staged shape that silently deep-creates could ship green.
+  function flattenLikeCollectionForm(
+    entry: Record<string, unknown>,
+    junctionField: string,
+  ): Record<string, unknown> {
+    const relatedValue = entry[junctionField];
+    const isSelectEntry =
+      !!relatedValue &&
+      typeof relatedValue === 'object' &&
+      !Array.isArray(relatedValue) &&
+      Object.keys(relatedValue as object).length === 1 &&
+      'id' in (relatedValue as object);
+    return isSelectEntry
+      ? { ...entry, [junctionField]: (relatedValue as Record<string, unknown>).id }
+      : entry;
+  }
+
+  it('flattens to a bare FK — a picked row must link, never deep-create', () => {
+    const { result } = renderHook(() => useRelationMultipleM2M(makeRelationInfo(), 1));
+
+    act(() => {
+      result.current.selectItems([42], { 42: { id: 42, name: 'Announcement' } });
+    });
+
+    const flat = flattenLikeCollectionForm(
+      result.current.getChanges().create[0],
+      'tag_id',
+    );
+    expect(flat.tag_id).toBe(42);
+  });
+});

@@ -68,6 +68,7 @@ describe('interfaceRequiresChoices', () => {
     expect(interfaceRequiresChoices('select-dropdown')).toBe(true);
     expect(interfaceRequiresChoices('select-radio')).toBe(true);
     expect(interfaceRequiresChoices('select-multiple-checkbox')).toBe(true);
+    expect(interfaceRequiresChoices('select-multiple-checkbox-tree')).toBe(true);
     expect(interfaceRequiresChoices('select-multiple-dropdown')).toBe(true);
   });
 

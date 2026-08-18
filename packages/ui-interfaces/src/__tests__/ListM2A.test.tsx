@@ -1,22 +1,32 @@
 /**
- * ListM2A — inline "Create New" staging & replace-mode payload flattening.
+ * ListM2A — inline "Create New" staging & replace-mode payload building.
  *
- * Regression tests for the two coupled bugs where an inline-created item was
+ * Regression tests for the coupled bugs where an inline-created item was
  * emitted with the collection-discriminator string as its item value:
  *
  * - the Create New modal's onSave must feed createItemWithData only the nested
  *   related-item fields (itemData) plus junction-level edits (additionalData);
  *   passing JunctionItemForm's whole combined payload double-wraps it under
  *   junctionField
- * - the replace-mode payload builder must resolve a nested row's id via the
- *   collection's actual PK field (relationPrimaryKeyFields), never "first
- *   object value"
+ * - the payload builder must resolve a staged entry's id via the collection's
+ *   actual PK field (relationPrimaryKeyFields), never "first object value"
  * - an inline-created row with no PK yet must pass its whole nested object
  *   through so DaaS deep-creates the related item
+ *
+ * And for the mass-unlink hole: DaaS processM2AField is replace-mode (deletes
+ * every junction row for the parent, re-inserts exactly the payload), but the
+ * payload used to be built from page-scoped displayItems — staging any single
+ * change on a >1-page relation deleted every off-page junction row on save.
+ * The emit must preserve-fetch ALL junction rows (limit=-1) and abort rather
+ * than emit an incomplete set.
  */
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MantineProvider } from "@mantine/core";
+
+jest.mock("@buildpad/services", () => ({
+    apiRequest: jest.fn(),
+}));
 
 jest.mock("@buildpad/hooks", () => ({
     useRelationM2A: jest.fn(),
@@ -54,6 +64,7 @@ jest.mock("../list-m2a/JunctionItemForm", () => {
     };
 });
 
+import { apiRequest } from "@buildpad/services";
 import {
     useRelationM2A,
     useRelationM2AItems,
@@ -81,6 +92,11 @@ const RELATION_INFO = {
 };
 
 const wrap = (ui: React.ReactNode) => <MantineProvider>{ui}</MantineProvider>;
+
+const flush = () =>
+    act(async () => {
+        await Promise.resolve();
+    });
 
 const BASE_PROPS = {
     collection: "pages",
@@ -114,6 +130,9 @@ function setItemsHook(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    // Default preserve-fetch: no junction rows linked yet. Tests that model a
+    // populated relation override this with their own row set.
+    (apiRequest as jest.Mock).mockResolvedValue({ data: [], meta: { total_count: 0 } });
     (globalThis as any).__relatedEdits = { title: "Hello" };
     (globalThis as any).__junctionEdits = {};
     (useRelationM2A as jest.Mock).mockReturnValue({
@@ -167,18 +186,17 @@ describe("ListM2A inline create — staging wiring", () => {
 });
 
 describe("ListM2A onChange payload — junction value flattening", () => {
+    // The payload is built from getChanges() plus a preserve-fetch of the
+    // server's junction rows — the default beforeEach fetch returns none.
     it("passes the whole nested object through for an inline-created item with no PK yet", async () => {
         const onChange = jest.fn();
         setItemsHook({
             hasChanges: true,
-            displayItems: [
-                {
-                    id: "temp-1",
-                    $type: "created",
-                    collection: "headings",
-                    item: { title: "Hello" },
-                },
-            ],
+            getChanges: jest.fn().mockReturnValue({
+                create: [{ collection: "headings", item: { title: "Hello" } }],
+                update: [],
+                delete: [],
+            }),
         });
 
         render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
@@ -189,18 +207,21 @@ describe("ListM2A onChange payload — junction value flattening", () => {
         ]);
     });
 
-    it("flattens a fetched row via the collection's actual PK field, not the first object value", async () => {
+    it("flattens a staged entry via the collection's actual PK field, not the first object value", async () => {
         const onChange = jest.fn();
         setItemsHook({
             hasChanges: true,
-            displayItems: [
-                {
-                    id: 7,
-                    // non-PK key deliberately first: "first object value" would pick it
-                    collection: "paragraphs",
-                    item: { title: "Nine", code: "para-9" },
-                },
-            ],
+            getChanges: jest.fn().mockReturnValue({
+                create: [
+                    {
+                        collection: "paragraphs",
+                        // non-PK key deliberately first: "first object value" would pick it
+                        item: { title: "Nine", code: "para-9" },
+                    },
+                ],
+                update: [],
+                delete: [],
+            }),
         });
 
         render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
@@ -211,13 +232,15 @@ describe("ListM2A onChange payload — junction value flattening", () => {
         ]);
     });
 
-    it("still flattens id-keyed rows to their id", async () => {
+    it("still flattens id-keyed entries to their id", async () => {
         const onChange = jest.fn();
         setItemsHook({
             hasChanges: true,
-            displayItems: [
-                { id: 3, collection: "headings", item: { id: "u-1", title: "T" } },
-            ],
+            getChanges: jest.fn().mockReturnValue({
+                create: [{ collection: "headings", item: { id: "u-1", title: "T" } }],
+                update: [],
+                delete: [],
+            }),
         });
 
         render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
@@ -226,6 +249,174 @@ describe("ListM2A onChange payload — junction value flattening", () => {
         expect(onChange).toHaveBeenLastCalledWith([
             { collection: "headings", item: "u-1" },
         ]);
+    });
+});
+
+describe("ListM2A replace payload — must span all pages (mass-unlink regression)", () => {
+    // Four junction rows exist server-side; the current page only ever shows
+    // some of them. The replace-mode payload must still contain every row
+    // that should survive, or DaaS deletes the off-page ones on save.
+    const ALL_JUNCTION_ROWS = [
+        { id: "j1", collection: "headings", item: "u1", sort: 1 },
+        { id: "j2", collection: "headings", item: "u2", sort: 2 },
+        { id: "j3", collection: "paragraphs", item: "para-3", sort: 3 },
+        { id: "j4", collection: "headings", item: "u4", sort: 4 },
+    ];
+
+    function mockJunctionFetch(rows = ALL_JUNCTION_ROWS, total = rows.length) {
+        (apiRequest as jest.Mock).mockImplementation((path: string) => {
+            if (path.startsWith("/api/items/pages_blocks")) {
+                return Promise.resolve({ data: rows, meta: { total_count: total } });
+            }
+            return Promise.resolve({ data: [] });
+        });
+    }
+
+    it("re-sends every off-page junction row when a single on-page removal is staged", async () => {
+        mockJunctionFetch();
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            totalCount: 4,
+            // current page holds j1 + j2 only; j2 is staged for removal
+            displayItems: [
+                { id: "j1", collection: "headings", item: { id: "u1" }, sort: 1 },
+                { id: "j2", $type: "deleted", collection: "headings", item: { id: "u2" }, sort: 2 },
+            ],
+            getChanges: jest.fn().mockReturnValue({ create: [], update: [], delete: ["j2"] }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
+
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+
+        // The preserve-fetch must be unpaginated and exactly counted
+        const junctionCall = (apiRequest as jest.Mock).mock.calls.find(([p]) =>
+            (p as string).startsWith("/api/items/pages_blocks"),
+        );
+        expect(junctionCall).toBeDefined();
+        expect(junctionCall![0]).toContain("limit=-1");
+        expect(junctionCall![0]).toContain("page=0");
+        expect(junctionCall![0]).toContain("count=exact");
+
+        // Off-page rows j3/j4 survive; only the staged removal j2 is gone.
+        expect(onChange).toHaveBeenCalledTimes(1);
+        expect(onChange).toHaveBeenLastCalledWith([
+            { collection: "headings", item: "u1" },
+            { collection: "paragraphs", item: "para-3" },
+            { collection: "headings", item: "u4" },
+        ]);
+    });
+
+    it("orders the payload by staged sort updates across the full set", async () => {
+        mockJunctionFetch();
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            totalCount: 4,
+            getChanges: jest.fn().mockReturnValue({
+                create: [],
+                // swap j1 and j2 — payload order is what the backend persists
+                update: [
+                    { id: "j1", sort: 2 },
+                    { id: "j2", sort: 1 },
+                ],
+                delete: [],
+            }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
+
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+        expect(onChange).toHaveBeenLastCalledWith([
+            { collection: "headings", item: "u2" },
+            { collection: "headings", item: "u1" },
+            { collection: "paragraphs", item: "para-3" },
+            { collection: "headings", item: "u4" },
+        ]);
+    });
+
+    it("appends a staged create after the preserved rows, at its staged sort", async () => {
+        mockJunctionFetch();
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            totalCount: 5,
+            getChanges: jest.fn().mockReturnValue({
+                create: [{ collection: "paragraphs", item: { code: "para-new" }, sort: 5 }],
+                update: [],
+                delete: [],
+            }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
+
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+        expect(onChange).toHaveBeenLastCalledWith([
+            { collection: "headings", item: "u1" },
+            { collection: "headings", item: "u2" },
+            { collection: "paragraphs", item: "para-3" },
+            { collection: "headings", item: "u4" },
+            { collection: "paragraphs", item: "para-new" },
+        ]);
+    });
+
+    it("aborts the emit when the preserve-fetch fails, instead of sending a page-only payload", async () => {
+        (apiRequest as jest.Mock).mockRejectedValue(new Error("network down"));
+        const consoleErr = jest.spyOn(console, "error").mockImplementation(() => {});
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            getChanges: jest.fn().mockReturnValue({ create: [], update: [], delete: ["j2"] }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
+        await flush();
+        await flush();
+
+        expect(apiRequest).toHaveBeenCalled();
+        expect(onChange).not.toHaveBeenCalled();
+        consoleErr.mockRestore();
+    });
+
+    it("aborts the emit when the preserve-fetch comes back incomplete", async () => {
+        // Server claims 5 linked rows but returns only 4 — emitting would
+        // silently unlink the missing one.
+        mockJunctionFetch(ALL_JUNCTION_ROWS, 5);
+        const consoleErr = jest.spyOn(console, "error").mockImplementation(() => {});
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            getChanges: jest.fn().mockReturnValue({ create: [], update: [], delete: ["j2"] }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
+        await flush();
+        await flush();
+
+        expect(onChange).not.toHaveBeenCalled();
+        expect(consoleErr).toHaveBeenCalledWith(
+            expect.stringContaining("refusing to emit an incomplete replace payload"),
+        );
+        consoleErr.mockRestore();
+    });
+
+    it("skips the preserve-fetch for an unsaved parent and emits staged creates only", async () => {
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            getChanges: jest.fn().mockReturnValue({
+                create: [{ collection: "headings", item: { id: "u-9" } }],
+                update: [],
+                delete: [],
+            }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} primaryKey="+" onChange={onChange} />));
+
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+        expect(onChange).toHaveBeenLastCalledWith([{ collection: "headings", item: "u-9" }]);
+        expect(apiRequest).not.toHaveBeenCalled();
     });
 });
 
