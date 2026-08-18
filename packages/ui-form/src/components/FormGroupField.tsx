@@ -21,6 +21,8 @@ export interface FormGroupFieldProps {
   field: TFormField;
   /** All fields in the collection (needed to find children) */
   allFields: Field[];
+  /** Field key that should receive initial focus, if it lives in this group. */
+  autofocusFieldKey?: string | null;
   /** Current form values */
   values: Record<string, any>;
   /** Initial form values */
@@ -80,6 +82,7 @@ function ChildFieldsRenderer({
   validationErrors,
   nonEditableFields,
   locale,
+  autofocusFieldKey,
 }: {
   childFields: TFormField[];
   values: Record<string, any>;
@@ -95,6 +98,7 @@ function ChildFieldsRenderer({
   validationErrors: ValidationError[];
   nonEditableFields?: Set<string>;
   locale?: string;
+  autofocusFieldKey?: string | null;
 }) {
   // Lay children out in the same two-column `.form-grid` the top-level VForm
   // uses, so each child's `field-width-*` class (which controls `grid-column`)
@@ -123,6 +127,7 @@ function ChildFieldsRenderer({
               getFieldError={getFieldError}
               nonEditableFields={nonEditableFields}
               locale={locale}
+              autofocusFieldKey={autofocusFieldKey}
             />
           );
         }
@@ -133,6 +138,7 @@ function ChildFieldsRenderer({
           <FormField
             key={child.field}
             field={child}
+            autofocus={child.field === autofocusFieldKey}
             value={values[child.field]}
             initialValue={initialValues[child.field]}
             onChange={(value) => onFieldChange(child.field, value)}
@@ -167,6 +173,7 @@ export const FormGroupField: React.FC<FormGroupFieldProps> = ({
   onFieldUnset,
   getFieldError,
   nonEditableFields,
+  autofocusFieldKey,
   className,
   locale,
 }) => {
@@ -201,6 +208,7 @@ export const FormGroupField: React.FC<FormGroupFieldProps> = ({
     validationErrors,
     nonEditableFields,
     locale,
+    autofocusFieldKey,
   };
 
   // Render based on group interface type

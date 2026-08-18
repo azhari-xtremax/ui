@@ -345,13 +345,7 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
 
   const interfaceProps: any = {
     value: isMultiSelectInterface ? normalizedMultiSelectValue : effectiveValue,
-    // A locked field can never be satisfied by the user, so it must not render
-    // the required asterisk or set aria-required — that would tell assistive
-    // tech to fill a field the user may not edit.
-    required: isEffectivelyReadonly ? false : required,
     error,
-    // Never steal initial focus into a field that cannot be edited.
-    autofocus: isEffectivelyReadonly ? false : autofocus,
     // Note: label is NOT passed here because FormField already renders FormFieldLabel.
     // We forward an aria-label so the underlying input still has a programmatic
     // accessible name (axe "label" rule). Each interface spreads this onto its
@@ -382,6 +376,16 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     // options JSON is unfiltered — an `aria-label` key in it silently erased
     // the name, and an explicit `undefined` value erased it outright.
     'aria-label': accessibleName || field.name || field.field,
+
+    // A locked field can never be satisfied by the user, so it must not render
+    // the required asterisk or set aria-required — that would tell assistive
+    // tech to fill a field the user may not edit.
+    required: isEffectivelyReadonly ? false : required,
+    // Never steal initial focus into a field that cannot be edited. Both of
+    // these sat ABOVE the meta.options spread, so an admin-authored
+    // `autofocus: true` (or `required: true`) on a readonly field overrode the
+    // suppression — the same hazard the lock props below were moved down for.
+    autofocus: isEffectivelyReadonly ? false : autofocus,
 
     // ── Lock props: declared AFTER the meta.options spread so they win ──
     // Admin-authored options JSON flows into interfaceConfig.props unfiltered,

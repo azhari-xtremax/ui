@@ -18,7 +18,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import './VForm.css';
 import { Stack, Box, Alert, Text, Skeleton } from '@mantine/core';
-import { isNewItem } from '@buildpad/utils';
+import { isNewItem, isFieldReadOnly, isPresentationField } from '@buildpad/utils';
 import { IconInfoCircle, IconLock } from '@tabler/icons-react';
 import type { Field } from '@buildpad/types';
 import { FieldsService, useDaaSContextOptional } from '@buildpad/services';
@@ -444,11 +444,33 @@ export const VForm: React.FC<VFormProps> = ({
     [stableValidationErrors, collection]
   );
 
-  // Pre-compute first editable field index once (avoid per-field findIndex)
-  const firstEditableIndex = useMemo(() => {
-    if (!autofocus) return -1;
-    return visibleFields.findIndex((f) => !f.meta?.readonly);
-  }, [autofocus, visibleFields]);
+  // The field KEY to autofocus, not an index.
+  //
+  // An index elected a row that could not accept focus and then dropped it:
+  // `!meta.readonly` is far weaker than the rule enforced downstream
+  // (`isFieldReadOnly` also covers auto-increment columns, generated UUID keys
+  // and generated defaults), it ignored permission-readonly fields, and it
+  // counted dividers, notices and group headers. On the commonest schema — an
+  // auto-increment `id` first — index 0 won and FormFieldInterface then zeroed
+  // the flag, so nothing in the form was focused. Resolving to a key also lets
+  // the group branch below forward it to a nested child.
+  const autofocusFieldKey = useMemo(() => {
+    if (!autofocus) return null;
+    const canTakeFocus = (f: (typeof visibleFields)[number]) =>
+      !isPresentationField(f as never) &&
+      !readOnlyPermFields.has(f.field) &&
+      !isFieldReadOnly(f as never, {
+        context: isNewItem(primaryKey) ? 'create' : 'edit',
+        primaryKey: primaryKey ?? undefined,
+      });
+    // Group rows are containers; descend so a sectioned form still focuses.
+    const flattened = visibleFields.flatMap((f) =>
+      isGroupField(f)
+        ? formFields.filter((c) => c.meta?.group === f.field)
+        : [f],
+    );
+    return flattened.find(canTakeFocus)?.field ?? null;
+  }, [autofocus, visibleFields, formFields, readOnlyPermFields, primaryKey]);
 
   // Show loading skeleton
   if (loadingFields || loadingProp || permissionsLoading) {
@@ -509,9 +531,9 @@ export const VForm: React.FC<VFormProps> = ({
         />
       )}
       <div className="form-grid">
-        {visibleFields.map((field, index) => {
+        {visibleFields.map((field) => {
           // Check if this is the first editable field (for autofocus)
-          const isFirstEditable = index === firstEditableIndex;
+          const isFirstEditable = field.field === autofocusFieldKey;
 
           // Determine if field is nonEditable (prop-level or permission-level)
           const isFieldNonEditable = nonEditable || readOnlyPermFields.has(field.field);
@@ -522,6 +544,9 @@ export const VForm: React.FC<VFormProps> = ({
               <FormGroupField
                 key={field.field}
                 field={field}
+                // Forward the autofocus target so a sectioned form still
+                // focuses; group rows are containers and can never take it.
+                autofocusFieldKey={autofocusFieldKey}
                 // Pass the PROCESSED fields (conditions/readonly/width/permission
                 // pipeline already applied), not the raw `fields` prop. Group
                 // children are re-derived inside FormGroupField via getChildFields;

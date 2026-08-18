@@ -130,6 +130,28 @@ describe('FormFieldInterface locked-field guards', () => {
         expect(lastLockState()).toEqual({ disabled: true, readOnly: true });
     });
 
+    // The focus and required suppressions are the container's decision too,
+    // and both sat ABOVE the meta.options spread — so an admin-authored
+    // `autofocus: true` on a locked field defeated "never steal initial focus
+    // into a field that cannot be edited", and a readonly input is focusable.
+    it.each([
+        ['autofocus', 'autofocus'],
+        ['required', 'required'],
+    ])('does not let meta.options re-enable %s on a readonly field', (_name, key) => {
+        interfaceProps.props = { [key]: true };
+        render(
+            wrap(
+                <FormFieldInterface
+                    field={{ ...baseField, meta: { ...baseField.meta, interface: 'input' } } as any}
+                    value=""
+                    readonly
+                />,
+            ),
+        );
+        expect(lastProps()?.[key as 'autofocus' | 'required']).toBe(false);
+        interfaceProps.props = {};
+    });
+
     // Admin-authored options JSON reaches the leaf unfiltered, so anything the
     // container owns must be declared after that spread. The accessible name
     // is the container's: FormField withholds `label` and relies on it.
