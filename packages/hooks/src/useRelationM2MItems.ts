@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { notifications } from '@mantine/notifications';
 import type { M2MRelationInfo } from './useRelationM2M';
 import { apiRequest, isValidPrimaryKey } from './utils';
@@ -16,6 +16,21 @@ export interface M2MQueryParams {
   sortDirection?: 'asc' | 'desc';
   fields: string[];
   enableSearchFilter?: boolean;
+}
+
+/**
+ * Alias the junction table's real primary key onto `.id`.
+ *
+ * Guarded, matching `useRelationMultipleM2M`: when the PK column is absent
+ * from the response (field-level read permission, or a mis-resolved field
+ * name) the row is returned untouched. Writing `undefined` over a real `id`
+ * would collapse every row onto one identity and point every per-row URL at
+ * `/undefined` — worse than the bug the alias fixes.
+ */
+function aliasJunctionPk(item: M2MItem, pkField: string): M2MItem {
+  const pk = item[pkField];
+  if (pk === undefined || pk === null) return item;
+  return { ...item, id: pk as string | number };
 }
 
 interface ItemsResponse {
@@ -48,6 +63,20 @@ export function useRelationM2MItems(
   // Check if operations can be performed (item must be saved first)
   const canPerformOperations = isValidPrimaryKey(primaryKey);
 
+  // Resolved once, defensively — matching the sibling hooks. A hand-built
+  // `relationInfo` (a supported pattern) without this field used to throw
+  // inside loadItems' try, where the bare catch reduced it to an empty list
+  // and a generic toast.
+  const junctionPKField = relationInfo?.junctionPrimaryKeyField?.field ?? 'id';
+  const junctionFieldName = relationInfo?.junctionField?.field ?? '';
+  const relatedPKField = relationInfo?.relatedPrimaryKeyField?.field ?? 'id';
+
+  // The last successful load, so mutations can refresh instead of leaving
+  // `items`/`totalCount`/`selectedPrimaryKeys` stale behind a green toast.
+  const lastParamsRef = useRef<M2MQueryParams | null>(null);
+  // Guards against an older in-flight load landing after a newer one.
+  const requestIdRef = useRef(0);
+
   // Load junction items
   const loadItems = useCallback(async (params: M2MQueryParams) => {
     if (!relationInfo || !isValidPrimaryKey(primaryKey)) {
@@ -55,6 +84,8 @@ export function useRelationM2MItems(
       setTotalCount(0);
       return;
     }
+
+    const requestId = ++requestIdRef.current;
 
     try {
       setLoading(true);
@@ -73,44 +104,68 @@ export function useRelationM2MItems(
       };
       queryParams.set('filter', JSON.stringify(filter));
 
-      // Include related collection data
-      const fieldsToFetch = [
-        relationInfo.junctionPrimaryKeyField.field,
-        ...params.fields.map(f => f.includes('.') ? f : `${relationInfo.junctionField.field}.${f}`)
-      ];
-      queryParams.set('fields', fieldsToFetch.join(','));
+      // Always fetch the three fields this hook itself depends on: the
+      // junction PK (used for every per-row URL), the related PK (used to
+      // build `selectedPrimaryKeys`, which silently came back empty whenever
+      // the caller's `fields` omitted it), and the sort field.
+      const fieldsToFetch = new Set<string>([
+        junctionPKField,
+        `${junctionFieldName}.${relatedPKField}`,
+        ...params.fields.map(f => f.includes('.') ? f : `${junctionFieldName}.${f}`),
+      ]);
+      if (relationInfo.sortField) fieldsToFetch.add(relationInfo.sortField);
+      queryParams.set('fields', [...fieldsToFetch].join(','));
 
-      if (params.sortField) {
-        queryParams.set('sort', params.sortDirection === 'desc' ? `-${params.sortField}` : params.sortField);
-      } else if (relationInfo.sortField) {
-        queryParams.set('sort', relationInfo.sortField);
+      // A bare `sortField` names a related-collection column, exactly as it
+      // does in `fields` above — sorting the junction table by it asks the
+      // backend for a column that doesn't exist there.
+      const sortField = params.sortField
+        ? (params.sortField.includes('.') ? params.sortField : `${junctionFieldName}.${params.sortField}`)
+        : relationInfo.sortField;
+      if (sortField) {
+        // Direction applies to the configured sort field too; it used to be
+        // honoured only on the caller-supplied branch.
+        queryParams.set('sort', params.sortDirection === 'desc' ? `-${sortField}` : sortField);
       }
 
-      if (params.search && params.enableSearchFilter) {
+      // `enableSearchFilter` is optional and undefined by default, so a caller
+      // passing `search` alone had it silently discarded. Search when asked.
+      if (params.search) {
         queryParams.set('search', params.search);
       }
 
       const response = await apiRequest<ItemsResponse>(
         `/api/items/${relationInfo.junctionCollection.collection}?${queryParams.toString()}`
       );
-      
-      // R6.5: alias the real junction PK onto `.id` — removeItem/updateSortOrder
-      // build their URLs from `item.id` directly, and every junction table
-      // whose PK isn't literally named "id" left `.id` undefined, silently
-      // requesting `/api/items/{collection}/undefined` for delete/reorder.
-      const loadedItems: M2MItem[] = (response.data || []).map((item) => ({
-        ...item,
-        id: item[relationInfo.junctionPrimaryKeyField.field] as string | number,
-      }));
-      setItems(loadedItems);
-      setTotalCount(response.meta?.total_count || 0);
 
-      // Extract selected primary keys for filtering
-      const pks = loadedItems.map((item) => {
-        const relatedData = item[relationInfo.junctionField.field] as Record<string, unknown> | undefined;
-        return relatedData?.[relationInfo.relatedPrimaryKeyField.field] as string | number | undefined;
-      }).filter(Boolean);
-      setSelectedPrimaryKeys(pks as (string | number)[]);
+      if (requestIdRef.current !== requestId) return; // superseded by a newer call
+
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      const loadedItems: M2MItem[] = rows.map((item) => aliasJunctionPk(item, junctionPKField));
+      setItems(loadedItems);
+      lastParamsRef.current = params;
+
+      // NOT `meta.total_count`: on this DaaS build that is the unfiltered
+      // count of the whole junction table, while this query is always
+      // filtered by the parent — it reported every junction row in the
+      // database as this parent's count, producing phantom pages. Infer from
+      // page fullness instead: a short page is the last one.
+      const pageSize = params.limit ?? loadedItems.length;
+      const page = params.page ?? 1;
+      const offset = (page - 1) * pageSize;
+      setTotalCount(
+        loadedItems.length < pageSize ? offset + loadedItems.length : offset + loadedItems.length + 1,
+      );
+
+      // Extract selected primary keys for filtering. `isValidPrimaryKey`
+      // rather than `Boolean`, so a legitimate key of `0` survives.
+      const pks = loadedItems
+        .map((item) => {
+          const relatedData = item[junctionFieldName] as Record<string, unknown> | undefined;
+          return relatedData?.[relatedPKField] as string | number | undefined;
+        })
+        .filter((pk): pk is string | number => isValidPrimaryKey(pk));
+      setSelectedPrimaryKeys(pks);
 
     } catch {
       notifications.show({
@@ -119,9 +174,29 @@ export function useRelationM2MItems(
         color: 'red',
       });
     } finally {
-      setLoading(false);
+      if (requestIdRef.current === requestId) setLoading(false);
     }
-  }, [relationInfo, primaryKey]);
+  }, [relationInfo, primaryKey, junctionPKField, junctionFieldName, relatedPKField]);
+
+  /** Re-run the last successful load, so state isn't stale after a mutation. */
+  const refresh = useCallback(async () => {
+    if (lastParamsRef.current) await loadItems(lastParamsRef.current);
+  }, [loadItems]);
+
+  /**
+   * Next sort value for a newly linked row. Derived from the loaded page, so
+   * it is correct for single-page lists and appends to the end of the current
+   * page otherwise — better than the NULL that made new rows clump.
+   */
+  const nextSortValue = useCallback((): number => {
+    const sortKey = relationInfo?.sortField;
+    if (!sortKey) return 1;
+    const highest = items.reduce((max, item) => {
+      const v = Number(item[sortKey]);
+      return Number.isFinite(v) && v > max ? v : max;
+    }, 0);
+    return highest + 1;
+  }, [items, relationInfo]);
 
   // Create new junction record
   const createJunctionItem = useCallback(async (relatedItemId: string | number) => {
@@ -139,10 +214,13 @@ export function useRelationM2MItems(
     }
 
     try {
-      const junctionItem = {
+      const junctionItem: Record<string, unknown> = {
         [relationInfo.reverseJunctionField.field]: primaryKey,
         [relationInfo.junctionField.field]: relatedItemId,
       };
+      // Without a sort value a new row lands as NULL and clumps at one end of
+      // the next sorted load, regardless of where the user added it.
+      if (relationInfo.sortField) junctionItem[relationInfo.sortField] = nextSortValue();
 
       const result = await apiRequest<{ data: M2MItem }>(
         `/api/items/${relationInfo.junctionCollection.collection}`,
@@ -151,13 +229,17 @@ export function useRelationM2MItems(
           body: JSON.stringify(junctionItem),
         }
       );
-      
+
       notifications.show({
         title: 'Success',
         message: 'Item added successfully',
         color: 'green',
       });
-      return result.data;
+      await refresh();
+      // Aliased like the load path: the raw POST body carries the junction's
+      // real PK, not `.id`, so returning it unmapped handed the caller a row
+      // whose `removeItem` URL resolved to `/undefined`.
+      return result?.data ? aliasJunctionPk(result.data, junctionPKField) : null;
     } catch {
       notifications.show({
         title: 'Error',
@@ -166,7 +248,7 @@ export function useRelationM2MItems(
       });
       throw new Error('Failed to add item');
     }
-  }, [relationInfo, primaryKey]);
+  }, [relationInfo, primaryKey, junctionPKField, nextSortValue, refresh]);
 
   // Select existing items from the RELATED collection
   const selectItems = useCallback(async (selectedIds: (string | number)[]) => {
@@ -184,14 +266,22 @@ export function useRelationM2MItems(
     }
 
     try {
-      const junctionItems = selectedIds.map(relatedId => ({
-        [relationInfo.reverseJunctionField.field]: primaryKey,
-        [relationInfo.junctionField.field]: relatedId,
-      }));
+      const baseSort = nextSortValue();
+      const junctionItems = selectedIds.map((relatedId, i) => {
+        const row: Record<string, unknown> = {
+          [relationInfo.reverseJunctionField.field]: primaryKey,
+          [relationInfo.junctionField.field]: relatedId,
+        };
+        if (relationInfo.sortField) row[relationInfo.sortField] = baseSort + i;
+        return row;
+      });
 
-      await Promise.all(
-        junctionItems.map(item => 
-          apiRequest(
+      // `allSettled`, not `all`: these are independent writes, so a rejection
+      // partway through still leaves the earlier rows committed. Reporting the
+      // whole batch as failed made the user retry and duplicate them.
+      const results = await Promise.allSettled(
+        junctionItems.map(item =>
+          apiRequest<{ data: M2MItem }>(
             `/api/items/${relationInfo.junctionCollection.collection}`,
             {
               method: 'POST',
@@ -201,13 +291,26 @@ export function useRelationM2MItems(
         )
       );
 
+      const created: M2MItem[] = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value?.data) {
+          created.push(aliasJunctionPk(r.value.data, junctionPKField));
+        }
+      }
+      const failed = results.length - created.length;
+
       notifications.show({
-        title: 'Success',
-        message: `Added ${selectedIds.length} items`,
-        color: 'green',
+        title: failed ? 'Partially added' : 'Success',
+        message: failed
+          ? `Added ${created.length} of ${results.length} items; ${failed} failed`
+          : `Added ${created.length} items`,
+        color: failed ? 'yellow' : 'green',
       });
 
-      return junctionItems;
+      await refresh();
+      // The server rows, not the request bodies — those carried no primary key
+      // of any name, so the caller could never remove what it had just added.
+      return created;
     } catch {
       notifications.show({
         title: 'Error',
@@ -216,7 +319,7 @@ export function useRelationM2MItems(
       });
       throw new Error('Failed to add selected items');
     }
-  }, [relationInfo, primaryKey]);
+  }, [relationInfo, primaryKey, junctionPKField, nextSortValue, refresh]);
 
   // Remove item (delete junction record)
   const removeItem = useCallback(async (item: M2MItem) => {
@@ -224,9 +327,23 @@ export function useRelationM2MItems(
       return;
     }
 
+    // Resolve the real PK rather than trusting `.id`: rows can reach here from
+    // paths the load-time alias never touched. Without this a missing key
+    // produced `/api/items/{collection}/undefined`, which a string-PK backend
+    // answers 2xx — so the UI reported a success that never happened.
+    const pk = (item[junctionPKField] ?? item.id) as string | number | undefined;
+    if (!isValidPrimaryKey(pk)) {
+      notifications.show({
+        title: 'Error',
+        message: 'Cannot remove this item: it has no primary key',
+        color: 'red',
+      });
+      throw new Error('Failed to remove item: missing primary key');
+    }
+
     try {
       await apiRequest(
-        `/api/items/${relationInfo.junctionCollection.collection}/${item.id}`,
+        `/api/items/${relationInfo.junctionCollection.collection}/${encodeURIComponent(String(pk))}`,
         {
           method: 'DELETE',
         }
@@ -236,6 +353,7 @@ export function useRelationM2MItems(
         message: 'Item removed successfully',
         color: 'green',
       });
+      await refresh();
     } catch {
       notifications.show({
         title: 'Error',
@@ -244,43 +362,80 @@ export function useRelationM2MItems(
       });
       throw new Error('Failed to remove item');
     }
-  }, [relationInfo]);
+  }, [relationInfo, junctionPKField, refresh]);
 
   // Update sort order for items
-  const updateSortOrder = useCallback(async (sortedItems: M2MItem[]) => {
+  /**
+   * @param sortedItems the reordered rows of the CURRENT page
+   * @param pageOffset  rows preceding this page, e.g. `(page - 1) * limit`.
+   *   Numbering positions 1..length assigns page-local sort values, so a
+   *   reorder on page 2 collided with page 1 and the two interleaved
+   *   arbitrarily on the next sorted load. Defaults to the offset of the last
+   *   load, so callers that paginate through `loadItems` get this for free.
+   */
+  const updateSortOrder = useCallback(async (sortedItems: M2MItem[], pageOffset?: number) => {
     if (!relationInfo?.sortField) {
       return;
     }
 
-    try {
-      await Promise.all(
-        sortedItems.map((item, idx) =>
-          apiRequest(
-            `/api/items/${relationInfo.junctionCollection.collection}/${item.id}`,
-            {
-              method: 'PATCH',
-              body: JSON.stringify({
-                [relationInfo.sortField!]: idx + 1
-              }),
-            }
-          )
-        )
-      );
+    const last = lastParamsRef.current;
+    const offset = pageOffset ?? (last ? ((last.page ?? 1) - 1) * last.limit : 0);
 
-      setItems(sortedItems);
-    } catch {
+    // Resolve every PK up front: a row with none would otherwise PATCH
+    // `/undefined`, and because the writes fan out, the rows before it in the
+    // array would already have been renumbered by the time it threw.
+    const targets = sortedItems.map((item, idx) => ({
+      pk: (item[junctionPKField] ?? item.id) as string | number | undefined,
+      sort: offset + idx + 1,
+    }));
+    const unresolved = targets.filter(t => !isValidPrimaryKey(t.pk));
+    if (unresolved.length > 0) {
       notifications.show({
         title: 'Error',
-        message: 'Failed to update sort order',
+        message: 'Cannot reorder: some items have no primary key',
         color: 'red',
       });
+      throw new Error('Failed to update sort order: missing primary key');
+    }
+
+    // `allSettled`: a rejection partway through still leaves the earlier
+    // PATCHes committed, so reporting a total failure hid a half-renumbered
+    // table behind the pre-reorder order.
+    const results = await Promise.allSettled(
+      targets.map(t =>
+        apiRequest(
+          `/api/items/${relationInfo.junctionCollection.collection}/${encodeURIComponent(String(t.pk))}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              [relationInfo.sortField!]: t.sort
+            }),
+          }
+        )
+      )
+    );
+
+    const failed = results.filter(r => r.status === 'rejected').length;
+    if (failed > 0) {
+      notifications.show({
+        title: 'Error',
+        message: `Failed to reorder ${failed} of ${results.length} items`,
+        color: 'red',
+      });
+      // Re-read rather than trusting the requested order: some writes landed.
+      await refresh();
       throw new Error('Failed to update sort order');
     }
-  }, [relationInfo]);
+
+    setItems(sortedItems.map(item => aliasJunctionPk(item, junctionPKField)));
+  }, [relationInfo, junctionPKField, refresh]);
 
   // Move item up in sort order
   const moveItemUp = useCallback(async (index: number) => {
-    if (index === 0 || !relationInfo?.sortField) {
+    // Bound BOTH ends: an index past the end (row removed, or the page shrank
+    // between render and click) used to fall through, writing `undefined` into
+    // the copied array and renumbering the real rows before throwing on it.
+    if (index <= 0 || index >= items.length || !relationInfo?.sortField) {
       return;
     }
     
@@ -292,7 +447,7 @@ export function useRelationM2MItems(
 
   // Move item down in sort order
   const moveItemDown = useCallback(async (index: number) => {
-    if (index === items.length - 1 || !relationInfo?.sortField) {
+    if (index < 0 || index >= items.length - 1 || !relationInfo?.sortField) {
       return;
     }
     
