@@ -10,13 +10,37 @@ import {
   Group,
   ActionIcon,
   TextInput,
+  ColorSwatch,
 } from '@mantine/core';
 import { IconPlus, IconX } from '@tabler/icons-react';
+import { paletteNameFromColor } from '../select-icon/SelectIcon';
+
+// `IconDisplay` resolves a Material icon NAME through select-icon's ICON_MAP,
+// a 257-entry table over ~220 Tabler components. Because that lookup is a
+// dynamic index inside IconDisplay's own body, a bundler cannot shake any of
+// it out — a static import made this component ~6x larger gzipped for every
+// consumer, including the overwhelming majority whose choices carry no icon
+// at all. Loading it on demand keeps the payload proportional to actual use:
+// a field with no icons never fetches the map.
+const IconDisplay = React.lazy(() =>
+  import('../select-icon/SelectIcon').then((m) => ({ default: m.IconDisplay })),
+);
+
+/** Reserves the glyph's box so deferring it cannot shift the label. */
+const IconSlot = ({ icon }: { icon: string }) => (
+  <React.Suspense fallback={<span style={{ display: 'inline-block', width: 14, height: 14 }} />}>
+    <IconDisplay icon={icon} size={14} />
+  </React.Suspense>
+);
 
 export interface Option {
   text: string;
   value: string | number | boolean;
   disabled?: boolean;
+  /** Icon name (Material Design name, resolved via the shared ICON_MAP), shown before the label */
+  icon?: string | null;
+  /** Theme color name or CSS color, applied to the checked state and an optional swatch */
+  color?: string | null;
 }
 
 export interface SelectMultipleCheckboxProps {
@@ -46,6 +70,13 @@ export interface SelectMultipleCheckboxProps {
   iconOff?: string;
   color?: string;
   itemsShown?: number;
+  /**
+   * Value is visible but not editable. Mantine's Checkbox has no native
+   * readOnly, so it is enforced at the `emit` chokepoint below plus pointer
+   * suppression — deliberately not by setting `disabled`, which would grey the
+   * control out and drop it from the tab order.
+   */
+  readOnly?: boolean;
 }
 
 export function SelectMultipleCheckbox({
@@ -54,6 +85,7 @@ export function SelectMultipleCheckbox({
   onChange,
   label,
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   choices = [],
@@ -81,6 +113,10 @@ export function SelectMultipleCheckbox({
   const isCsvStorage = type === 'csv' || typeof value === 'string';
   // Emit an array or, for csv storage, join it back to a comma-string.
   const emit = (next: (string | number | boolean)[] | null) => {
+    // Single chokepoint for every mutation path (checkbox, "other" text, "other"
+    // checkbox, clear). Gating here rather than per-handler means a new call
+    // site cannot silently bypass the read-only guard.
+    if (disabled || readOnly) return;
     if (isCsvStorage && Array.isArray(next)) {
       onChange?.(next.join(','));
     } else {
@@ -89,12 +125,7 @@ export function SelectMultipleCheckbox({
   };
 
   // Parse color prop to work with Mantine's color system
-  const mantineColor = useMemo(() => {
-    if (color.startsWith('var(--mantine-color-')) {
-      return color.replace('var(--mantine-color-', '').replace(')', '').replace('-6', '');
-    }
-    return color;
-  }, [color]);
+  const mantineColor = useMemo(() => paletteNameFromColor(color), [color]);
 
   // `mantineColor` is only a real Mantine palette name when it's not a raw
   // hex/CSS-color literal — interpolating a hex into `var(--mantine-color-*)`
@@ -206,18 +237,41 @@ export function SelectMultipleCheckbox({
   };
 
   // Get other values that are in the current selection. Excludes any value
-  // already backed by a live `otherValues` input row (S7.3) — without this,
-  // committing a custom value via that row made it match here too, so it
-  // rendered a second time as a separate read-only checked checkbox above
-  // the row that still owned it.
+  // already backed by a live, CHECKED `otherValues` input row (S7.3) —
+  // without this, committing a custom value via that row made it match here
+  // too, so it rendered a second time as a separate read-only checked
+  // checkbox above the row that still owned it.
+  //
+  // V3-7: matching by `String(v)` against every row's typed text (regardless
+  // of whether that row was even checked) hid a genuinely separate, already-
+  // stored numeric value whenever any row's in-progress text happened to
+  // share the same digits (e.g. stored number 5, an unrelated new row mid-
+  // typing "5"). Only a row that's actually checked — i.e. its exact typed
+  // string is itself a member of `normalizedValue` via strict equality — is
+  // the one truly backing that entry; a mid-typed but unchecked row, or a
+  // stored value of a different type with the same digits, must not exclude it.
   const otherValuesInSelection = useMemo(() => {
     if (!allowOther) {
       return [];
     }
 
     const choiceValues = choices.map(c => c.value);
-    const rowValues = new Set(otherValues.map(item => item.value));
-    return normalizedValue.filter(v => !choiceValues.includes(v) && !rowValues.has(String(v)));
+    // A row backs an entry only if it is CHECKED — i.e. its own typed string is
+    // itself in the selection. Matching every row regardless (the previous
+    // behaviour) hid a genuinely separate stored value whenever an unrelated,
+    // still-being-typed row happened to share its digits.
+    const checkedRowValues = new Set(
+      otherValues.filter(item => normalizedValue.includes(item.value)).map(item => item.value),
+    );
+    // Compare by string. `otherValues[].value` is always a string (it is the
+    // row's typed text), so a strict-equality test can never match a stored
+    // NUMBER or BOOLEAN — the row that genuinely owns `5` would fail to
+    // exclude it and the entry would render twice, once read-only and once as
+    // the row. The checked-row filter above is what keeps this from
+    // over-matching the way a bare String() comparison did.
+    return normalizedValue.filter(
+      v => !choiceValues.includes(v) && !checkedRowValues.has(String(v)),
+    );
   }, [normalizedValue, choices, allowOther, otherValues]);
 
   // Show choices validation message
@@ -243,7 +297,11 @@ export function SelectMultipleCheckbox({
   }
 
   return (
-    <Stack gap="xs" style={{ width }}>
+    <Stack
+      gap="xs"
+      style={{ width, ...(readOnly && { pointerEvents: 'none' as const, opacity: 0.8 }) }}
+      {...(readOnly && { 'aria-readonly': true })}
+    >
       {label && (
         <Text size="sm" fw={500}>
           {label}
@@ -260,15 +318,44 @@ export function SelectMultipleCheckbox({
           // compare item.value directly, not its string form).
           <Grid.Col span={12 / gridColumns} key={`${index}-${String(item.value)}`}>
             <Checkbox
-              label={item.text}
+              // Wrapped unconditionally, matching SelectRadio: wrapping only
+              // the iconed choices gave a mixed group two different label
+              // baselines (Text metrics vs the raw labelWrapper line-height).
+              label={
+                <Group gap={6} wrap="nowrap">
+                  {item.icon && <IconSlot icon={item.icon} />}
+                  {item.color && !item.icon && (
+                    // Raw, NOT palette-normalized: ColorSwatch assigns this
+                    // straight to backgroundColor without theme resolution, so
+                    // a bare palette name renders no colour at all.
+                    <ColorSwatch color={item.color} size={12} />
+                  )}
+                  <Text size="sm" span>{item.text ?? String(item.value)}</Text>
+                </Group>
+              }
               checked={normalizedValue.includes(item.value)}
               onChange={(event) => handleCheckboxChange(item.value, event.currentTarget.checked)}
               disabled={disabled || item.disabled}
               size="sm"
-              color={mantineColor}
+              // choice.color overrides the group default, matching SelectRadio's
+              // per-choice color resolution (S3.3/S7.2). Passed RAW: Mantine's
+              // `color` accepts any CSS value and returns a non-palette string
+              // untouched, so `var(--mantine-color-blue-3)` resolves correctly
+              // while the palette-normalized `blue-3` is neither a palette
+              // reference nor valid CSS and computes the checked box to
+              // transparent.
+              color={item.color ?? mantineColor}
               aria-label={`Select ${item.text}`}
-              wrapperProps={{
-                style: {
+              // `wrapperProps.style` is spread directly onto the root element's
+              // props *after* Mantine's own computed `style` (which carries
+              // `--checkbox-color` and friends), so a raw wrapperProps.style
+              // object doesn't merge with it — it replaces it outright,
+              // silently discarding the resolved color CSS vars regardless of
+              // whether `color` came from the group default or a per-choice
+              // override. `styles={{ root: {...} }}` goes through Mantine's
+              // own vars resolver instead, which does merge.
+              styles={{
+                root: {
                   width: '100%',
                   padding: '12px',
                   backgroundColor: 'var(--mantine-color-gray-0)',

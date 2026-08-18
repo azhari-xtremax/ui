@@ -15,6 +15,12 @@ export interface TagsProps {
   placeholder?: string;
   /** Whether the field is disabled */
   disabled?: boolean;
+  /**
+   * Value is visible but not editable. Mantine's TagsInput supports this
+   * natively (hides remove buttons and the entry field); the preset-Chip
+   * branch is covered by the `handleTagsChange` gate plus pointer suppression.
+   */
+  readOnly?: boolean;
   /** Whether the field is required */
   required?: boolean;
   /** Error message to display */
@@ -114,6 +120,7 @@ export function Tags({
   label,
   placeholder = 'Add a tag...',
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   iconLeft,
@@ -159,6 +166,9 @@ export function Tags({
   const selectedCustom = selectedTags.filter(tag => !processedPresets.includes(tag));
 
   const handleTagsChange = (newTags: string[]) => {
+    // Single chokepoint: TagsInput, the custom TextInput, preset chips and
+    // custom-tag chips all route here.
+    if (disabled || readOnly) return;
     const processed = processArray(newTags);
     
     // Filter out custom tags if not allowed
@@ -218,6 +228,7 @@ export function Tags({
           label={label}
           placeholder={placeholder}
           disabled={disabled}
+          readOnly={readOnly}
           required={required}
           error={error}
           value={selectedTags}
@@ -234,6 +245,7 @@ export function Tags({
             <TextInput
               placeholder={placeholder}
               disabled={disabled}
+              readOnly={readOnly}
               value={inputValue}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -248,7 +260,11 @@ export function Tags({
 
           {/* Tags display area */}
           {(processedPresets.length > 0 || selectedCustom.length > 0) && (
-            <Box mt={allowCustom ? 'xs' : 0}>
+            <Box
+              mt={allowCustom ? 'xs' : 0}
+              style={readOnly ? { pointerEvents: 'none', opacity: 0.8 } : undefined}
+              {...(readOnly && { 'aria-readonly': true })}
+            >
               <Group gap="xs" align="flex-start">
                 {/* Preset tags */}
                 {processedPresets.length > 0 && (

@@ -24,6 +24,8 @@ export interface RichTextHTMLProps {
   placeholder?: string;
   /** Whether the editor is disabled */
   disabled?: boolean;
+  /** Content is visible but not editable — Tiptap's own `editable` flag. */
+  readOnly?: boolean;
   /** Whether the field is required */
   required?: boolean;
   /** Error message */
@@ -62,6 +64,7 @@ export function RichTextHTML({
   label,
   placeholder = 'Start typing...',
   disabled = false,
+  readOnly = false,
   required = false,
   error,
   toolbar = defaultToolbar,
@@ -101,7 +104,7 @@ export function RichTextHTML({
       const html = editor.getHTML();
       onChange?.(html);
     },
-    editable: !disabled,
+    editable: !disabled && !readOnly,
     // Always false: the editor is created asynchronously in a useEffect after
     // the component's DOM has been committed. This is critical when the editor
     // mounts inside a container that was just made visible (e.g. accordion
@@ -125,6 +128,13 @@ export function RichTextHTML({
       editor.commands.setContent(value || '');
     }
   }, [editor, value]);
+
+  // `editable` above is only read when the editor is constructed, so a
+  // disabled/readOnly flag that resolves after mount (async permissions) would
+  // otherwise leave a live editor behind. Keep it in sync.
+  React.useEffect(() => {
+    editor?.setEditable(!disabled && !readOnly);
+  }, [editor, disabled, readOnly]);
 
   // Character count functionality
   const characterCount = editor?.getText()?.length || 0;

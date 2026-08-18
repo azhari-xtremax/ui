@@ -15,17 +15,15 @@
 
 import type { Meta, StoryObj } from '@storybook/react';
 import { Paper, Text } from '@mantine/core';
-import { PROVISIONABLE_INTERFACES } from '@buildpad/utils';
+import { PROVISIONABLE_INTERFACES, CHOICE_INTERFACES } from '@buildpad/utils';
 import type { Field, FormDefinition } from '@buildpad/types';
 import { FormPreview } from './FormPreview';
 
-/** Interfaces that need an author-supplied choices list to render meaningfully. */
-const CHOICE_INTERFACES = new Set([
-  'select-dropdown',
-  'select-radio',
-  'select-multiple-checkbox',
-  'select-multiple-dropdown',
-]);
+// Interfaces that need an author-supplied choices list to render meaningfully
+// come from CHOICE_INTERFACES above. This file used to keep its own copy, which
+// silently went stale the moment a new choice interface was catalogued — the
+// story then rendered that one row as "Choices option configured incorrectly"
+// while claiming every interface renders.
 
 const SAMPLE_CHOICES = [
   { text: 'Low', value: 'low' },

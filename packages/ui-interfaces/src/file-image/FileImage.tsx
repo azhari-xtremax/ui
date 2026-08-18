@@ -47,6 +47,11 @@ export interface FileImageProps extends Omit<UploadProps, 'onInput' | 'multiple'
   placeholder?: string;
   disabled?: boolean;
   readonly?: boolean;
+  /**
+   * camelCase alias for `readonly`. This is the casing @buildpad/ui-form passes,
+   * so it must be accepted here or the read-only affordances are unreachable.
+   */
+  readOnly?: boolean;
   crop?: boolean; // whether preview should crop (cover) or contain
   letterbox?: boolean; // add padding around image for letterbox effect
   width?: 'auto' | 'full' | 'fill' | 'half';
@@ -176,7 +181,8 @@ export const FileImage: React.FC<FileImageProps> = ({
   label,
   placeholder = 'No image selected',
   disabled = false,
-  readonly = false,
+  readonly: readonlyProp = false,
+  readOnly: readOnlyProp = false,
   crop = true,
   letterbox = false,
   width = 'auto',
@@ -191,6 +197,8 @@ export const FileImage: React.FC<FileImageProps> = ({
   enableCreate = true,
   enableSelect = true,
 }) => {
+  // Accept either casing — @buildpad/ui-form passes camelCase `readOnly`.
+  const readonly = readonlyProp || readOnlyProp;
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState<FileUpload | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);

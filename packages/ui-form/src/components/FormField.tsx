@@ -72,14 +72,24 @@ export const FormField: React.FC<FormFieldProps> = ({
     return isNewItem(primaryKey) ? 'create' : 'edit';
   }, [primaryKey]);
 
-  // Determine if field is disabled using @buildpad/utils isFieldReadOnly
-  const isDisabled = useMemo(() => {
-    if (disabled) return true;
-    
+  // `disabled` is now ONLY the explicit prop. Everything isFieldReadOnly()
+  // reports — meta.readonly, auto-increment, auto-generated UUID PKs, generated
+  // defaults — is semantically read-only ("value visible, not editable"), not
+  // disabled, so it is routed to `readonly` below instead.
+  //
+  // This is the layer S2.6 actually lives at: folding isFieldReadOnly into
+  // `disabled` here meant a meta.readonly field reached the leaf as
+  // disabled=true/readOnly=false no matter what FormFieldInterface computed,
+  // which is why dropping readonly from `disabled` downstream changed nothing.
+  const isDisabled = disabled;
+
+  const isReadOnly = useMemo(() => {
+    if (readonly) return true;
+
     // Use the comprehensive isFieldReadOnly from @buildpad/utils
     // This handles: auto-increment, UUID PKs, meta.readonly, generated defaults, etc.
     return isFieldReadOnly(field, { context, primaryKey });
-  }, [disabled, field, context, primaryKey]);
+  }, [readonly, field, context, primaryKey]);
 
   // Determine if field is required
   const isRequired = useMemo(() => {
@@ -183,7 +193,7 @@ export const FormField: React.FC<FormFieldProps> = ({
           value={effectiveValue}
           onChange={onChange}
           disabled={isDisabled}
-          readonly={readonly}
+          readonly={isReadOnly}
           nonEditable={nonEditable}
           loading={loading}
           required={isRequired}

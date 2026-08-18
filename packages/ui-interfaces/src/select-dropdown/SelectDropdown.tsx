@@ -192,21 +192,63 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   // has no built-in "creatable" mode, so this is done manually.
   const [otherSearchValue, setOtherSearchValue] = React.useState('');
 
-  // Set synchronously by handleChange whenever Mantine resolves a real
-  // option selection (including via Enter on a highlighted option) — read
-  // by the Enter-key commit below to avoid double-emitting: Mantine's own
-  // onChange already fired with the correct value, so the manual commit
-  // must be skipped rather than re-emitting the raw (possibly different)
-  // search text.
+  // Set synchronously whenever Mantine submits a dropdown option — via the
+  // chained onOptionSubmit below, which fires for BOTH click and Enter
+  // submissions, including re-submitting the currently-selected option
+  // (which Mantine's own onChange skips) — and by cancelOtherEdit. Read by
+  // the microtask-DEFERRED Enter commit: Mantine's Enter handling runs
+  // after this component's onKeyDown but synchronously within the same
+  // task, so by the time the deferred commit executes, this flag says
+  // authoritatively whether that Enter selected an option (skip — Mantine
+  // already emitted) or was free text (commit). Also consumed by same-task
+  // blur commits (e.g. selectProps.autoSelectOnBlur, where Mantine clicks
+  // the selected option synchronously inside its blur handler before
+  // chaining to ours).
   const justSelectedRef = React.useRef(false);
 
-  // Tracks the last value we committed via commitOtherValue so repeated
-  // blur/Enter events with unchanged text (e.g. tabbing away and back
-  // without editing) don't re-fire onChange with the same value.
+  // Dedupe key for commitOtherValue, so repeated blur/Enter events with
+  // unchanged text (e.g. tabbing away and back without editing) don't
+  // re-fire onChange with the same value. Written by commitOtherValue and
+  // handleChange, and kept in sync with the current `value` by the effect
+  // below. Stored TRIMMED, because commitOtherValue compares the trimmed
+  // search text against it — an untrimmed entry could never match, so a
+  // stored value with surrounding whitespace would re-commit its trimmed
+  // form on every focus traversal.
   const lastCommittedRef = React.useRef<string | null>(null);
 
+  // V3-2: keep lastCommittedRef in sync with the actual current `value`
+  // instead of only ever being written by commitOtherValue itself.
+  // Otherwise: commit "bar" (lastCommittedRef = "bar") → select a different
+  // option or have the value reset externally → type "bar" again → the
+  // dedupe check still sees "bar" === lastCommittedRef and silently drops
+  // the commit for the rest of the mount's lifetime, even though "bar"
+  // isn't the current value anymore.
+  React.useEffect(() => {
+    lastCommittedRef.current =
+      value !== null && value !== undefined ? String(value).trim() : null;
+  }, [value]);
+
+  // V3-3: the flag must self-expire instead of relying solely on
+  // commitOtherValue to consume it. Previously it stayed `true` until the
+  // *next* commitOtherValue call, however far in the future that was — so
+  // click "Foo" (sets it true) → type "bar" → Enter did nothing and only
+  // the *second* Enter actually committed "bar". The flag exists to bridge
+  // exactly one task (the event in which Mantine synchronously submitted an
+  // option); a microtask reset keeps it visible to everything else in that
+  // task — the deferred Enter commit, a same-task blur commit — while
+  // guaranteeing a later, unrelated keystroke or blur never sees it.
+  const clearJustSelectedSoon = React.useCallback(() => {
+    queueMicrotask(() => {
+      justSelectedRef.current = false;
+    });
+  }, []);
+
   const commitOtherValue = React.useCallback(() => {
-    if (!allowOther || !onChange) return;
+    // readOnly/disabled fields must never emit — Mantine only gates its own
+    // keyboard logic on readOnly, not the chained onBlur/onKeyDown here, so
+    // without this guard a field flipped to readOnly with uncommitted text
+    // (save-in-flight, permission change) would still commit it on blur.
+    if (!allowOther || !onChange || readOnly || disabled) return;
     if (justSelectedRef.current) {
       justSelectedRef.current = false;
       return;
@@ -214,24 +256,56 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
     const trimmed = otherSearchValue.trim();
     if (!trimmed) return;
     if (trimmed === lastCommittedRef.current) return;
-    // Only commit free text — an exact match to an existing choice's label
-    // was already handled by onChange via the normal option-select path.
-    const matchesExistingChoice = choices.some(
-      (choice) => choice.text === trimmed || String(choice.value) === trimmed,
+    // Text that names an existing choice resolves to that choice's typed
+    // value instead of committing as free text — or being silently dropped:
+    // with no highlighted option (Mantine resets the highlight on every
+    // keystroke and selectFirstOptionOnChange is off by default), Mantine
+    // declines the Enter entirely, so a silently-returning guard here made
+    // typing an exact label a dead keystroke whose text the next blur then
+    // wiped. Comparisons are trimmed-to-trimmed so whitespace-padded choice
+    // labels can't be committed over their own values.
+    const matchedChoice = choices.find(
+      (choice) => choice.text.trim() === trimmed || String(choice.value).trim() === trimmed,
     );
-    if (!matchesExistingChoice) {
-      lastCommittedRef.current = trimmed;
-      onChange(trimmed);
+    if (matchedChoice) {
+      const matchedStr = String(matchedChoice.value).trim();
+      if (matchedStr !== lastCommittedRef.current) {
+        lastCommittedRef.current = matchedStr;
+        onChange(matchedChoice.value);
+      }
+      return;
     }
-  }, [allowOther, onChange, otherSearchValue, choices]);
+    lastCommittedRef.current = trimmed;
+    onChange(trimmed);
+  }, [allowOther, onChange, readOnly, disabled, otherSearchValue, choices]);
+
+  // The currently selected choice, if any — used so the closed input can
+  // show *that* choice's own icon/color once something is selected (see
+  // leftSection below), and by cancelOtherEdit to restore the label.
+  const selectedChoice = React.useMemo(() => {
+    if (value === null || value === undefined || value === '') {
+      return null;
+    }
+    const strValue = String(value);
+    return choices.find((choice) => String(choice.value) === strValue) ?? null;
+  }, [choices, value]);
 
   // Escape: restore the search text to the current committed value instead
   // of leaving typed-but-uncommitted text in place, which the subsequent
-  // blur would otherwise commit.
+  // blur would otherwise commit. Restore the choice's LABEL when the value
+  // is a real choice — restoring String(value) would display the raw stored
+  // value (a numeric FK, a slug) in the input until the next blur re-syncs.
   const cancelOtherEdit = React.useCallback(() => {
-    justSelectedRef.current = true; // suppress the blur that follows Escape
-    setOtherSearchValue(value !== null && value !== undefined ? String(value) : '');
-  }, [value]);
+    justSelectedRef.current = true; // suppress a same-task blur following Escape
+    clearJustSelectedSoon();
+    setOtherSearchValue(
+      selectedChoice
+        ? selectedChoice.text
+        : value !== null && value !== undefined
+          ? String(value)
+          : '',
+    );
+  }, [value, selectedChoice, clearJustSelectedSoon]);
 
   // Handle value changes
   const handleChange = React.useCallback(
@@ -240,15 +314,24 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
         return;
       }
       justSelectedRef.current = true;
+      clearJustSelectedSoon();
 
       if (selectedValue === null) {
+        lastCommittedRef.current = null;
         onChange(null);
         return;
       }
 
-      // Find the original choice to get the correct value type
+      // Find the original choice to get the correct value type.
+      //
+      // The dedupe key is synced here as well as in the [value] effect:
+      // for parents that never echo the value back into `value`
+      // (uncontrolled usage, or a parent that rejects the commit) the
+      // effect never re-fires, and a stale key from an earlier free-text
+      // commit would otherwise swallow re-typing that same text forever.
       const originalChoice = choices.find((choice) => String(choice.value) === selectedValue);
       if (originalChoice) {
+        lastCommittedRef.current = String(originalChoice.value).trim();
         onChange(originalChoice.value);
       } else if (allowOther) {
         // Reachable when the user clicks the synthetic "current custom
@@ -257,10 +340,11 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
         // commitOtherValue (search + Enter/blur), not through this path,
         // since Mantine's onChange never fires for text with no matching
         // option.
+        lastCommittedRef.current = selectedValue.trim();
         onChange(selectedValue);
       }
     },
-    [onChange, choices, allowOther]
+    [onChange, choices, allowOther, clearJustSelectedSoon]
   );
 
   // Convert current value to string for Mantine Select
@@ -273,20 +357,6 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
 
   // Determine if we should show no data message
   const showNoData = selectData.length === 0;
-
-  // The currently selected choice, if any — used so the closed input can
-  // show *that* choice's own icon/color once something is selected, instead
-  // of going blank (showGlobalIcon deliberately turns off the global
-  // fallback icon once a value is picked, but nothing filled that gap with
-  // the selection's own icon).
-  const selectedChoice = React.useMemo(() => {
-    if (value === null || value === undefined || value === '') {
-      return null;
-    }
-    const strValue = String(value);
-    return choices.find((choice) => String(choice.value) === strValue) ?? null;
-  }, [choices, value]);
-
 
   // Left section icon rendering — the selected choice's own icon/color when
   // set, otherwise the global fallback; icons resolved to the actual Tabler
@@ -373,14 +443,52 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
               selectProps.onSearchChange?.(val);
               setOtherSearchValue(val);
             },
+            // Fires for every dropdown submission (mouse click or Enter on
+            // a highlighted option), INCLUDING re-submitting the
+            // currently-selected option, which Mantine's own onChange skips
+            // (its `nextValue !== value` guard). Two jobs: set the
+            // suppression flag for the deferred Enter commit below, and
+            // eagerly sync the search text to the submitted option's label.
+            // Without the eager sync, a blur that arrives before the
+            // controlled value echo lands (async form stores), or after a
+            // no-op re-select, still holds the abandoned filter text and
+            // would commit it over the user's selection.
+            onOptionSubmit: (val: string) => {
+              selectProps.onOptionSubmit?.(val);
+              justSelectedRef.current = true;
+              clearJustSelectedSoon();
+              const submitted = choices.find((choice) => String(choice.value) === val);
+              setOtherSearchValue(submitted ? submitted.text : val);
+            },
             onBlur: (event: React.FocusEvent<HTMLInputElement>) => {
               selectProps.onBlur?.(event);
               commitOtherValue();
             },
             onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
               selectProps.onKeyDown?.(event);
-              if (event.key === 'Enter') commitOtherValue();
-              else if (event.key === 'Escape') cancelOtherEdit();
+              // An Enter that confirms an IME composition is not a commit;
+              // mirror Mantine's own guards (isComposing, Safari's
+              // keyCode 229), which run after this handler and return
+              // without calling preventDefault.
+              if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+              if (event.key === 'Enter') {
+                // N3-b: this handler runs BEFORE Mantine's own Enter
+                // handling (the Combobox target invokes the consumer
+                // handler first), so nothing Mantine is about to do —
+                // preventDefault, selecting a highlighted option — is
+                // observable here yet. Defer the commit one microtask:
+                // Mantine's selection is synchronous within this task, so
+                // by drain time justSelectedRef (set in the chained
+                // onOptionSubmit above) says authoritatively whether this
+                // Enter selected an option (skip — Mantine's onChange
+                // already emitted the resolved value) or was free text
+                // (commit). Deliberately NOT gated on event.defaultPrevented:
+                // a consumer's selectProps.onKeyDown preventDefaulting Enter
+                // (the standard way to stop a wrapping form from submitting,
+                // since Mantine doesn't preventDefault free-text Enter) must
+                // not disable the commit wiring.
+                queueMicrotask(commitOtherValue);
+              } else if (event.key === 'Escape') cancelOtherEdit();
             },
           }
         : {})}
