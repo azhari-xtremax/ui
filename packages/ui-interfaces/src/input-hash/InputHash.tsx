@@ -1,4 +1,5 @@
 import React, { forwardRef, useState, useEffect } from 'react';
+import { isConcealedValue } from '@buildpad/utils';
 import { TextInput, PasswordInput, Box } from '@mantine/core';
 import { IconLock, IconLockOpen } from '@tabler/icons-react';
 import './InputHash.css';
@@ -33,6 +34,8 @@ export interface InputHashProps {
   autocomplete?: string;
   /** data-testid for testing */
   'data-testid'?: string;
+  /** Accessible name, used when no visible `label` is rendered */
+  'aria-label'?: string;
 }
 
 export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
@@ -49,17 +52,24 @@ export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
   description,
   autocomplete,
   'data-testid': testId,
+  'aria-label': ariaLabel,
 }, ref) => {
   // Accept either casing. @buildpad/ui-form passes camelCase `readOnly`; this
   // component historically read only the lowercase form, so a readonly password
   // field stayed fully typeable and overwrote the stored credential on save.
   const readonly = readonlyProp || readOnlyProp;
-  const isHashed = !!(value && value.length > 0);
+  const isHashed = typeof value === 'string' && value.length > 0;
   const [localValue, setLocalValue] = useState<string>('');
 
-  // Reset local value when external value changes (e.g. on save/reset)
+  // Reset local value when external value changes (e.g. on save/reset).
+  //
+  // The concealed mask counts as a reset: it is the steady state for a stored
+  // credential, so a null/undefined-only test could never fire for the case it
+  // exists to handle — typed plaintext survived Discard, stayed visible in the
+  // input, and was re-submitted on the next save. SystemToken already guards
+  // this transition the same way.
   useEffect(() => {
-    if (value === null || value === undefined) {
+    if (value === null || value === undefined || isConcealedValue(value)) {
       setLocalValue('');
     }
   }, [value]);
@@ -97,6 +107,11 @@ export const InputHash = forwardRef<HTMLInputElement, InputHashProps>(({
   const isShowingHashedState = isHashed && !localValue;
   const commonProps = {
     label,
+    // Only needed as the accessible name when no visible label is rendered
+    // (FormField hides the label and relies on this) — an explicit `label`
+    // already gives Mantine's input its accessible name via the linked
+    // <label for>, so setting both would just be redundant.
+    'aria-label': label ? undefined : ariaLabel,
     placeholder: internalPlaceholder,
     required,
     disabled,

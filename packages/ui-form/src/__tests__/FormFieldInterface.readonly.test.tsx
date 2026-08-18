@@ -129,4 +129,21 @@ describe('FormFieldInterface locked-field guards', () => {
 
         expect(lastLockState()).toEqual({ disabled: true, readOnly: true });
     });
+
+    // Admin-authored options JSON reaches the leaf unfiltered, so anything the
+    // container owns must be declared after that spread. The accessible name
+    // is the container's: FormField withholds `label` and relies on it.
+    it('does not let meta.options override the accessible name', () => {
+        interfaceProps.props = { 'aria-label': 'FROM-OPTIONS' };
+        render(
+            wrap(
+                <FormFieldInterface
+                    field={{ ...baseField, meta: { ...baseField.meta, interface: 'input' } } as any}
+                    value=""
+                />,
+            ),
+        );
+        expect(lastProps()?.ariaLabel).toBe('Title');
+        interfaceProps.props = {};
+    });
 });

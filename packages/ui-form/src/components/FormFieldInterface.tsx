@@ -14,6 +14,10 @@ import type { FormField } from '../types';
 import {
   getFieldInterface,
   getFieldDefault,
+  isNewItem,
+  isConcealedField,
+  concealingInterface,
+  CONCEALED_PLACEHOLDER,
   type InterfaceConfig,
   type InterfaceType,
 } from '@buildpad/utils';
@@ -259,12 +263,33 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
   // "Rendered more hooks than during the previous render" crash.
   const effectiveValue = useMemo(() => {
     if (value !== undefined && value !== null) return value;
-    const isHashField = field.meta?.special?.includes?.('hash') || field.type === 'hash';
-    if (isHashField && interfaceConfig.type === 'input-hash') return '**********';
-    const isConcealField = field.meta?.special?.includes?.('conceal');
-    if (isConcealField && interfaceConfig.type === 'system-token') return '**********';
-    return value;
-  }, [value, field, interfaceConfig.type]);
+
+    // Nothing to mask unless this is a secret field AND the interface renders
+    // one — a plain text control must show an empty box, not a literal row of
+    // asterisks the user could submit as their password.
+    if (!isConcealedField(field) || !concealingInterface(interfaceConfig.type)) {
+      // Normalise back to null. FormField used to guarantee the leaf never
+      // saw `undefined`; now that it forwards the omitted signal, that
+      // guarantee is restored here rather than dropped.
+      return null;
+    }
+
+    // A record that does not exist yet cannot have a stored secret. Without
+    // this the create form showed a closed padlock and "Value securely
+    // stored", and users saved accounts with no credential at all.
+    if (isNewItem(primaryKey)) return null;
+
+    // `conceal` distinguishes its own empty state: the server returns the mask
+    // when a value exists and `null` when it does not, so an explicit null is
+    // the answer and must pass through — re-masking it stranded a just-cleared
+    // token as "still set" forever.
+    if (value === null && interfaceConfig.type === 'system-token') return null;
+
+    // Otherwise the field was omitted (write-only columns are not round-tripped
+    // on read), or a `hash` leaf emitted null because the user typed and then
+    // erased. Neither means the stored credential is gone.
+    return CONCEALED_PLACEHOLDER;
+  }, [value, field, interfaceConfig.type, primaryKey]);
 
   const isMultiSelectInterface = MULTI_SELECT_INTERFACE_TYPES.has(interfaceConfig.type);
 
@@ -331,7 +356,6 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     // We forward an aria-label so the underlying input still has a programmatic
     // accessible name (axe "label" rule). Each interface spreads this onto its
     // Mantine control via ...rest.
-    'aria-label': accessibleName || field.name || field.field,
 
     // Field metadata
     collection: field.collection,
@@ -349,6 +373,15 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
 
     // Spread interface-specific props from InterfaceConfig (includes meta.options)
     ...interfaceConfig.props,
+
+    // ── Container-owned props: declared AFTER the meta.options spread ──
+    // The accessible name is the container's to set, not the field author's:
+    // FormField renders the visible label itself and deliberately withholds
+    // `label` from the leaf, so this is the input's only programmatic name
+    // (axe "label" rule). Declared below the spread because admin-authored
+    // options JSON is unfiltered — an `aria-label` key in it silently erased
+    // the name, and an explicit `undefined` value erased it outright.
+    'aria-label': accessibleName || field.name || field.field,
 
     // ── Lock props: declared AFTER the meta.options spread so they win ──
     // Admin-authored options JSON flows into interfaceConfig.props unfiltered,

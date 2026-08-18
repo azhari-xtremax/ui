@@ -12,7 +12,13 @@ import { IconAlertCircle } from '@tabler/icons-react';
 import type { FormField as TFormField, ValidationError } from '../types';
 import { FormFieldInterface } from './FormFieldInterface';
 import { FormFieldLabel } from './FormFieldLabel';
-import { isFieldReadOnly, isNewItem, getFieldDisplayName, getFieldDefault } from '@buildpad/utils';
+import {
+  isFieldReadOnly,
+  isNewItem,
+  getFieldDisplayName,
+  getFieldDefault,
+  isConcealedField,
+} from '@buildpad/utils';
 
 export interface FormFieldProps {
   /** Field definition */
@@ -101,6 +107,16 @@ export const FormField: React.FC<FormFieldProps> = ({
   // Get effective value (use value or default)
   const effectiveValue = useMemo(() => {
     if (value !== undefined) return value;
+    // Secrets first, and deliberately ahead of the column default.
+    //
+    // A hash/conceal column is often omitted from the fetched item (write-only
+    // credentials are never round-tripped on read); collapsing that to `null`
+    // here would look identical to "no value is set" and cost
+    // FormFieldInterface the signal it needs to decide whether to show the
+    // mask. And a DDL default on a secret column is not the secret — taking
+    // that branch first rendered the literal default as "Value securely
+    // stored" and would have submitted it as the credential.
+    if (isConcealedField(field)) return undefined;
     // Parse the column default rather than passing the raw SQL text: a
     // Postgres default arrives as `'active'::character varying`, which was
     // rendered verbatim here while the form model held the parsed value.

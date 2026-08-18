@@ -85,9 +85,23 @@ vi.mock("@buildpad/ui-form", () => ({
   )),
 }));
 
-// Minimal mock for SaveOptions
+// Minimal mock for SaveOptions — forwards the callbacks so tests can drive
+// the save-variant paths (save-as-copy in particular, which builds its own
+// payload rather than reusing the update body).
 vi.mock("../src/SaveOptions", () => ({
-  SaveOptions: () => <div data-testid="save-options-mock" />,
+  SaveOptions: ({ onSaveAsCopy, onSaveAndStay, onSaveAndAddNew, onDiscardAndStay }: {
+    onSaveAsCopy?: () => void;
+    onSaveAndStay?: () => void;
+    onSaveAndAddNew?: () => void;
+    onDiscardAndStay?: () => void;
+  }) => (
+    <div data-testid="save-options-mock">
+      <button type="button" data-testid="save-as-copy" onClick={onSaveAsCopy} />
+      <button type="button" data-testid="save-and-stay" onClick={onSaveAndStay} />
+      <button type="button" data-testid="save-add-new" onClick={onSaveAndAddNew} />
+      <button type="button" data-testid="discard-and-stay" onClick={onDiscardAndStay} />
+    </div>
+  ),
 }));
 
 // Import component under test AFTER mocks
@@ -380,6 +394,38 @@ describe("CollectionForm", () => {
   // =====================================================================
   // Edit / Update operation
   // =====================================================================
+  describe("save as copy", () => {
+    // A concealed column reads back as a mask, never as the secret, and
+    // formData holds that mask verbatim. Copying it would write the literal
+    // asterisks into the new row — a guessable static token, or a password
+    // hashed from "**********".
+    it("does not copy a concealed value into the duplicated row", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0 } },
+        { field: "title", type: "string", meta: { interface: "input", sort: 1 } },
+        { field: "token", type: "string", meta: { interface: "system-token", special: ["conceal"], sort: 2 } },
+      ]);
+      mockItemsReadOne.mockResolvedValue({ id: 7, title: "Row", token: "**************" });
+      mockItemsUpdateOne.mockResolvedValue({ id: 7 });
+      mockItemsCreateOne.mockResolvedValue({ id: 8 });
+
+      renderForm({ mode: "edit", id: "7", showSaveOptions: true });
+      await waitFor(() => {
+        expect(screen.getByTestId("save-as-copy")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("save-as-copy"));
+      await waitFor(() => {
+        expect(mockItemsCreateOne).toHaveBeenCalled();
+      });
+
+      const copied = mockItemsCreateOne.mock.calls[0][0];
+      expect(copied).not.toHaveProperty("token");
+      // The rest of the row still copies.
+      expect(copied).toHaveProperty("title", "Row");
+    });
+  });
+
   describe("edit", () => {
     it("loads existing item data in edit mode", async () => {
       mockItemsReadOne.mockResolvedValue({
