@@ -736,3 +736,185 @@ describe("Create New reverse-FK default", () => {
     expect(defaults.category_id).toBe("cat-7");
   });
 });
+
+describe("ListO2M — rendered columns and selection lifecycle (slug PK)", () => {
+  beforeEach(() => {
+    (useRelationO2M as jest.Mock).mockReturnValue({
+      relationInfo: SLUG_PK_RELATION_INFO,
+      loading: false,
+      error: null,
+    });
+  });
+
+  it("renders the resolved PK column, not the bootstrap \"id\" default", async () => {
+    setHookItems([{ slug: "post-a", name: "Post A" }]);
+
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />));
+    await screen.findByTestId("o2m-table");
+
+    // The bootstrap "id" is a stand-in for "the primary key", not a real
+    // column: rendering it verbatim shows an empty column and sorts by a
+    // field this collection doesn't have.
+    expect(screen.queryByText("Id")).not.toBeInTheDocument();
+    expect(screen.getByText("Slug")).toBeInTheDocument();
+    expect(screen.getByText("post-a")).toBeInTheDocument();
+  });
+
+  it("does not report select-all when the visible rows are not the selected ones", async () => {
+    setHookItems([
+      { slug: "post-a", name: "Post A" },
+      { slug: "post-b", name: "Post B" },
+    ]);
+
+    const { rerender } = render(
+      wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />),
+    );
+    await screen.findByTestId("o2m-table");
+
+    fireEvent.click(screen.getByTestId("o2m-select-all"));
+    expect(
+      (screen.getByTestId("o2m-select-all") as HTMLInputElement).checked,
+    ).toBe(true);
+
+    // Swap in a different page of rows, as pagination does. Comparing the
+    // Set's size to the row count would still read "all selected" here.
+    setHookItems([
+      { slug: "post-c", name: "Post C" },
+      { slug: "post-d", name: "Post D" },
+    ]);
+    rerender(wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />));
+    await screen.findByTestId("o2m-row-post-c");
+
+    expect(
+      (screen.getByTestId("o2m-select-all") as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it("keeps the header checkbox consistent with the rows when PKs collapse", async () => {
+    // Field-level read permissions can strip the PK column from the response,
+    // so every row resolves to the same (undefined) key and the Set collapses
+    // to one entry. Comparing its size to the row count then reads "not all
+    // selected" while every row box renders checked, and the header can never
+    // reach its clear branch.
+    setHookItems([{ name: "Post A" }, { name: "Post B" }]);
+
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />));
+    await screen.findByTestId("o2m-table");
+
+    const header = () =>
+      screen.getByTestId("o2m-select-all") as HTMLInputElement;
+
+    fireEvent.click(header());
+    expect(header().checked).toBe(true);
+
+    fireEvent.click(header());
+    expect(header().checked).toBe(false);
+  });
+
+  it("drops a row's selection once that row leaves the list", async () => {
+    setHookItems([{ slug: "post-a", name: "Post A" }]);
+
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="+" value={[]} />));
+    await screen.findByTestId("o2m-table");
+
+    fireEvent.click(screen.getByTestId("o2m-check-post-a"));
+    expect(screen.getByTestId("o2m-batch-remove")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("o2m-remove-post-a"));
+
+    // Otherwise the bar keeps offering to unlink a row that is already gone.
+    await waitFor(() =>
+      expect(screen.queryByTestId("o2m-batch-remove")).not.toBeInTheDocument(),
+    );
+  });
+});
+
+describe("ListO2M — staged-create modal mode and parent-record reset", () => {
+  async function stageOneCreate() {
+    (globalThis as any).__formName = "Draft";
+    (globalThis as any).__newId = "srv-draft";
+    fireEvent.click(await screen.findByTestId("o2m-create-btn"));
+    fireEvent.click(await screen.findByTestId("mock-form-save"));
+    await waitFor(() =>
+      expect(screen.getByTestId("o2m-edit-$temp_0")).toBeInTheDocument(),
+    );
+  }
+
+  it("opens a staged create in create mode rather than an edit with no id", async () => {
+    setHookItems([]);
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="+" value={[]} />));
+    await stageOneCreate();
+
+    fireEvent.click(screen.getByTestId("o2m-edit-$temp_0"));
+    await flush();
+
+    // A staged create has no server row, so `id` is undefined by design —
+    // `mode` has to follow it, or CollectionForm routes Save into createOne.
+    expect((globalThis as any).__lastFormId).toBeUndefined();
+    expect((globalThis as any).__lastFormMode).toBe("create");
+  });
+
+  it("resets staged changes when the parent record changes", async () => {
+    setHookItems([]);
+    const onChange = jest.fn();
+    const { rerender } = render(
+      wrap(
+        <ListO2M {...BASE_PROPS} primaryKey="+" value={[]} onChange={onChange} />,
+      ),
+    );
+    await stageOneCreate();
+
+    rerender(
+      wrap(
+        <ListO2M
+          {...BASE_PROPS}
+          primaryKey="cat-9"
+          value={[]}
+          onChange={onChange}
+        />,
+      ),
+    );
+
+    // Record A's staged create must not be emitted for record B.
+    await waitFor(() =>
+      expect(screen.queryByTestId("o2m-edit-$temp_0")).not.toBeInTheDocument(),
+    );
+  });
+});
+
+describe("ListO2M — reorder arrows vs staged rows", () => {
+  const SORTABLE_RELATION_INFO = { ...RELATION_INFO, sortField: "sort" };
+
+  beforeEach(() => {
+    (useRelationO2M as jest.Mock).mockReturnValue({
+      relationInfo: SORTABLE_RELATION_INFO,
+      loading: false,
+      error: null,
+    });
+    (apiRequest as jest.Mock).mockResolvedValue({
+      data: [{ id: "p9", name: "Picked post" }],
+    });
+  });
+
+  it("disables reorder for a staged row, which the movers cannot index", async () => {
+    setHookItems([{ id: "p1", name: "Existing post" }]);
+
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="cat-1" value={[]} />));
+    await screen.findByTestId("o2m-table");
+
+    fireEvent.click(screen.getByTestId("o2m-select-btn"));
+    fireEvent.click(await screen.findByTestId("mock-add-selected"));
+    await waitFor(() =>
+      expect(screen.getByTestId("o2m-row-p9")).toBeInTheDocument(),
+    );
+
+    // p9 is staged only — it isn't in the array the movers index, so passing
+    // its display index would swap in `undefined` and throw mid-reorder.
+    expect(screen.getByTestId("o2m-move-up-p9")).toBeDisabled();
+    expect(screen.getByTestId("o2m-move-down-p9")).toBeDisabled();
+
+    // p1 is the only real row, so it can move neither way.
+    expect(screen.getByTestId("o2m-move-up-p1")).toBeDisabled();
+    expect(screen.getByTestId("o2m-move-down-p1")).toBeDisabled();
+  });
+});
