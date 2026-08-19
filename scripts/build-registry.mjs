@@ -26,7 +26,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { createHash } from 'crypto';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,6 +48,7 @@ const PACKAGE_FOLDERS = {
   '@buildpad/services': 'services',
   '@buildpad/types': 'types',
   '@buildpad/utils': 'utils',
+  '@buildpad/cli': 'cli',
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -66,8 +67,13 @@ function getPackageVersion(folder) {
 function computeFileSha256(source) {
   const fullPath = join(PACKAGES_DIR, source);
   if (!existsSync(fullPath)) return undefined;
-  const bytes = readFileSync(fullPath);
-  return sha256(bytes);
+  // Normalise line endings before hashing. Hashing raw bytes makes the
+  // artifact platform-dependent: a checkout with `core.autocrlf=true`
+  // produces hashes that can never match an LF checkout, so `--check`
+  // fails permanently on CI. The CLI's own hashTransformed() already
+  // normalises the same way.
+  const text = readFileSync(fullPath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return sha256(text);
 }
 
 /** Compare bare semver strings: >0 if a>b, <0 if a<b, 0 if equal. */
@@ -409,7 +415,12 @@ function collectUndeclaredImports(registry) {
   const componentNames = new Set(
     (registry.components ?? registry.items ?? []).map((c) => c.name).filter(Boolean),
   );
-  const RELATIVE_IMPORT = /(?:^|\n)\s*(?:import|export)[^'"\n]*from\s+['"](\.[^'"]+)['"]/g;
+  // Must tolerate multi-line specifier lists: barrels are written as
+  // `export {\n  a,\n  b,\n} from '../mod';`, and a newline-free pattern
+  // silently skips every one of them — which is why an unregistered module
+  // could be re-exported without the check noticing.
+  const RELATIVE_IMPORT =
+    /(?:^|\n)\s*(?:import|export)\b(?:[^'"{}\n]|\{[^}]*\})*from\s+['"](\.[^'"]+)['"]/g;
 
   for (const component of registry.components ?? registry.items ?? []) {
     const files = component.files ?? [];
@@ -444,6 +455,48 @@ function collectUndeclaredImports(registry) {
       }
     }
   }
+
+  // Lib modules (the hand-maintained barrels) were never scanned, which is
+  // how a barrel could re-export '../conceal' while conceal.ts was not a
+  // registry file at all. Resolve these in TARGET space: a barrel emitted at
+  // lib/buildpad/utils/index.ts importing '../conceal' means
+  // lib/buildpad/conceal.ts, which source-space resolution cannot express.
+  for (const [moduleName, mod] of Object.entries(registry.lib ?? {})) {
+    const files = mod.files ?? [];
+    const ownTargets = files.map((f) => f.target).filter(Boolean);
+    if (mod.path && mod.target) ownTargets.push(mod.target);
+
+    for (const file of files) {
+      if (!file.source || !file.target) continue;
+      const fullPath = join(PACKAGES_DIR, file.source);
+      if (!existsSync(fullPath)) continue;
+      const text = readFileSync(fullPath, 'utf8');
+      const dir = file.target.split('/').slice(0, -1);
+
+      for (const match of text.matchAll(RELATIVE_IMPORT)) {
+        const spec = match[1];
+        const segments = [...dir];
+        for (const part of spec.split('/')) {
+          if (part === '.' || part === '') continue;
+          if (part === '..') segments.pop();
+          else segments.push(part);
+        }
+        const resolved = segments.join('/');
+        const shipped = ownTargets.some(
+          (t) => t === resolved || t.startsWith(`${resolved}.`) || t.startsWith(`${resolved}/`),
+        );
+        if (shipped) continue;
+        problems.push({
+          kind: 'lib-file',
+          component: `lib:${moduleName}`,
+          file: file.source,
+          spec,
+          needs: resolved,
+        });
+      }
+    }
+  }
+
   return problems;
 }
 
@@ -461,7 +514,11 @@ function checkRegistry() {
     console.error('\n✗ A shipped file imports a component its entry does not declare:\n');
     for (const u of undeclared) {
       console.error(`    ${u.component}: ${u.file} imports '${u.spec}'`);
-      console.error(`      → add "${u.needs}" to that entry's registryDependencies`);
+      if (u.kind === 'lib-file') {
+        console.error(`      → ${u.needs} is not shipped by that lib entry; register its source file`);
+      } else {
+        console.error(`      → add "${u.needs}" to that entry's registryDependencies`);
+      }
     }
     console.error('');
     process.exit(1);
@@ -530,7 +587,7 @@ function checkRegistry() {
 
 // Run only when invoked directly (e.g. `node scripts/build-registry.mjs`),
 // not when imported by tests for the helper exports.
-if (import.meta.url.endsWith('build-registry.mjs') || process.argv[1]?.replace(/\\/g, '/').endsWith('scripts/build-registry.mjs')) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   if (process.argv.includes('--check')) {
     checkRegistry();
   } else {

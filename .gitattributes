@@ -1,0 +1,8 @@
+# Normalise line endings in the repository. The registry generator hashes
+# source files to detect changes; without this a checkout with
+# core.autocrlf=true produces hashes that can never match an LF checkout,
+# which made `pnpm registry:check` fail permanently on CI.
+* text=auto eol=lf
+
+# Generated artifact — keep diffs reviewable and endings stable.
+packages/registry.json text eol=lf

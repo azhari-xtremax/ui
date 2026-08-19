@@ -498,7 +498,18 @@ export async function upgrade(options: UpgradeOptions) {
     const installedVersion = installedRecord?.version ?? '0.0.0';
     const isAdoption = !installedRecord;
 
-    const upToDate = !isAdoption && semverGte(installedVersion, lastChangedIn);
+    // A module gains files over time. Comparing versions alone means a
+    // consumer whose recorded version already equals `lastChangedIn` is told
+    // "up to date" and never receives a newly added file — the version can't
+    // move until a release, so the gap is invisible. Treat any registered
+    // file that is absent on disk as work to do, regardless of version.
+    const libSrcDir = config.srcDir ? path.join(cwd, 'src') : cwd;
+    const missingFiles = (mod.files ?? []).filter(
+      (f: { target: string }) => !fs.existsSync(path.join(libSrcDir, f.target))
+    );
+
+    const upToDate =
+      !isAdoption && missingFiles.length === 0 && semverGte(installedVersion, lastChangedIn);
     if (upToDate && !force) {
       console.log(chalk.dim(`  ${moduleName} — already up to date (${installedVersion})`));
       skipped++;

@@ -1423,7 +1423,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {displayItems.map((item, index) => (
+              {displayItems.map((item) => (
                 <Table.Tr key={getPk(item)} data-testid={`o2m-row-${getPk(item)}`}>
                   {/* Batch checkbox */}
                   {!isDisabled && (
@@ -1546,7 +1546,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         ) : (
           /* ── List Layout ──────────────────────────────────────────────── */
           <Stack gap="xs" data-testid="o2m-list">
-            {displayItems.map((item, index) => (
+            {displayItems.map((item) => (
               <Paper
                 key={getPk(item)}
                 p="sm"

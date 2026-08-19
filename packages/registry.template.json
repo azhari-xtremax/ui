@@ -96,6 +96,10 @@
           "target": "lib/buildpad/field-interface-mapper.ts"
         },
         {
+          "source": "utils/src/conceal.ts",
+          "target": "lib/buildpad/conceal.ts"
+        },
+        {
           "source": "utils/src/interface-types.ts",
           "target": "lib/buildpad/interface-types.ts"
         },
@@ -197,6 +201,10 @@
         {
           "source": "services/src/items.ts",
           "target": "lib/buildpad/services/items.ts"
+        },
+        {
+          "source": "services/src/module-access-keys.ts",
+          "target": "lib/buildpad/services/module-access-keys.ts"
         },
         {
           "source": "services/src/permissions.ts",
@@ -335,6 +343,10 @@
         {
           "source": "hooks/src/useAuth.ts",
           "target": "lib/buildpad/hooks/useAuth.ts"
+        },
+        {
+          "source": "hooks/src/useModuleAccessKeys.ts",
+          "target": "lib/buildpad/hooks/useModuleAccessKeys.ts"
         },
         {
           "source": "hooks/src/usePermissions.ts",

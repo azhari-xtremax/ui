@@ -66,3 +66,31 @@ export function resolvePackageVersion(
     '0.0.0'
   );
 }
+
+/**
+ * Verify fetched source bytes against the registry's recorded `sourceSha256`.
+ *
+ * The registry has always carried this hash but nothing compared it, so the
+ * field advertised integrity it did not provide: sources are fetched from an
+ * unpinned branch and written into the consumer's project unchecked. Hashes
+ * are compared over line-ending-normalised content, matching how the registry
+ * generator computes them.
+ *
+ * Returns true when the content matches or when there is nothing to check.
+ */
+export function verifySourceSha256(
+  source: string,
+  content: string,
+  expected?: string
+): boolean {
+  if (!expected) return true;
+  const normalised = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const actual = createHash('sha256').update(normalised).digest('hex');
+  if (actual === expected) return true;
+  console.warn(
+    `  ! Integrity warning: ${source} does not match the registry hash ` +
+      `(expected ${expected.slice(0, 12)}…, got ${actual.slice(0, 12)}…). ` +
+      `The upstream file may have changed since the registry was generated.`
+  );
+  return false;
+}

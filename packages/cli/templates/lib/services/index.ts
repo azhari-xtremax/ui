@@ -44,3 +44,12 @@ export {
   type DaaSProviderProps,
   type DaaSUser,
 } from "./daas-context";
+
+export {
+  ModuleAccessKeysService,
+  createModuleAccessKeysService,
+  buildModuleAccessTree,
+  leafModuleAccessKeys,
+  MODULE_ACCESS_KEYS_COLLECTION,
+  type ModuleAccessKeyInput,
+} from "./module-access-keys";

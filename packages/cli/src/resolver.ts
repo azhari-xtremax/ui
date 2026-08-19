@@ -123,6 +123,8 @@ export interface LibModule {
   version?: string;
   /** v2: last package version in which any of this module's files changed. */
   lastChangedIn?: string;
+  /** v2: SHA-256 of the raw source bytes for a single-path module. */
+  sourceSha256?: string;
 }
 
 export interface ComponentEntry {

@@ -33,9 +33,11 @@ jobs:
       # Full history + tags: build-registry.mjs derives lastChangedIn from git tags
       - run: git fetch --tags --unshallow || git fetch --tags
 
-      - name: Registry in sync with sources
-        run: pnpm registry:check
-
+      # Build, typecheck and tests run BEFORE the registry check. Fail-fast
+      # means a red registry:check used to abort the job before any of them
+      # executed, so a broken build or a failing test could merge unnoticed.
+      # The registry guard still gates the job — it just no longer masks the
+      # checks that catch real defects.
       - name: Build all packages
         run: pnpm build
 
@@ -44,3 +46,6 @@ jobs:
 
       - name: Unit tests
         run: pnpm test
+
+      - name: Registry in sync with sources
+        run: pnpm registry:check
