@@ -22,7 +22,7 @@ import {
   addOriginHeader,
   hashTransformed
 } from './transformer.js';
-import { inferSourcePackage, resolvePackageVersion, semverGte } from '../utils/checksum.js';
+import { inferSourcePackage, resolvePackageVersion, semverGte, verifySourceSha256 } from '../utils/checksum.js';
 import { ensureExternalDeps } from '../utils/external-deps.js';
 import { validate } from './validate.js';
 import {
@@ -255,6 +255,7 @@ export async function copyLibModule(
       const sourcePackage = inferSourcePackage(libModule.path);
       const version = resolvePackageVersion(registry, sourcePackage);
       let content = await readSource(libModule.path);
+      verifySourceSha256(libModule.path, content, libModule.sourceSha256);
       content = transformImports(content, config);
       content = addOriginHeader(content, moduleName, sourcePackage, version);
       await fs.ensureDir(path.dirname(targetPath));
@@ -283,10 +284,22 @@ export async function copyLibModule(
         continue;
       }
 
+      // When the module gains a file, `allExist` above is false and we fall
+      // through here for consumers who already have the other twelve. Without
+      // this guard every one of them is rewritten, silently discarding local
+      // edits to files the header explicitly invites customising. Only write
+      // what is genuinely missing unless an overwrite was asked for.
+      if (!overwrite && fs.existsSync(targetPath)) {
+        const existing = await fs.readFile(targetPath, 'utf-8');
+        writtenFiles.push({ target: file.target, sha256: hashTransformed(existing) });
+        continue;
+      }
+
       if (await checkSource(file.source)) {
         const sourcePackage = inferSourcePackage(file.source);
         const version = resolvePackageVersion(registry, sourcePackage);
         let content = await readSource(file.source);
+        verifySourceSha256(file.source, content, file.sourceSha256);
         content = transformImports(content, config);
         // Extract filename for origin tracking
         const fileName = path.basename(file.source, path.extname(file.source));

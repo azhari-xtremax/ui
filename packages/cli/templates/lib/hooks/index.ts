@@ -16,6 +16,8 @@ export {
 } from './useAuth';
 export {
   usePermissions,
+  useModuleAccess,
+  useModuleAccessMap,
   type PermissionAction,
   type PermissionDetails,
   type CollectionPermissions,
@@ -198,3 +200,4 @@ export type {
 
 // Utility functions
 export { apiRequest, isValidPrimaryKey } from './utils';
+export { useModuleAccessKeys } from './useModuleAccessKeys';
