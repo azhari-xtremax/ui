@@ -1864,7 +1864,8 @@
       "internalDependencies": [
         "types",
         "hooks",
-        "services"
+        "services",
+        "utils"
       ],
       "registryDependencies": [
         "collection-form",
