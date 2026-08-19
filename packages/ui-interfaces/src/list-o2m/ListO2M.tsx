@@ -332,6 +332,16 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     [displayTemplate, fields, relationInfo],
   );
 
+  // The `fields` prop defaults to the bootstrap ["id"], which is a stand-in
+  // for "the primary key" rather than a real column. Rendering it verbatim
+  // shows an empty "Id" column — and sorts by a column that doesn't exist —
+  // whenever the related PK isn't literally "id". Substitute the resolved PK,
+  // the same rule resolveRelationFields applies to the query.
+  const displayColumns = useMemo(
+    () => fields.map((f) => (f === "id" && pkField !== "id" ? pkField : f)),
+    [fields, pkField],
+  );
+
   // ── Pagination & search state ────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(initialLimit);
@@ -358,6 +368,25 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   // mount emit: once the user has staged something, going back to an empty
   // changeset must still be emitted so the parent form drops the field edit.
   const hasEmittedRef = useRef(false);
+  // Last successfully fetched id set of the parent's currently linked
+  // children, keyed by the parent pk it was fetched for. Lets the emit
+  // effect deliver a synchronous payload (the parent form snapshots field
+  // values at Save-click time, so an emit that lands only after a network
+  // round-trip leaves a window where Save submits the previous payload) and
+  // gives the failure path a known-good fallback. The direct-API mutation
+  // handlers below keep it in sync.
+  const preservedIdsRef = useRef<{
+    key: string | number;
+    ids: (string | number)[];
+  } | null>(null);
+  // Bumped to force a re-emit after out-of-band mutations (direct unlink /
+  // delete, modal create on a saved parent) and by the preserve-error Retry
+  // button.
+  const [preserveEpoch, setPreserveEpoch] = useState(0);
+  // Set when a preserve fetch failed with no cached fallback: the pending
+  // change is still rendered in the list but has NOT been handed to the
+  // parent form.
+  const [preserveError, setPreserveError] = useState<string | null>(null);
 
   // Check if parent item is saved (valid PK, not '+' convention for new)
   const isParentSaved = primaryKey && primaryKey !== "+";
@@ -411,20 +440,26 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     const deletedIds = new Set(changeset.delete.map((d) => d.id));
     let merged = baseItems.filter((item) => !deletedIds.has(getPk(item)));
 
-    // Apply staged updates
-    merged = merged.map((item) => {
+    // Apply staged updates. Used for both fetched rows and staged links —
+    // a link picked while the parent is unsaved can be edited before save,
+    // and that edit must show in the row and dedupe against the link entry.
+    const applyStagedUpdate = (item: O2MItem): O2MItem => {
       const update = changeset.update.find((u) => u.id === getPk(item));
       if (update) {
         const { $type, ...rest } = update;
         return { ...item, ...rest };
       }
       return item;
-    });
+    };
+    merged = merged.map(applyStagedUpdate);
 
     // Append staged creates
     const createdItems: O2MItem[] = changeset.create.map((c) => {
       const { $type, $index, ...rest } = c;
-      return { id: `$temp_${$index}`, ...rest } as O2MItem;
+      // `rest` carries the real `id` CollectionForm injects on every
+      // onSuccess, so the sentinel must be assigned last or it is lost and
+      // every `$temp_` guard in this file silently mis-branches.
+      return { ...rest, id: `$temp_${$index}` } as O2MItem;
     });
 
     // Append staged links (existing items picked via "Add Existing" while
@@ -435,11 +470,44 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       .filter((l) => !alreadyMergedIds.has(l.id))
       .map((l) => {
         const { $type, ...rest } = l;
-        return { ...rest } as O2MItem;
+        return applyStagedUpdate({ ...rest } as O2MItem);
       });
 
     return [...merged, ...linkedItems, ...createdItems];
   }, [baseItems, changeset, getPk]);
+
+  // Select-all state must be derived from membership, not from comparing the
+  // Set's size to the row count: the Set can hold ids that are no longer on
+  // this page, and duplicate/undefined keys collapse it.
+  const allSelected =
+    displayItems.length > 0 &&
+    displayItems.every((item) => selectedIds.has(getPk(item)));
+  const someSelected = displayItems.some((item) =>
+    selectedIds.has(getPk(item)),
+  );
+
+  // F11b: drop selections for rows that are no longer displayed (page change,
+  // search, single-row removal) so batch actions can never target nothing.
+  useEffect(() => {
+    const visible = new Set(displayItems.map((item) => getPk(item)));
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [displayItems, getPk]);
+
+  // Reset staged state when the parent record changes. Without this, staged
+  // links/updates/deletes from record A are still emitted for record B when
+  // the host swaps `primaryKey` without remounting this component.
+  const lastParentKeyRef = useRef(primaryKey);
+  useEffect(() => {
+    if (lastParentKeyRef.current === primaryKey) return;
+    lastParentKeyRef.current = primaryKey;
+    setChangeset(EMPTY_CHANGESET);
+    setSelectedIds(new Set());
+    preservedIdsRef.current = null;
+    createIndexRef.current = 0;
+  }, [primaryKey]);
 
   const totalCount = isDemoMode
     ? internalMockItems.length
@@ -467,54 +535,218 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     // Bailing on `!hasChanges` alone is not enough: once something has been
     // staged, un-staging it back to empty must still emit `[]`, otherwise the
     // parent form keeps the last payload and saves items the user removed.
-    if (!hasChanges && !hasEmittedRef.current) return;
+    if (!hasChanges && !hasEmittedRef.current) {
+      // Nothing staged and nothing ever emitted — any earlier preserve
+      // failure is moot (the change it failed to stage is gone).
+      setPreserveError((prev) => (prev === null ? prev : null));
+      return;
+    }
 
     const fkField = relationInfo?.reverseJunctionField?.field;
-    const payload: Record<string, unknown>[] = [];
+    const relatedCol = relationInfo?.relatedCollection?.collection;
 
-    // Creates: emit the item data with FK pointing to parent
-    for (const item of changeset.create) {
-      const { $type, $index, ...data } = item;
-      payload.push({
-        ...data,
-        ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
-      });
+    const buildPayload = (preservedIds: (string | number)[] | null) => {
+      const payload: (string | number | Record<string, unknown>)[] = [];
+
+      // Creates: emit the item data with FK pointing to parent
+      for (const item of changeset.create) {
+        const { $type, $index, ...data } = item;
+        payload.push({
+          ...data,
+          ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
+        });
+      }
+
+      // Links: existing items picked while the parent is unsaved. Emit the
+      // reference only (id + FK) — DaaS links by id and fills in the real parent
+      // key. The staged entry also carries the fetched display fields so the row
+      // can render, but those must NOT be echoed back: when the display template
+      // references a nested path (e.g. `{{author_id.name}}`) the fetched row
+      // contains a nested object, and DaaS then silently drops the whole entry
+      // from the save (201, `posts: []`) instead of linking it.
+      //
+      // KNOWN LIMIT: every object-shaped entry below is keyed by a literal
+      // "id" property, and that is deliberate. The relation writer looks a
+      // record up via `itemObj[manyPrimary]`, but `manyPrimary` is
+      // `directus_relations.many_primary`, which is `TEXT NOT NULL DEFAULT
+      // 'id'` and is hardcoded to "id" at every DaaS write site — this repo
+      // never sends it. So `manyPrimary` is always the literal "id" in
+      // practice, and re-keying these entries by the related collection's
+      // real PK column makes the lookup miss: the writer then falls through
+      // to its create branch and INSERTs a row that already exists.
+      // Supporting a related collection whose PK isn't "id" needs a backend
+      // change (populate `many_primary`), not just a client change.
+      const stagedLinkIds = new Set(changeset.link.map((item) => item.id));
+      for (const item of changeset.link) {
+        // `item.id` already holds the resolved real PK *value* (getPk, set
+        // at staging time); only the backend's key name is fixed at "id".
+        payload.push({
+          id: item.id,
+          ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
+        });
+      }
+
+      // N1 fix: a saved parent with staged links needs every other
+      // already-linked child preserved in the payload too, or the relation
+      // writer deselects them. Bare primitive entries match its
+      // string/number shorthand, which passes the value straight to
+      // `recordsToUpdate` without reading any property off it — so unlike
+      // the object-shaped entries above they carry no key-name assumption
+      // at all (the writer still filters by `manyPrimary`, i.e. "id").
+      if (preservedIds) {
+        for (const pk of preservedIds) {
+          if (!stagedLinkIds.has(pk)) {
+            payload.push(pk);
+          }
+        }
+      }
+
+      // Updates: emit the staged `id` plus the changed fields. `data` is
+      // spread last on purpose — when the PK column is user-editable the
+      // user's new value must survive, so the PK key must not be reasserted
+      // over it.
+      for (const item of changeset.update) {
+        const { $type, ...data } = item;
+        payload.push(data);
+      }
+
+      // Deletes: emit id with a $delete marker. NOTE: DaaS has no reader for
+      // `$delete` — it is dropped as an unknown column and the entry is
+      // routed by `itemObj["id"]` like any other, i.e. this re-links the row
+      // rather than removing it. Removing a fetched row while the parent is
+      // unsaved therefore has no backend representation today.
+      for (const item of changeset.delete) {
+        payload.push({ id: item.id, $delete: true });
+      }
+
+      return payload;
+    };
+
+    const emit = (preservedIds: (string | number)[] | null) => {
+      hasEmittedRef.current = true;
+      onChange(buildPayload(preservedIds));
+    };
+
+    // The preserve requirement must NOT be gated on
+    // `changeset.link.length > 0` ALONE, or a revert hole opens up: stage a
+    // link (preserve runs, hasEmittedRef becomes true) → un-stage it again
+    // (change of mind) → changeset is entirely empty, so
+    // `changeset.link.length > 0` is false, but the effect still runs (see
+    // the bail-out above) and would emit `[]` — the relation writer's
+    // empty-array branch then unlinks/deletes every child.
+    // `hasEmittedRef.current` is added as an OR so any run after the first
+    // real emit also re-preserves, turning the revert into a no-op re-link
+    // of the full current id set instead. Dropping the original
+    // `changeset.link.length > 0` arm instead of OR-ing would skip the
+    // preserve on the very first stage (hasEmittedRef is still false then),
+    // reopening the original N1 bug.
+    if (
+      !isParentSaved ||
+      (changeset.link.length === 0 && !hasEmittedRef.current) ||
+      !relatedCol ||
+      !fkField ||
+      !primaryKey
+    ) {
+      emit(null);
+      return;
     }
 
-    // Links: existing items picked while the parent is unsaved. Emit the
-    // reference only (id + FK) — DaaS links by id and fills in the real parent
-    // key. The staged entry also carries the fetched display fields so the row
-    // can render, but those must NOT be echoed back: when the display template
-    // references a nested path (e.g. `{{author_id.name}}`) the fetched row
-    // contains a nested object, and DaaS then silently drops the whole entry
-    // from the save (201, `posts: []`) instead of linking it.
-    for (const item of changeset.link) {
-      // KNOWN LIMIT: link/update/delete payload entries still key the item by
-      // the literal "id" property (item.id holds the real PK *value* via
-      // getPk). For related collections whose PK column isn't named "id",
-      // whether DaaS accepts this shape is unverified — resolving it needs a
-      // backend-contract check, not just a client change.
-      payload.push({
-        id: item.id,
-        ...(fkField ? { [fkField]: primaryKey || "+" } : {}),
-      });
+    const cached =
+      preservedIdsRef.current && preservedIdsRef.current.key === primaryKey
+        ? preservedIdsRef.current.ids
+        : null;
+
+    // Emit synchronously whenever a known-good id set exists. The parent
+    // form snapshots its field values at Save-click time, so an emit that
+    // only lands after a network round-trip leaves a window where Save
+    // submits the PREVIOUS payload — e.g. a link the user just reverted.
+    // The fetch below still runs and re-emits only if the server set
+    // actually differs from the cache.
+    if (cached) {
+      emit(cached);
     }
 
-    // Updates: emit id + changed fields
-    for (const item of changeset.update) {
-      const { $type, ...data } = item;
-      payload.push(data);
-    }
+    let cancelled = false;
 
-    // Deletes: emit id with $delete marker (DaaS convention)
-    for (const item of changeset.delete) {
-      payload.push({ id: item.id, $delete: true });
-    }
+    const refreshAndReconcile = async () => {
+      try {
+        const { apiRequest } = await import("@buildpad/services");
+        const qp = new URLSearchParams();
+        qp.set("filter", JSON.stringify({ [fkField]: { _eq: primaryKey } }));
+        qp.set("fields", pkField);
+        // `limit=-1` alone is NOT "no limit" here: the route defaults
+        // `page` to 1 regardless, and the range branch then computes a
+        // broken range for limit=-1. `page=0` is falsy so that branch is
+        // skipped entirely, same as passing no page at all.
+        qp.set("limit", "-1"); // fetch every linked child, not just the current page
+        qp.set("page", "0");
+        // An exact count lets us detect a silently capped response (e.g. a
+        // server-side max-rows setting): emitting a truncated id set as the
+        // authoritative payload would deselect every child beyond the cap.
+        qp.set("count", "exact");
+        const resp = await apiRequest<{
+          data: Record<string, unknown>[];
+          meta?: { total_count?: number };
+        }>(`/api/items/${relatedCol}?${qp.toString()}`);
+        if (cancelled) return;
 
-    hasEmittedRef.current = true;
-    onChange(payload);
+        const rows = resp.data || [];
+        const total = resp.meta?.total_count;
+        if (typeof total === "number" && rows.length !== total) {
+          throw new Error(
+            `preserve fetch returned ${rows.length} of ${total} linked rows (server-side row cap?)`,
+          );
+        }
+        const ids: (string | number)[] = [];
+        for (const row of rows) {
+          const pk = row[pkField];
+          if (pk === undefined || pk === null) {
+            // A row we can't key would silently fall out of the payload and
+            // be deselected on save (e.g. field permissions stripping the
+            // PK column). Treat the whole fetch as unusable instead.
+            throw new Error(`linked row is missing its primary key ('${pkField}')`);
+          }
+          ids.push(pk as string | number);
+        }
+
+        preservedIdsRef.current = { key: primaryKey, ids };
+        setPreserveError((prev) => (prev === null ? prev : null));
+
+        if (!cached) {
+          emit(ids);
+        } else {
+          const cachedSet = new Set(cached);
+          const changed =
+            ids.length !== cached.length || ids.some((id) => !cachedSet.has(id));
+          if (changed) {
+            emit(ids);
+          }
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Failed to fetch existing children to preserve on save:", err);
+        if (!cached) {
+          // No known-good id set to fall back on: an emit here would be a
+          // links-only payload, which the relation writer treats as
+          // authoritative and answers by deselecting every other child.
+          // Withhold the emit and surface it — the staged change is visible
+          // in the list but has NOT been handed to the parent form.
+          setPreserveError(
+            "Couldn't load the currently linked items, so the pending change was not staged for save.",
+          );
+        }
+        // With a cache, the synchronous emit above already delivered the
+        // last known-good payload; a failed refresh only skips
+        // reconciliation for this round.
+      }
+    };
+
+    refreshAndReconcile();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [changeset]);
+  }, [changeset, isParentSaved, primaryKey, relationInfo, preserveEpoch]);
 
   // ── Priority #4: Unique FK guard ────────────────────────────────────────
   // In demo mode, use mockRelationInfo; otherwise use hookRelationInfo
@@ -600,6 +832,19 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     openEditModal();
   };
 
+  // R6.1: resolve via getPk, not the raw `.id` property — for a related
+  // collection whose PK isn't literally "id", `currentlyEditing.id` is
+  // undefined. A staged local create ($temp_ sentinel) has no server row to
+  // edit, so it resolves to undefined on purpose.
+  const editingPk =
+    currentlyEditing &&
+    !(
+      typeof currentlyEditing.id === "string" &&
+      currentlyEditing.id.startsWith("$temp_")
+    )
+      ? getPk(currentlyEditing)
+      : undefined;
+
   const handleEditItem = (item: O2MItem) => {
     if (!updateAllowed && !isDemoMode) return;
     setCurrentlyEditing(item);
@@ -627,6 +872,15 @@ export const ListO2M: React.FC<ListO2MProps> = ({
             sortDirection,
             fields: resolvedFields,
           });
+        }
+        if (isCreatingNew) {
+          // A child was just created and born linked (via the FK default in
+          // the modal). A previously emitted payload doesn't contain it, and
+          // the relation writer treats that payload as authoritative — saving
+          // the parent would deselect the new child. Invalidate the snapshot
+          // and re-emit so the payload is rebuilt from fresh server state.
+          preservedIdsRef.current = null;
+          setPreserveEpoch((v) => v + 1);
         }
         return;
       }
@@ -656,11 +910,20 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           ),
         }));
       } else if (currentlyEditing && data) {
+        // R6.1: stage the resolved real PK (getPk), not the raw `.id`
+        // property — for a related collection whose PK isn't literally
+        // "id", `currentlyEditing.id` is undefined, which both broke
+        // de-duping against a prior staged update for the same row and
+        // fed an undefined id into the emitted payload.
+        const editedPk = getPk(currentlyEditing);
         setChangeset((prev) => ({
           ...prev,
           update: [
-            ...prev.update.filter((u) => u.id !== currentlyEditing.id),
-            { $type: "updated", id: currentlyEditing.id, ...data },
+            ...prev.update.filter((u) => u.id !== editedPk),
+            // `id` last: `data` always carries CollectionForm's own literal
+            // `id`, which would otherwise overwrite the resolved PK and
+            // desynchronise the stored key from the de-dupe filter above.
+            { $type: "updated", ...data, id: editedPk },
           ],
         }));
       }
@@ -753,9 +1016,13 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     // is saved, selection is always deferred now), just un-stage it —
     // nothing was ever linked server-side.
     if (changeset.link.some((l) => l.id === getPk(item))) {
+      const pk = getPk(item);
       setChangeset((prev) => ({
         ...prev,
-        link: prev.link.filter((l) => l.id !== getPk(item)),
+        link: prev.link.filter((l) => l.id !== pk),
+        // Drop any edit staged against this row too — otherwise the removed
+        // record is still emitted and the writer re-links it on save.
+        update: prev.update.filter((u) => u.id !== pk),
       }));
       return;
     }
@@ -767,6 +1034,19 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         } else {
           await removeItem(item);
         }
+        // The child is gone server-side, but a previously emitted payload
+        // still carries its pk as a preserved entry — saving the parent
+        // would re-link it (or reference a deleted row). Drop it from the
+        // snapshot and re-emit the corrected payload.
+        const removedPk = getPk(item);
+        const cache = preservedIdsRef.current;
+        if (cache && cache.key === primaryKey) {
+          preservedIdsRef.current = {
+            key: cache.key,
+            ids: cache.ids.filter((id) => id !== removedPk),
+          };
+        }
+        setPreserveEpoch((v) => v + 1);
       } catch (err) {
         console.error("Error removing item:", err);
       }
@@ -807,7 +1087,15 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   );
 
   // ── Move handlers ───────────────────────────────────────────────────────
-  const handleMoveUp = async (index: number) => {
+  // `displayItems` is padded with staged links and creates, but the movers
+  // index `baseItems`. Resolve the row's index there and no-op for rows that
+  // only exist locally, or the mover swaps in `undefined` and throws.
+  const reorderIndexOf = (item: O2MItem) =>
+    baseItems.findIndex((r) => getPk(r) === getPk(item));
+
+  const handleMoveUp = async (item: O2MItem) => {
+    const index = reorderIndexOf(item);
+    if (index <= 0) return;
     try {
       await moveItemUp(index);
     } catch (err) {
@@ -815,7 +1103,9 @@ export const ListO2M: React.FC<ListO2MProps> = ({
     }
   };
 
-  const handleMoveDown = async (index: number) => {
+  const handleMoveDown = async (item: O2MItem) => {
+    const index = reorderIndexOf(item);
+    if (index < 0 || index >= baseItems.length - 1) return;
     try {
       await moveItemDown(index);
     } catch (err) {
@@ -958,6 +1248,30 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         </Alert>
       )}
 
+      {/* Preserve-fetch failure: the staged change is rendered but was NOT
+          handed to the parent form (emitting without the preserved id set
+          would deselect every other child on save). */}
+      {preserveError && (
+        <Alert
+          icon={<IconAlertCircle size={16} />}
+          color="red"
+          data-testid="o2m-preserve-error"
+        >
+          <Group justify="space-between" wrap="nowrap">
+            <Text size="sm">{preserveError}</Text>
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              onClick={() => setPreserveEpoch((v) => v + 1)}
+              data-testid="o2m-preserve-retry"
+            >
+              Retry
+            </Button>
+          </Group>
+        </Alert>
+      )}
+
       <Paper p="md" withBorder pos="relative">
         <LoadingOverlay visible={loading && displayItems.length > 0} />
 
@@ -1056,20 +1370,21 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                   <Table.Th style={{ width: 40 }}>
                     <Checkbox
                       size="xs"
-                      checked={
-                        displayItems.length > 0 &&
-                        selectedIds.size === displayItems.length
-                      }
-                      indeterminate={
-                        selectedIds.size > 0 &&
-                        selectedIds.size < displayItems.length
-                      }
+                      checked={allSelected}
+                      indeterminate={someSelected && !allSelected}
                       onChange={() => {
-                        if (selectedIds.size === displayItems.length) {
+                        if (allSelected) {
                           clearSelection();
                         } else {
+                          // R6.1: individual row checkboxes key selectedIds by
+                          // getPk(item) (the resolved real PK), not `.id` —
+                          // for a related collection whose PK isn't literally
+                          // "id", selecting via this header checkbox put
+                          // `undefined` (or the wrong value) into the set for
+                          // every row, so per-row checkboxes never matched
+                          // and batch actions silently targeted nothing.
                           setSelectedIds(
-                            new Set(displayItems.map((i) => i.id)),
+                            new Set(displayItems.map((i) => getPk(i))),
                           );
                         }
                       }}
@@ -1083,7 +1398,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                     <IconGripVertical size={14} style={{ opacity: 0.5 }} />
                   </Table.Th>
                 )}
-                {fields.map((fieldName) => (
+                {displayColumns.map((fieldName) => (
                   <Table.Th
                     key={fieldName}
                     style={{ cursor: "pointer" }}
@@ -1129,8 +1444,8 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                         <ActionIcon
                           variant="subtle"
                           size="xs"
-                          disabled={index === 0}
-                          onClick={() => handleMoveUp(index)}
+                          disabled={reorderIndexOf(item) <= 0}
+                          onClick={() => handleMoveUp(item)}
                           data-testid={`o2m-move-up-${getPk(item)}`}
                         >
                           <IconChevronUp size={12} />
@@ -1138,8 +1453,11 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                         <ActionIcon
                           variant="subtle"
                           size="xs"
-                          disabled={index === displayItems.length - 1}
-                          onClick={() => handleMoveDown(index)}
+                          disabled={
+                            reorderIndexOf(item) < 0 ||
+                            reorderIndexOf(item) >= baseItems.length - 1
+                          }
+                          onClick={() => handleMoveDown(item)}
                           data-testid={`o2m-move-down-${getPk(item)}`}
                         >
                           <IconChevronDown size={12} />
@@ -1147,7 +1465,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                       </Group>
                     </Table.Td>
                   )}
-                  {fields.map((fieldName) => {
+                  {displayColumns.map((fieldName) => {
                     const cellValue = getByPath(
                       item as Record<string, unknown>,
                       fieldName,
@@ -1248,10 +1566,10 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                         <ActionIcon
                           variant="subtle"
                           size="sm"
-                          disabled={index === 0}
+                          disabled={reorderIndexOf(item) <= 0}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleMoveUp(index);
+                            handleMoveUp(item);
                           }}
                           data-testid={`o2m-list-move-up-${getPk(item)}`}
                         >
@@ -1260,10 +1578,13 @@ export const ListO2M: React.FC<ListO2MProps> = ({
                         <ActionIcon
                           variant="subtle"
                           size="sm"
-                          disabled={index === displayItems.length - 1}
+                          disabled={
+                            reorderIndexOf(item) < 0 ||
+                            reorderIndexOf(item) >= baseItems.length - 1
+                          }
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleMoveDown(index);
+                            handleMoveDown(item);
                           }}
                           data-testid={`o2m-list-move-down-${getPk(item)}`}
                         >
@@ -1365,16 +1686,11 @@ export const ListO2M: React.FC<ListO2MProps> = ({
         {relationInfo && relationInfo.relatedCollection && (
           <CollectionForm
             collection={relationInfo.relatedCollection.collection}
-            id={
-              currentlyEditing?.id &&
-              !(
-                typeof currentlyEditing.id === "string" &&
-                currentlyEditing.id.startsWith("$temp_")
-              )
-                ? currentlyEditing.id
-                : undefined
-            }
-            mode={isCreatingNew ? "create" : "edit"}
+            id={editingPk}
+            // `mode` must follow the resolved id: CollectionForm gates its
+            // edit path on `mode === "edit" && id`, so an "edit" modal with
+            // no id silently routes Save into createOne.
+            mode={isCreatingNew || editingPk === undefined ? "create" : "edit"}
             defaultValues={
               // Only pre-fill the reverse FK when the parent is actually saved
               // (primaryKey is a real id, not the "+" new-record placeholder).

@@ -41,6 +41,18 @@ export interface TextareaProps {
   maxRows?: number;
   /** Whether to autosize based on content */
   autosize?: boolean;
+  /**
+   * Accessible name. The form container renders the visible label itself and
+   * deliberately withholds `label` from the leaf, so without this the control
+   * has no programmatic name at all.
+   */
+  'aria-label'?: string;
+  /** Hard character limit from the column's schema. */
+  maxLength?: number;
+  /** Focus the control on mount (the form pipeline sends the lowercase spelling). */
+  autofocus?: boolean;
+  /** camelCase alias for {@link TextareaProps.autofocus}. */
+  autoFocus?: boolean;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
@@ -61,7 +73,14 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
   minRows = 3,
   maxRows = 10,
   autosize = true,
+  'aria-label': ariaLabel,
+  maxLength,
+  autofocus,
+  autoFocus: autoFocusProp,
 }, ref) => {
+  // Strict on the lowercase spelling: meta.options is unvalidated admin JSON,
+  // so a truthy string like "false" must not turn focus on.
+  const shouldAutoFocus = autoFocusProp === true || autofocus === true;
   // Calculate characters remaining
   const charsRemaining = useMemo(() => {
     if (!softLength) return null;
@@ -134,6 +153,10 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
         required={required}
         error={error}
         description={description}
+        aria-label={label ? undefined : ariaLabel}
+        maxLength={maxLength}
+        autoFocus={shouldAutoFocus}
+        {...(shouldAutoFocus ? { 'data-autofocus': true } : {})}
         autosize={autosize}
         minRows={minRows}
         maxRows={maxRows}

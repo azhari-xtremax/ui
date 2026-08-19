@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { isNewItem } from "@buildpad/utils";
+import { isNewItem } from '@buildpad/utils';
 import {
     Paper,
     Group,
@@ -256,11 +256,16 @@ export const ListM2A: React.FC<ListM2AProps> = ({
     description,
     error,
     required = false,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    readOnly: _readOnly,
+    readOnly = false,
     mockItems,
     mockRelationInfo,
 }) => {
+    // `readOnly` was previously destructured into an unused variable, so every
+    // mutation affordance below was gated on `disabled` alone and a read-only
+    // M2A field stayed fully create/select/delete/reorder capable. Mirrors the
+    // `isEffectivelyDisabled` flag ListM2M and ListO2M already use.
+    const isEffectivelyDisabled = disabled || readOnly;
+
     // Determine if we're in demo/mock mode
     const isDemoMode = mockItems !== undefined;
 
@@ -291,9 +296,10 @@ export const ListM2A: React.FC<ListM2AProps> = ({
     const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
     
     // Check if parent item is saved. Uses the canonical sentinel set
-    // (`isNewItem` knows "+", "%2B" and "new") — the same helper
+    // (`isNewItem` knows '+', '%2B' and 'new') — the same helper
     // useRelationM2A.loadItems gates on, so this can't report "saved" for a
-    // parent the loader is declining to fetch.
+    // parent the loader is declining to fetch and then preserve-fetch against
+    // a literal 'new' primary key.
     const isParentSaved = !!primaryKey && !isNewItem(primaryKey);
 
     // Error notification state
@@ -393,17 +399,24 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         onChangeRef.current = _onChange;
     }, [_onChange]);
 
-    // Track previous changes JSON to avoid duplicate onChange emissions
-    const prevChangesRef = useRef<string>('');
+    // Track the changes JSON we last *successfully* emitted for. Set only
+    // after an emit completes, so an aborted or cancelled payload build is
+    // retried on the next effect run instead of being deduped away.
+    const lastEmittedChangesRef = useRef<string>('');
     // Track whether we've ever emitted so we don't clear formData on initial load
     const hasEmittedRef = useRef(false);
 
     // Notify parent component whenever local changes change.
     // Builds a flat M2A payload for DaaS processM2AField (replace mode):
     //   [{ collection: "coll_name", item: "item_id" }, ...]
-    // Must include EVERY currently-linked junction row, not just the visible
-    // page: DaaS deletes all existing junction records for the parent and
-    // then inserts exactly this payload, so any row missing from it is gone.
+    // DaaS deletes ALL junction records for the parent, then inserts exactly
+    // the payload (assigning sort from payload order) — so the payload must
+    // contain every junction row that should survive, across every page.
+    // displayItems is page-scoped, so the surviving rows are re-fetched here
+    // unpaginated at build time (fresh per emit, not a mount-time snapshot)
+    // and merged with the staged changes. Bare-primitive entries are ignored
+    // by processM2AField, so unlike ListO2M each preserved row must be a full
+    // { collection, item } object.
     useEffect(() => {
         if (isDemoMode || !relationInfo) return;
 
@@ -413,193 +426,165 @@ export const ListM2A: React.FC<ListM2AProps> = ({
             if (hasEmittedRef.current) {
                 onChangeRef.current?.(undefined as unknown as M2AItem[]);
                 hasEmittedRef.current = false;
-                prevChangesRef.current = '';
+                lastEmittedChangesRef.current = '';
             }
             return;
         }
 
         const currentChanges = getChanges();
-        // Keyed on the changeset alone. The key is advanced only after a
-        // successful emit (below), so an aborted, failed or cancelled build
-        // is retried rather than silently deduped away.
         const serialized = JSON.stringify(currentChanges);
-        if (serialized === prevChangesRef.current) return;
+        if (serialized === lastEmittedChangesRef.current) return;
+
+        let cancelled = false;
 
         const collField = relationInfo.collectionField.field;
         const itemField = relationInfo.junctionField.field;
-        const sortFieldName = relationInfo.sortField;
-
-        // One mapper for whichever baseline wins, so the flattening rule can
-        // never drift between the two paths.
-        const toPayload = (rows: M2AItem[]) =>
-            rows
-                .filter(item => item.$type !== 'deleted')
-                .map(item => {
-                    const collectionName = item[collField] as string;
-                    const junctionFieldValue = item[itemField];
-
-                    // Extract the plain item ID.
-                    // loadItems enrichment replaces the flat junction ID with a nested
-                    // object like { id: "uuid", title: "..." }. For locally-created
-                    // items it's { id: "uuid" }. We need the flat ID for the backend.
-                    let itemValue: unknown;
-                    if (typeof junctionFieldValue === 'object' && junctionFieldValue !== null) {
-                        const nested = junctionFieldValue as Record<string, unknown>;
-                        const pkField = relationInfo.relationPrimaryKeyFields?.[collectionName]?.field || 'id';
-                        if (nested[pkField] != null) {
-                            itemValue = nested[pkField] as string | number;
-                        } else {
-                            // No resolvable PK — this is an inline "Create New" item that
-                            // was never assigned its own id (JunctionItemForm.handleSave
-                            // omits the PK key for new items). Grabbing the first object
-                            // value here used to return the collection-discriminator
-                            // string instead of an item id. Pass the whole nested object
-                            // through so the backend can deep-create the related item.
-                            itemValue = nested;
-                        }
-                    } else {
-                        itemValue = junctionFieldValue as string | number;
-                    }
-
-                    return {
-                        [collField]: collectionName,
-                        [itemField]: itemValue,
-                    };
-                })
-                .filter(entry => entry[collField] && entry[itemField]);
-
-        // hookDisplayItems only ever holds the current page's rows merged with
-        // local create/update/delete. On a saved parent, emitting straight from
-        // it silently drops every off-page row from the replace-mode payload —
-        // the backend deletes-all-then-inserts, so anything not in the payload
-        // is gone. Fetch every currently-linked junction row unpaginated and
-        // overlay the local changeset onto that full set instead.
-        //
-        // The fetch is NOT gated on a row count: `totalCount` is
-        // `existingItemCount + creates - deletes`, so staged deletes shrink it
-        // and a count-based gate switches the safety fetch off exactly when
-        // rows are being removed. `existingItemCount` is also an estimated
-        // count, not an exact one. Fetch whenever the parent is saved.
-        let cancelled = false;
+        const sortField = relationInfo.sortField;
+        const junctionPK = relationInfo.junctionPrimaryKeyField?.field || 'id';
 
         const buildAndEmit = async () => {
-            let baselineItems = hookDisplayItems;
+            // Rows that survive the replace, with the sort value that decides
+            // payload order (entries carry no sort of their own — the backend
+            // persists payload order as the sort).
+            const survivors: { collection: string; itemValue: unknown; sort: number }[] = [];
 
-            const junctionPk = relationInfo.junctionPrimaryKeyField?.field;
-            const parentFk = relationInfo.reverseJunctionField?.field;
-            if (
-                isParentSaved &&
-                relationInfo.junctionCollection?.collection &&
-                junctionPk &&
-                parentFk
-            ) {
+            if (isParentSaved) {
+                // Preserve-fetch: every junction row currently linked to this
+                // parent, raw and unpaginated. Staged deletes are dropped and
+                // staged sort updates applied below; everything else must be
+                // re-sent, or the replace-mode save silently unlinks it.
                 try {
-                    const { apiRequest } = await import("@buildpad/services");
-                    const junctionCol = relationInfo.junctionCollection.collection;
-                    const qp = new URLSearchParams();
-                    qp.set("filter", JSON.stringify({ [parentFk]: { _eq: primaryKey } }));
-                    const fetchFields = [junctionPk, collField, itemField];
-                    if (sortFieldName) fetchFields.push(sortFieldName);
-                    qp.set("fields", fetchFields.join(","));
-                    // limit=-1 alone is NOT "no limit" — page defaults to 1
-                    // regardless, and the range branch computes a broken
-                    // range for limit=-1. page=0 is required to skip it.
-                    qp.set("limit", "-1");
-                    qp.set("page", "0");
-                    // count=exact drives the completeness check below.
-                    qp.set("count", "exact");
-                    qp.set("meta", "total_count");
-                    if (sortFieldName) qp.set("sort", sortFieldName);
+                    const { apiRequest } = await import('@buildpad/services');
+                    const qp = new URLSearchParams({
+                        filter: JSON.stringify({
+                            [relationInfo.reverseJunctionField.field]: { _eq: primaryKey },
+                        }),
+                        fields: [junctionPK, collField, itemField, ...(sortField ? [sortField] : [])].join(','),
+                        // `limit=-1` alone is NOT "no limit" here: the route
+                        // defaults `page` to 1 regardless, and the range branch
+                        // then computes a broken range for limit=-1. `page=0` is
+                        // falsy so that branch is skipped entirely.
+                        limit: '-1',
+                        page: '0',
+                        // The route's default count mode is the planner's
+                        // estimate; the completeness check below needs the
+                        // real number.
+                        count: 'exact',
+                        meta: 'total_count',
+                    });
+                    if (sortField) qp.set('sort', sortField);
+
                     const resp = await apiRequest<
-                        | {
-                              data?: Record<string, unknown>[];
-                              meta?: { total_count?: number; filter_count?: number };
-                          }
-                        | Record<string, unknown>[]
-                    >(`/api/items/${junctionCol}?${qp.toString()}`);
+                        { data?: M2AItem[]; meta?: { total_count?: number; filter_count?: number } } | M2AItem[]
+                    >(`/api/items/${relationInfo.junctionCollection.collection}?${qp.toString()}`);
 
-                    // This endpoint may answer with a bare array or a {data} envelope.
-                    const allRows = (Array.isArray(resp) ? resp : resp.data || []) as M2AItem[];
+                    const rows = (Array.isArray(resp) ? resp : (resp.data || [])) as Record<string, unknown>[];
 
-                    // Completeness check: a clamped limit or capped page size
-                    // returns 200 with fewer rows than are linked, and emitting
-                    // that as authoritative would unlink the difference.
+                    // Completeness check: if the server reports more linked rows
+                    // than it returned (a clamped limit, a capped page size),
+                    // emitting would silently unlink the difference.
                     const expected = Array.isArray(resp)
                         ? undefined
                         : (resp.meta?.total_count ?? resp.meta?.filter_count);
-                    if (typeof expected === "number" && allRows.length !== expected) {
+                    if (typeof expected === 'number' && rows.length !== expected) {
                         console.error(
-                            `M2A preserve-fetch returned ${allRows.length} of ${expected} junction rows — refusing to emit an incomplete replace payload.`,
+                            `M2A preserve-fetch returned ${rows.length} of ${expected} junction rows — refusing to emit an incomplete replace payload.`,
                         );
                         return;
                     }
 
-                    // Overlay local update/delete onto the FULL set — the same
-                    // merge useRelationM2AItems.displayItems does per-page.
-                    const deleteIds = new Set(currentChanges.delete);
-                    const updateByPk = new Map(
-                        currentChanges.update.map((u) => [u[junctionPk], u]),
-                    );
-                    const merged: M2AItem[] = [];
-                    for (const row of allRows) {
-                        const pk = row[junctionPk];
-                        if (deleteIds.has(pk as string | number)) continue;
-                        const update = updateByPk.get(pk as string | number);
-                        // Only the staged *sort* participates — it decides payload
-                        // order. The link itself always comes from the fetched row:
-                        // a staged nested edit carries no related PK, and passing
-                        // it through would make the writer deep-create a duplicate
-                        // related item instead of re-linking the existing one.
-                        merged.push(
-                            update && sortFieldName && update[sortFieldName] != null
-                                ? ({ ...row, [sortFieldName]: update[sortFieldName] } as M2AItem)
-                                : row,
-                        );
+                    const deletedPks = new Set<unknown>(currentChanges.delete);
+                    const updatesByPk = new Map(currentChanges.update.map(u => [u[junctionPK], u]));
+
+                    for (const row of rows) {
+                        const pk = row[junctionPK];
+                        if (deletedPks.has(pk)) continue;
+                        // Only the staged *sort* participates here — it decides
+                        // payload order. The link itself always comes from the
+                        // fetched row: edit staging never retargets a junction
+                        // row, and passing staged nested edits through would
+                        // deep-create a new related item instead of re-linking.
+                        const staged = updatesByPk.get(pk);
+                        let sortVal: unknown = sortField ? row[sortField] : undefined;
+                        if (sortField && staged && staged[sortField] !== undefined) {
+                            sortVal = staged[sortField];
+                        }
+                        survivors.push({
+                            collection: row[collField] as string,
+                            itemValue: row[itemField],
+                            sort: typeof sortVal === 'number' ? sortVal : Number.POSITIVE_INFINITY,
+                        });
                     }
-                    merged.push(...(currentChanges.create as M2AItem[]));
-                    // Payload order IS the persisted sort (the writer assigns
-                    // sort from the payload index), so a staged reorder only
-                    // survives if the array is ordered by it here.
-                    if (sortFieldName) {
-                        const key = (r: M2AItem) => {
-                            const v = r[sortFieldName];
-                            return v == null ? Number.MAX_SAFE_INTEGER : Number(v);
-                        };
-                        merged.sort((a, b) => key(a) - key(b));
-                    }
-                    baselineItems = merged;
                 } catch (err) {
-                    console.error("Failed to fetch full M2A junction set to preserve on save:", err);
-                    // An incomplete/aborted preserve-fetch must NOT proceed to
-                    // emit — a page-scoped payload here is destructive (the
-                    // replace-mode backend deletes everything missing from
-                    // it), not just incomplete. Returning without advancing the
-                    // dedupe key leaves the changeset eligible for retry.
+                    console.error('Failed to fetch existing M2A junction rows to preserve on save:', err);
+                    // A failed preserve-fetch must NOT fall through to a
+                    // changes-only payload — replace mode treats the payload as
+                    // the complete set and would delete every other junction
+                    // row. Aborting only fails to stage this save; emitting
+                    // anyway would destroy data.
                     return;
                 }
             }
 
+            // Staged creates: the link value comes from the staged entry.
+            for (const entry of currentChanges.create) {
+                const collectionName = entry[collField] as string;
+                const raw = entry[itemField];
+
+                // Extract the plain item ID. selectItems/createItem stage
+                // { [pkField]: id }. createItemWithData stages the new item's
+                // fields with no PK (JunctionItemForm.handleSave omits the PK
+                // key for new items) — grabbing the first object value here
+                // used to return the collection-discriminator string instead
+                // of an item id. Pass the whole nested object through so the
+                // backend can deep-create the related item.
+                let itemValue: unknown;
+                if (typeof raw === 'object' && raw !== null) {
+                    const nested = raw as Record<string, unknown>;
+                    const pkField = relationInfo.relationPrimaryKeyFields?.[collectionName]?.field || 'id';
+                    itemValue = nested[pkField] != null ? (nested[pkField] as string | number) : nested;
+                } else {
+                    itemValue = raw;
+                }
+
+                const sortVal = sortField ? entry[sortField] : undefined;
+                survivors.push({
+                    collection: collectionName,
+                    itemValue,
+                    sort: typeof sortVal === 'number' ? sortVal : Number.POSITIVE_INFINITY,
+                });
+            }
+
+            // Payload order carries the sort. Array.prototype.sort is stable,
+            // so rows without a numeric sort keep their relative order at the
+            // end (fetched rows first, then creates) — same as displayItems.
+            if (sortField) {
+                survivors.sort((a, b) => a.sort - b.sort);
+            }
+
+            const payload = survivors
+                .filter(s => s.collection && s.itemValue)
+                .map(s => ({
+                    [collField]: s.collection,
+                    [itemField]: s.itemValue,
+                }));
+
             if (cancelled) return;
-
-            const finalPayload = toPayload(baselineItems);
-
-            prevChangesRef.current = serialized;
-            onChangeRef.current?.(finalPayload as unknown as M2AItem[]);
+            lastEmittedChangesRef.current = serialized;
+            onChangeRef.current?.(payload as unknown as M2AItem[]);
             hasEmittedRef.current = true;
         };
 
-        void buildAndEmit().catch((err) => {
-            console.error("M2A emit failed:", err);
-        });
+        buildAndEmit();
         return () => {
             cancelled = true;
         };
-    }, [isDemoMode, relationInfo, getChanges, hasChanges, hookDisplayItems, isParentSaved, primaryKey]);
+    }, [isDemoMode, relationInfo, getChanges, hasChanges, isParentSaved, primaryKey]);
 
     // ── Drag & Drop (DnD) setup ──
     // Drag is only allowed when: there's a sortField, not disabled, and all items (across all pages) fit on one page
     const hasSortField = !!relationInfo?.sortField;
-    const canDrag = hasSortField && !disabled && totalCount <= limit;
+    const canDrag = hasSortField && !isEffectivelyDisabled && totalCount <= limit;
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -823,7 +808,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                             </Text>
                         )}
 
-                        {!disabled && enableSelect && selectableCollections.length > 0 && (
+                        {!isEffectivelyDisabled && enableSelect && selectableCollections.length > 0 && (
                             <Menu shadow="md" width={200}>
                                 <Menu.Target>
                                     <Button
@@ -850,7 +835,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                             </Menu>
                         )}
 
-                        {!disabled && enableCreate && creatableCollections.length > 0 && (
+                        {!isEffectivelyDisabled && enableCreate && creatableCollections.length > 0 && (
                             <Menu shadow="md" width={200}>
                                 <Menu.Target>
                                     <Tooltip 
@@ -905,7 +890,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                 )}
 
                 {/* Drag disabled notice (paginated) */}
-                {hasSortField && !disabled && totalCount > limit && (
+                {hasSortField && !isEffectivelyDisabled && totalCount > limit && (
                     <Alert icon={<IconAlertCircle size={16} />} color="warning" mb="md" data-testid="m2a-drag-disabled-notice">
                         Drag &amp; drop sorting is disabled when items are paginated. Reduce items or increase page size to enable.
                     </Alert>
@@ -986,7 +971,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </Tooltip>
                                                 )}
 
-                                                {!disabled && isAllowed && !isDeleted && canEditItem(item) && (
+                                                {!isEffectivelyDisabled && isAllowed && !isDeleted && canEditItem(item) && (
                                                     <Tooltip label="Edit">
                                                         <ActionIcon
                                                             variant="subtle"
@@ -1000,7 +985,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </Tooltip>
                                                 )}
 
-                                                {!disabled && isDeleted && (
+                                                {!isEffectivelyDisabled && isDeleted && (
                                                     <Tooltip label="Undo remove">
                                                         <ActionIcon
                                                             variant="subtle"
@@ -1013,7 +998,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </Tooltip>
                                                 )}
 
-                                                {!disabled && !isDeleted && canDeleteItem(item) && (
+                                                {!isEffectivelyDisabled && !isDeleted && canDeleteItem(item) && (
                                                     <Tooltip label="Remove">
                                                         <ActionIcon
                                                             variant="subtle"
@@ -1061,7 +1046,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                         textDecoration: isDeleted ? 'line-through' : undefined,
                                         borderColor: isCreated ? 'var(--mantine-color-green-4)' : isUpdated ? 'var(--mantine-color-yellow-4)' : isDeleted ? 'var(--mantine-color-red-3)' : undefined,
                                     }}
-                                    onClick={() => !disabled && isAllowed && !isDeleted && canEditItem(item) && handleEditItem(item)}
+                                    onClick={() => !isEffectivelyDisabled && isAllowed && !isDeleted && canEditItem(item) && handleEditItem(item)}
                                     data-testid={`m2a-item-${item.id}`}
                                     data-item-type={item.$type}
                                 >
@@ -1096,7 +1081,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     <IconExternalLink size={14} />
                                                 </ActionIcon>
                                             )}
-                                            {!disabled && isDeleted && (
+                                            {!isEffectivelyDisabled && isDeleted && (
                                                 <Tooltip label="Undo remove">
                                                     <ActionIcon
                                                         variant="subtle"
@@ -1111,7 +1096,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                                                     </ActionIcon>
                                                 </Tooltip>
                                             )}
-                                            {!disabled && !isDeleted && canDeleteItem(item) && (
+                                            {!isEffectivelyDisabled && !isDeleted && canDeleteItem(item) && (
                                                 <Tooltip label="Remove">
                                                     <ActionIcon
                                                         variant="subtle"
@@ -1198,7 +1183,7 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                         targetCollection={selectedCollection}
                         isNew={isCreatingNew}
                         parentPrimaryKey={primaryKey}
-                        disabled={disabled}
+                        disabled={isEffectivelyDisabled}
                         onCancel={() => {
                             closeEditModal();
                             setCurrentlyEditing(null);

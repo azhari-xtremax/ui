@@ -969,42 +969,188 @@ export function getFieldValidation(field: Field): {
 }
 
 /**
- * Get default value for a field
+ * A `::type` cast suffix. Postgres appends the column's type to a literal
+ * default and can chain casts. Type names are not just words: they carry
+ * length/precision (`character varying(255)`, `numeric(10,2)`), array
+ * dimensions (`text[]`), schema qualification (`public.status_enum`), quoted
+ * identifiers (`"MyEnum"`), and multi-word spellings (`timestamp with time
+ * zone`). Matching only `[\w\s]` left every other spelling unstripped, so the
+ * raw SQL text became the form value.
+ */
+const SQL_CAST =
+  '::\\s*(?:"[^"]*"|[A-Za-z_][A-Za-z0-9_.]*)' + // quoted or (qualified) name
+  '(?:\\s+[A-Za-z_][A-Za-z0-9_]*)*' + //            `character varying`, `with time zone`
+  '(?:\\s*\\([^()]*\\))?' + //                       `(255)`, `(10,2)`
+  '(?:\\s*\\[\\s*\\])*'; //                            `[]`, `[][]`
+const SQL_CAST_CHAIN_SUFFIX = new RegExp(`(?:\\s*${SQL_CAST})+\\s*$`);
+const SQL_CAST_CHAIN_ONLY = new RegExp(`^(?:\\s*${SQL_CAST})+\\s*$`);
+
+/**
+ * Defaults the database evaluates per row. These are keywords, not calls, so
+ * they carry no parentheses and a paren test cannot see them; Postgres reports
+ * `DEFAULT CURRENT_DATE` as exactly that, and MySQL lower-cases its spelling.
+ */
+const GENERATED_DEFAULT_KEYWORDS = new Set([
+  "current_timestamp",
+  "current_date",
+  "current_time",
+  "current_user",
+  "session_user",
+  "localtime",
+  "localtimestamp",
+]);
+
+/**
+ * A function call: an identifier immediately followed by `(`. Testing for a
+ * bare `(` anywhere also rejected ordinary literals whose *text* contains one
+ * (`'Acme (US)'`) and every parameterized cast (`::numeric(10,2)`).
+ */
+const SQL_FUNCTION_CALL = /[A-Za-z_][A-Za-z0-9_.]*\s*\(/;
+
+const NUMERIC_FIELD_TYPES = new Set([
+  "integer",
+  "bigInteger",
+  "float",
+  "decimal",
+  "number",
+]);
+
+/**
+ * Read a single-quoted SQL literal, or null if the expression is not one.
+ *
+ * A quoted literal is self-delimiting, which is what makes the rest of the
+ * parse safe: once the closing quote is found, a `(` or `::` inside the text
+ * cannot be mistaken for syntax, and only what follows the quote is a cast.
+ * `''` is SQL's escape for a literal quote and is unescaped here.
+ */
+function readSqlStringLiteral(expression: string): string | null {
+  if (!expression.startsWith("'")) return null;
+
+  let text = "";
+  for (let i = 1; i < expression.length; i++) {
+    if (expression[i] !== "'") {
+      text += expression[i];
+      continue;
+    }
+    if (expression[i + 1] === "'") {
+      text += "'";
+      i++;
+      continue;
+    }
+    // Closing quote. Anything after it must be cast suffix; if it is an
+    // operator or a concatenation this is an expression, not a literal.
+    const rest = expression.slice(i + 1).trim();
+    if (rest !== "" && !SQL_CAST_CHAIN_ONLY.test(rest)) return null;
+    return text;
+  }
+  return null; // unterminated
+}
+
+function isJsonField(field: Field): boolean {
+  const dataType = field.schema?.data_type?.toLowerCase() ?? "";
+  return field.type === "json" || dataType === "json" || dataType === "jsonb";
+}
+
+/**
+ * Turn a parsed SQL literal into a form value, directed by the field's own
+ * declared type rather than by the shape of the text.
+ *
+ * Guessing from shape is what turned a varchar default of `007` into the
+ * number 7 and left a `jsonb` default as the string "{}".
+ */
+function coerceDefaultLiteral(text: string, field: Field): unknown {
+  if (isJsonField(field)) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text; // not valid JSON; hand back what was stored
+    }
+  }
+
+  const type = field.type;
+
+  if (type === "boolean") {
+    const token = text.trim().toLowerCase();
+    if (token === "true" || token === "t" || token === "1") return true;
+    if (token === "false" || token === "f" || token === "0") return false;
+    return text;
+  }
+
+  if (NUMERIC_FIELD_TYPES.has(type)) {
+    const parsed = Number(text);
+    if (Number.isNaN(parsed)) return text;
+    // An integer past 2^53 does not survive Number; returning the text keeps
+    // the value intact instead of silently shifting it by one.
+    if (Number.isInteger(parsed) && !Number.isSafeInteger(parsed)) return text;
+    return parsed;
+  }
+
+  return text;
+}
+
+/**
+ * Get default value for a field.
+ *
+ * Returns `undefined` when the column has no usable form default — no default
+ * at all, or one the database evaluates per row (`now()`, `gen_random_uuid()`,
+ * `CURRENT_DATE`, `NULL`).
  */
 export function getFieldDefault(field: Field): unknown {
-  const { schema } = field;
+  const raw = field.schema?.default_value;
 
-  if (!schema?.default_value) {
-    return undefined;
+  // Only null/undefined mean "no default". `0`, `false` and `''` are real
+  // defaults that a falsy test silently dropped, so a column defaulting to
+  // false behaved differently from its sibling defaulting to true.
+  if (raw === null || raw === undefined) return undefined;
+
+  // Some backends return the default already parsed rather than as SQL text.
+  // Stringifying those produced "[object Object]" and turned `[]` into 0.
+  if (typeof raw !== "string") return raw;
+
+  const expression = raw.trim();
+  if (expression === "") return "";
+
+  const literal = readSqlStringLiteral(expression);
+  if (literal !== null) return coerceDefaultLiteral(literal, field);
+
+  // Not a quoted literal: a keyword, a number, or an expression.
+  const bare = expression.replace(SQL_CAST_CHAIN_SUFFIX, "").trim();
+  if (bare === "") return undefined;
+
+  const token = bare.toLowerCase();
+  if (token === "null") return undefined;
+  if (GENERATED_DEFAULT_KEYWORDS.has(token)) return undefined;
+  if (SQL_FUNCTION_CALL.test(bare)) return undefined;
+
+  if (token === "true") return true;
+  if (token === "false") return false;
+
+  if (NUMERIC_FIELD_TYPES.has(field.type)) {
+    return coerceDefaultLiteral(bare, field);
   }
+  // Unknown/!numeric declared type: only accept a number that survives the
+  // round-trip, so `007`, `1e3`, `0x10` and oversized integers stay as written.
+  if (bare !== "" && String(Number(bare)) === bare) return Number(bare);
 
-  const defaultValue = String(schema.default_value);
+  return bare;
+}
 
-  // Handle function-generated defaults (don't use them as form defaults)
-  if (
-    defaultValue.includes("(") ||
-    defaultValue.includes("gen_random_uuid") ||
-    defaultValue.includes("now()") ||
-    defaultValue.includes("CURRENT_TIMESTAMP")
-  ) {
-    return undefined;
+/**
+ * Build the map of schema-level defaults for a set of fields.
+ *
+ * Lives here, beside the parser, because it is pure and both the form renderer
+ * and the collection form need the same answer; `@buildpad/ui-form` re-exports
+ * it for its existing consumers.
+ */
+export function getDefaultValuesFromFields(
+  fields: Field[],
+): Record<string, unknown> {
+  const defaults: Record<string, unknown> = {};
+  for (const field of fields) {
+    const defaultValue = getFieldDefault(field);
+    if (defaultValue !== undefined) defaults[field.field] = defaultValue;
   }
-
-  // Handle boolean defaults
-  if (defaultValue === "true") return true;
-  if (defaultValue === "false") return false;
-
-  // Handle numeric defaults
-  if (!isNaN(Number(defaultValue))) {
-    return Number(defaultValue);
-  }
-
-  // Handle string defaults (remove quotes if present)
-  if (defaultValue.startsWith("'") && defaultValue.endsWith("'")) {
-    return defaultValue.slice(1, -1);
-  }
-
-  return defaultValue;
+  return defaults;
 }
 
 /**

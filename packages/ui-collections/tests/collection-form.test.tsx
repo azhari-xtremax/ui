@@ -50,10 +50,17 @@ vi.mock("@buildpad/services", () => ({
 }));
 
 // Mock VForm to a simple controlled component so we can drive it in tests
+// Models the two halves of VForm's contract that CollectionForm depends on:
+// it renders `modelValue` falling back to `initialValues`, and it emits the
+// COMPLETE model on every change — dropping the key entirely when the value
+// returns to the field's initial/default rather than recording it as an edit.
+// A double that emitted only the changed key could not tell a merging
+// `handleFormUpdate` from a replacing one.
 vi.mock("@buildpad/ui-form", () => ({
-  VForm: vi.fn(({ fields, modelValue, onUpdate, disabled }: {
+  VForm: vi.fn(({ fields, modelValue, initialValues, onUpdate, disabled }: {
     fields: Array<{ field: string }>;
     modelValue: Record<string, unknown>;
+    initialValues?: Record<string, unknown>;
     onUpdate: (values: Record<string, unknown>) => void;
     disabled?: boolean;
   }) => (
@@ -62,18 +69,39 @@ vi.mock("@buildpad/ui-form", () => ({
         <input
           key={f.field}
           data-testid={`field-${f.field}`}
-          value={String(modelValue[f.field] ?? "")}
+          value={String(modelValue[f.field] ?? initialValues?.[f.field] ?? "")}
           disabled={disabled}
-          onChange={(e) => onUpdate({ [f.field]: e.target.value })}
+          onChange={(e) => {
+            const next = { ...modelValue, [f.field]: e.target.value };
+            const initial = initialValues?.[f.field];
+            if (initial !== undefined && e.target.value === String(initial)) {
+              delete next[f.field];
+            }
+            onUpdate(next);
+          }}
         />
       ))}
     </div>
   )),
 }));
 
-// Minimal mock for SaveOptions
+// Minimal mock for SaveOptions — forwards the callbacks so tests can drive
+// the save-variant paths (save-as-copy in particular, which builds its own
+// payload rather than reusing the update body).
 vi.mock("../src/SaveOptions", () => ({
-  SaveOptions: () => <div data-testid="save-options-mock" />,
+  SaveOptions: ({ onSaveAsCopy, onSaveAndStay, onSaveAndAddNew, onDiscardAndStay }: {
+    onSaveAsCopy?: () => void;
+    onSaveAndStay?: () => void;
+    onSaveAndAddNew?: () => void;
+    onDiscardAndStay?: () => void;
+  }) => (
+    <div data-testid="save-options-mock">
+      <button type="button" data-testid="save-as-copy" onClick={onSaveAsCopy} />
+      <button type="button" data-testid="save-and-stay" onClick={onSaveAndStay} />
+      <button type="button" data-testid="save-add-new" onClick={onSaveAndAddNew} />
+      <button type="button" data-testid="discard-and-stay" onClick={onDiscardAndStay} />
+    </div>
+  ),
 }));
 
 // Import component under test AFTER mocks
@@ -181,11 +209,223 @@ describe("CollectionForm", () => {
         expect(mockItemsCreateOne).toHaveBeenCalled();
       });
     });
+
+    it("seeds create-mode form data from each field's own schema default_value", async () => {
+      // Postgres reports a typed literal default with a `::type` cast suffix
+      // (e.g. `'active'::character varying`) — getFieldDefault handles the
+      // parsing; this covers CollectionForm actually calling it for create
+      // mode, which it previously never did (only the defaultValues prop
+      // and permission presets seeded initial form data).
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 1 } },
+        { field: "theme", type: "string", schema: { default_value: "auto" }, meta: { interface: "input", sort: 2 } },
+        { field: "title", type: "string", schema: { default_value: null }, meta: { interface: "input", sort: 3 } },
+      ]);
+
+      renderForm({ mode: "create" });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-status")).toHaveValue("active");
+      });
+      expect(screen.getByTestId("field-theme")).toHaveValue("auto");
+      expect(screen.getByTestId("field-title")).toHaveValue("");
+    });
+
+    it("lets an explicit defaultValues prop override a field's schema default", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 1 } },
+        // A second defaulted field the prop does NOT cover, so the test can
+        // tell "the prop won the tie" apart from "no seeding happened".
+        { field: "theme", type: "string", schema: { default_value: "auto" }, meta: { interface: "input", sort: 2 } },
+      ]);
+
+      renderForm({ mode: "create", defaultValues: { status: "draft" } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-status")).toHaveValue("draft");
+      });
+      // Assert the schema default was actually computed and then LOST the
+      // tie: without this the test passes with the seeding removed entirely,
+      // because "draft" arrives from the prop either way.
+      expect(screen.getByTestId("field-status")).not.toHaveValue("active");
+      expect(screen.getByTestId("field-theme")).toHaveValue("auto");
+    });
+
+    // Presets are how a role forces a value on create (status, owner,
+    // tenant_id). A column default is the weakest signal and must lose to one.
+    it("lets a permission preset override a field's schema default", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 1 } },
+      ]);
+      mockPermissionsGetAccess.mockResolvedValueOnce({
+        posts: {
+          read: { fields: ["*"] },
+          create: { fields: ["*"], presets: { status: "pending_review" } },
+        },
+      });
+
+      renderForm({ mode: "create" });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-status")).toHaveValue("pending_review");
+      });
+    });
+
+    // Everything in formData is sent on create, so a field the role cannot
+    // write must never be seeded — it would put that field in the payload.
+    it("does not seed a field outside the role's create fields", async () => {
+      mockItemsCreateOne.mockResolvedValueOnce({ id: 1 });
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "title", type: "string", meta: { interface: "input", sort: 1 } },
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 2 } },
+      ]);
+      mockPermissionsGetAccess.mockResolvedValueOnce({
+        posts: { read: { fields: ["*"] }, create: { fields: ["title"] } },
+      });
+
+      renderForm({ mode: "create" });
+      await waitFor(() => {
+        expect(screen.getByTestId("field-title")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("form-submit-btn"));
+      await waitFor(() => {
+        expect(mockItemsCreateOne).toHaveBeenCalled();
+      });
+      expect(Object.keys(mockItemsCreateOne.mock.calls[0][0])).not.toContain("status");
+    });
+
+    // A form definition's per-field config is overlaid AFTER the permission
+    // pass and can set `readonly: false` (build-fields-from-definition.ts:88),
+    // clearing the flag that pass raised. Write permission has to be checked
+    // in its own right, or a definition re-opens a field the role cannot write.
+    it("does not seed an unwritable field a definition marks writable", async () => {
+      mockItemsCreateOne.mockResolvedValueOnce({ id: 1 });
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "title", type: "string", meta: { interface: "input", sort: 1 } },
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 2 } },
+      ]);
+      mockPermissionsGetAccess.mockResolvedValueOnce({
+        posts: { read: { fields: ["*"] }, create: { fields: ["title"] } },
+      });
+
+      renderForm({
+        mode: "create",
+        definition: {
+          name: "Post create",
+          target_collection: "posts",
+          sections: [
+            {
+              id: "main",
+              fields: [
+                { field: "title" },
+                { field: "status", readonly: false },
+              ],
+            },
+          ],
+        },
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-status")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("field-status")).toHaveValue("");
+
+      fireEvent.click(screen.getByTestId("form-submit-btn"));
+      await waitFor(() => {
+        expect(mockItemsCreateOne).toHaveBeenCalled();
+      });
+      expect(Object.keys(mockItemsCreateOne.mock.calls[0][0])).not.toContain("status");
+    });
+
+    // A column the schema itself declares readonly is not the user's to set,
+    // even when the role's write permission is unrestricted.
+    it("does not seed a field the schema declares readonly", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "title", type: "string", meta: { interface: "input", sort: 1 } },
+        { field: "code", type: "string", schema: { default_value: "'auto'::character varying" }, meta: { interface: "input", sort: 2, readonly: true } },
+      ]);
+
+      renderForm({ mode: "create" });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-title")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("field-code")).toHaveValue("");
+    });
+
+    // A field hidden by a form-definition condition is never shown, so writing
+    // its column default would persist a value the user never saw.
+    it("does not seed a hidden field", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "title", type: "string", meta: { interface: "input", sort: 1 } },
+        { field: "severity", type: "string", schema: { default_value: "'medium'::character varying" }, meta: { interface: "input", sort: 2, hidden: true } },
+      ]);
+
+      renderForm({ mode: "create" });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("field-title")).toBeInTheDocument();
+      });
+      expect(screen.getByTestId("field-severity")).toHaveValue("");
+    });
+
+    // VForm drops a key from the model when the value returns to its default;
+    // merging that back left the previous choice in place.
+    it("keeps a re-selected default instead of reverting to the previous value", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "status", type: "string", schema: { default_value: "'active'::character varying" }, meta: { interface: "input", sort: 1 } },
+      ]);
+
+      renderForm({ mode: "create" });
+      const input = await screen.findByTestId("field-status");
+      expect(input).toHaveValue("active");
+
+      fireEvent.change(input, { target: { value: "draft" } });
+      await waitFor(() => expect(screen.getByTestId("field-status")).toHaveValue("draft"));
+
+      // Back to the default: the VForm double reports the whole model, minus
+      // the key, exactly as the real component does on a revert.
+      fireEvent.change(screen.getByTestId("field-status"), { target: { value: "active" } });
+      await waitFor(() => expect(screen.getByTestId("field-status")).toHaveValue("active"));
+    });
   });
 
   // =====================================================================
   // Edit / Update operation
   // =====================================================================
+  describe("save as copy", () => {
+    // A concealed column reads back as a mask, never as the secret, and
+    // formData holds that mask verbatim. Copying it would write the literal
+    // asterisks into the new row — a guessable static token, or a password
+    // hashed from "**********".
+    it("does not copy a concealed value into the duplicated row", async () => {
+      mockFieldsReadAll.mockResolvedValue([
+        { field: "id", type: "integer", meta: { interface: "input", sort: 0 } },
+        { field: "title", type: "string", meta: { interface: "input", sort: 1 } },
+        { field: "token", type: "string", meta: { interface: "system-token", special: ["conceal"], sort: 2 } },
+      ]);
+      mockItemsReadOne.mockResolvedValue({ id: 7, title: "Row", token: "**************" });
+      mockItemsUpdateOne.mockResolvedValue({ id: 7 });
+      mockItemsCreateOne.mockResolvedValue({ id: 8 });
+
+      renderForm({ mode: "edit", id: "7", showSaveOptions: true });
+      await waitFor(() => {
+        expect(screen.getByTestId("save-as-copy")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("save-as-copy"));
+      await waitFor(() => {
+        expect(mockItemsCreateOne).toHaveBeenCalled();
+      });
+
+      const copied = mockItemsCreateOne.mock.calls[0][0];
+      expect(copied).not.toHaveProperty("token");
+      // The rest of the row still copies.
+      expect(copied).toHaveProperty("title", "Row");
+    });
+  });
+
   describe("edit", () => {
     it("loads existing item data in edit mode", async () => {
       mockItemsReadOne.mockResolvedValue({
