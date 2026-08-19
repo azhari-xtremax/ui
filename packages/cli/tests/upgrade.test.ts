@@ -329,6 +329,36 @@ async function setupDesignConsumer(opts: DesignSetupOpts) {
   return { targetAbs, targetRel };
 }
 
+describe('upgrade --all', () => {
+  test('also re-syncs installed lib modules, not just components', async () => {
+    // Consumer has both a component and a lib module installed.
+    await setupConsumer({ installedVersion: '1.0.0', fileBody: 'export const old = 1;\n' });
+
+    const manifest = await readManifest();
+    manifest.installedLib = ['design-system'];
+    manifest.lib['design-system'] = {
+      version: '1.1.0',
+      sourcePackage: '@buildpad/cli',
+      installedAt: '2026-01-01T00:00:00Z',
+      files: [{ target: 'app/globals.css', sha256: 'stale-hash' }],
+    };
+    manifest.packageVersions['@buildpad/cli'] = '1.1.0';
+    await fs.writeJSON(path.join(tmpdir, 'buildpad.json'), manifest);
+
+    const globalsAbs = path.join(tmpdir, 'app/globals.css');
+    await fs.ensureDir(path.dirname(globalsAbs));
+    await fs.writeFile(globalsAbs, 'body { color: red; }\n');
+
+    await upgrade({ components: [], all: true, force: true, cwd: tmpdir, strategy: 'overwrite' });
+
+    // The lib module must be re-synced too — this used to be silently skipped
+    // because `--all` only populated targetComponents, never targetLibModules.
+    expect(await fs.readFile(globalsAbs, 'utf8')).toContain('globals v2');
+    const after = await readManifest();
+    expect(after.lib['design-system'].version).toBe('2.0.0');
+  });
+});
+
 describe('upgrade --design', () => {
   test('overwrites a pristine design file and bumps the module version', async () => {
     const OLD = 'body { color: red; }\n';

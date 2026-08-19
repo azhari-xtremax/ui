@@ -327,6 +327,7 @@ export async function upgrade(options: UpgradeOptions) {
     targetLibModules = ['design-system'];
   } else if (all) {
     targetComponents = config.installedComponents;
+    targetLibModules = config.installedLib;
   } else if (packageFilter) {
     targetComponents = config.installedComponents.filter(name => {
       const rec = config.components?.[name];
@@ -340,6 +341,7 @@ export async function upgrade(options: UpgradeOptions) {
     }
   } else if (force) {
     targetComponents = config.installedComponents;
+    targetLibModules = config.installedLib;
   } else {
     // Default: all outdated components AND all outdated lib modules.
     targetComponents = config.installedComponents.filter(name => {
