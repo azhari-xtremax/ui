@@ -418,6 +418,115 @@ describe("ListM2A replace payload — must span all pages (mass-unlink regressio
         expect(onChange).toHaveBeenLastCalledWith([{ collection: "headings", item: "u-9" }]);
         expect(apiRequest).not.toHaveBeenCalled();
     });
+
+    it("treats the other new-item sentinels as unsaved too", async () => {
+        // `isNewItem` knows '+', '%2B' and 'new'. Testing only '+' let a
+        // parent on a /new route report "saved", which preserve-fetches
+        // against a literal 'new' primary key — and if the backend rejects
+        // that against a uuid column, the emit aborts and the record saves
+        // with none of its staged rows.
+        for (const sentinel of ["%2B", "new"]) {
+            (apiRequest as jest.Mock).mockClear();
+            const onChange = jest.fn();
+            setItemsHook({
+                hasChanges: true,
+                getChanges: jest.fn().mockReturnValue({
+                    create: [{ collection: "headings", item: { id: "u-9" } }],
+                    update: [],
+                    delete: [],
+                }),
+            });
+
+            const { unmount } = render(
+                wrap(<ListM2A {...(BASE_PROPS as any)} primaryKey={sentinel} onChange={onChange} />),
+            );
+
+            await waitFor(() => expect(onChange).toHaveBeenCalled());
+            expect(apiRequest).not.toHaveBeenCalled();
+            unmount();
+        }
+    });
+
+    it("scopes the preserve-fetch to this parent", async () => {
+        // Without the parent filter the fetch returns every parent's junction
+        // rows, and the replace-mode emit re-links them onto this one.
+        mockJunctionFetch();
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            totalCount: 4,
+            displayItems: [{ id: "j1", collection: "headings", item: { id: "u1" }, sort: 1 }],
+            getChanges: jest.fn().mockReturnValue({ create: [], update: [], delete: ["j2"] }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
+
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+        const junctionCall = (apiRequest as jest.Mock).mock.calls.find(([p]) =>
+            (p as string).startsWith("/api/items/pages_blocks"),
+        );
+        expect(decodeURIComponent(junctionCall![0] as string)).toContain(
+            '{"page_id":{"_eq":"page-1"}}',
+        );
+    });
+
+    it("normalizes a bare-array response instead of reading it as an empty relation", async () => {
+        // This endpoint may answer with a bare array rather than a {data}
+        // envelope; `resp.data || []` alone would emit [] and unlink everything.
+        (apiRequest as jest.Mock).mockImplementation((path: string) => {
+            if (path.startsWith("/api/items/pages_blocks")) {
+                return Promise.resolve(ALL_JUNCTION_ROWS);
+            }
+            return Promise.resolve({ data: [] });
+        });
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            totalCount: 4,
+            displayItems: [{ id: "j1", collection: "headings", item: { id: "u1" }, sort: 1 }],
+            getChanges: jest.fn().mockReturnValue({ create: [], update: [], delete: ["j2"] }),
+        });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} onChange={onChange} />));
+
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+        expect(onChange).toHaveBeenLastCalledWith([
+            { collection: "headings", item: "u1" },
+            { collection: "paragraphs", item: "para-3" },
+            { collection: "headings", item: "u4" },
+        ]);
+    });
+
+    it("still spans all pages when a search has filtered the visible set", async () => {
+        // An active search can narrow the on-page set below the limit. A
+        // count-based gate would skip the preserve-fetch here and emit only
+        // the matching row, unlinking everything that didn't match.
+        mockJunctionFetch();
+        const onChange = jest.fn();
+        setItemsHook({
+            hasChanges: true,
+            totalCount: 1,
+            displayItems: [{ id: "j1", collection: "headings", item: { id: "u1" }, sort: 1 }],
+            getChanges: jest.fn().mockReturnValue({ create: [], update: [], delete: ["j2"] }),
+        });
+
+        render(
+            wrap(
+                <ListM2A
+                    {...(BASE_PROPS as any)}
+                    onChange={onChange}
+                    enableSearchFilter
+                    layout="table"
+                />,
+            ),
+        );
+
+        fireEvent.change(screen.getByTestId("m2a-search"), { target: { value: "abc" } });
+
+        await waitFor(() => expect(onChange).toHaveBeenCalled());
+        const payload = onChange.mock.calls.at(-1)![0] as unknown[];
+        expect(payload).toHaveLength(3);
+    });
 });
 
 describe("ListM2A drag gating — paginated sets", () => {
