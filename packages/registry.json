@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microbuild-ui/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-08-26T04:05:47.776Z",
+  "generatedAt": "2026-08-27T07:43:25.892Z",
   "version": "1.10.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -534,7 +534,7 @@
         {
           "source": "cli/templates/api/auth-logout-route.ts",
           "target": "app/api/auth/logout/route.ts",
-          "sourceSha256": "a534a86e057275efa4077cea8d91cae112ad7ae9501938b0646a0ebd0fb144ad"
+          "sourceSha256": "e83bfcef5586a7389714cfd50ea135aeaebcd34abfa47ed5daf8fcb2b9d41f9f"
         },
         {
           "source": "cli/templates/api/auth-user-route.ts",
@@ -544,7 +544,7 @@
         {
           "source": "cli/templates/api/auth-callback-route.ts",
           "target": "app/api/auth/callback/route.ts",
-          "sourceSha256": "4b592578c3d56bf5576c81116400aabfc461d577dba424bf159dbd0011a23a39"
+          "sourceSha256": "ec480a0c7c1c4fa17ef554307ec833068915fe0fd476eecb62073fc2961b8f09"
         },
         {
           "source": "cli/templates/api/login-page.tsx",
@@ -648,7 +648,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.11.0",
-      "lastChangedIn": "1.8.0"
+      "lastChangedIn": "1.11.0"
     },
     "content-routes": {
       "name": "content-routes",
@@ -839,6 +839,11 @@
       ],
       "files": [
         {
+          "source": "cli/templates/lib/origin.ts",
+          "target": "lib/origin.ts",
+          "sourceSha256": "65e630eedd04b562b8f48cb49beba759c674bc444f691aea16aa4b675ce2a993"
+        },
+        {
           "source": "cli/templates/supabase/client.ts",
           "target": "lib/supabase/client.ts",
           "sourceSha256": "af193762a219fb279f72345d8d12d0164b5e367d9ff6874b68351fabc4841f5e"
@@ -851,7 +856,7 @@
         {
           "source": "cli/templates/supabase/middleware.ts",
           "target": "lib/supabase/middleware.ts",
-          "sourceSha256": "0c4774d02fff2d3b8248093b26ba39c476ce712cee1735f557eb3bf5d041679f"
+          "sourceSha256": "b0c3f1d255100de81f5aa10ceb58b9bd06d89837be258aa9da9a02a51b9ed95d"
         },
         {
           "source": "cli/templates/supabase/admin.ts",
@@ -861,12 +866,12 @@
         {
           "source": "cli/templates/middleware/middleware.ts",
           "target": "middleware.ts",
-          "sourceSha256": "382591a2830ed8c6155affd3c37427ef66af407a549b8475be521bd51e143286"
+          "sourceSha256": "70fe395d22de166a1a7c3ed1b5939fa4f71bfa6671a8b8102c7230a10475cd06"
         }
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "1.11.0",
-      "lastChangedIn": "1.2.0"
+      "lastChangedIn": "1.11.0"
     },
     "external-oauth": {
       "name": "external-oauth",
@@ -902,12 +907,12 @@
         {
           "source": "cli/templates/api/auth-callback-oauth-route.ts",
           "target": "app/api/auth/callback/route.ts",
-          "sourceSha256": "2ba76539c345eb3658e16e7c37adc409208d96d076a142ba04df50b80c5ba402"
+          "sourceSha256": "2c01a6f42aef3c4aea9538e0cdfcb59c4101fad53395a06ce1105c9c29793341"
         },
         {
           "source": "cli/templates/api/auth-oauth-provider-route.ts",
           "target": "app/api/auth/oauth/[provider]/route.ts",
-          "sourceSha256": "675b5ae55dd862099f528603da16faf6f0095c2befb0964290b770c3cae1488a"
+          "sourceSha256": "d7cd70cd296b785cc9f00da90872f99016de92947d4447b491efbacaad54c0b7"
         },
         {
           "source": "cli/templates/components/auth/OAuthLoginButtons.tsx",

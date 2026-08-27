@@ -652,6 +652,10 @@
       ],
       "files": [
         {
+          "source": "cli/templates/lib/origin.ts",
+          "target": "lib/origin.ts"
+        },
+        {
           "source": "cli/templates/supabase/client.ts",
           "target": "lib/supabase/client.ts"
         },
