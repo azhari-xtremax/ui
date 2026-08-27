@@ -28,6 +28,29 @@ import { getProviderConfig, buildLogoutUrl } from '@/lib/oauth/config';
 const PROVIDER_COOKIE_NAME = 'oauth_provider';
 
 /**
+ * Resolve the app's real public origin.
+ *
+ * Behind a reverse proxy / serverless platform (e.g. AWS Amplify), the
+ * server process listens on `localhost`, so `request.nextUrl.origin`
+ * describes the process rather than the address the browser actually used.
+ * Prefer an explicitly configured origin, then forwarded-host headers, and
+ * only fall back to `request.nextUrl.origin` when neither is available
+ * (e.g. local dev).
+ */
+function publicOrigin(request: NextRequest): string {
+  const configured = process.env.NEXT_PUBLIC_HOST_ORIGIN;
+  if (configured) return configured.replace(/\/$/, '');
+
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  if (host && !host.startsWith('localhost')) {
+    const proto = request.headers.get('x-forwarded-proto') ?? 'https';
+    return `${proto}://${host}`;
+  }
+
+  return request.nextUrl.origin;
+}
+
+/**
  * Shared helper: sign out of Supabase, clear the provider cookie, and
  * return the IdP end-session URL (if applicable).
  */
@@ -86,7 +109,7 @@ async function performLogout(
  */
 export async function POST(request: NextRequest) {
   try {
-    const origin = request.nextUrl.origin;
+    const origin = publicOrigin(request);
     const { idpLogoutUrl, error } = await performLogout(origin);
 
     if (error) {
@@ -125,18 +148,23 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const origin = request.nextUrl.origin;
+    const origin = publicOrigin(request);
     const { idpLogoutUrl, error } = await performLogout(origin);
 
     if (error) {
+      // Relative redirect — resolved by the browser against the address it
+      // actually used, so it can't be broken by a proxy/serverless origin.
       return NextResponse.redirect(
         new URL(`/login?error=${encodeURIComponent(error)}`, request.url)
       );
     }
 
-    // Redirect to IdP end-session endpoint (SLO) or fall back to /login
-    const destination = idpLogoutUrl ?? `${origin}/login`;
-    return NextResponse.redirect(destination);
+    // IdP end-session hand-off genuinely needs an absolute URL (it leaves
+    // this app); the ordinary case redirects relatively to `/login`.
+    if (idpLogoutUrl) {
+      return NextResponse.redirect(idpLogoutUrl);
+    }
+    return NextResponse.redirect(new URL('/login', request.url));
   } catch (error) {
     console.error('Unexpected logout error:', error);
     return NextResponse.redirect(new URL('/login', request.url));
