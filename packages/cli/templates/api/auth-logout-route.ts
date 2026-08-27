@@ -7,7 +7,7 @@
  * also returns / redirects to the IdP end-session URL (Single Logout / SLO).
  *
  * @buildpad/origin: api-routes/auth-logout
- * @buildpad/version: 1.1.0
+ * @buildpad/version: 1.2.0
  *
  * ## POST /api/auth/logout
  * JSON response — backward compatible. Includes `idpLogoutUrl` when the user
@@ -24,31 +24,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { getProviderConfig, buildLogoutUrl } from '@/lib/oauth/config';
+import { publicOrigin } from '@/lib/origin';
 
 const PROVIDER_COOKIE_NAME = 'oauth_provider';
-
-/**
- * Resolve the app's real public origin.
- *
- * Behind a reverse proxy / serverless platform (e.g. AWS Amplify), the
- * server process listens on `localhost`, so `request.nextUrl.origin`
- * describes the process rather than the address the browser actually used.
- * Prefer an explicitly configured origin, then forwarded-host headers, and
- * only fall back to `request.nextUrl.origin` when neither is available
- * (e.g. local dev).
- */
-function publicOrigin(request: NextRequest): string {
-  const configured = process.env.NEXT_PUBLIC_HOST_ORIGIN;
-  if (configured) return configured.replace(/\/$/, '');
-
-  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
-  if (host && !host.startsWith('localhost')) {
-    const proto = request.headers.get('x-forwarded-proto') ?? 'https';
-    return `${proto}://${host}`;
-  }
-
-  return request.nextUrl.origin;
-}
 
 /**
  * Shared helper: sign out of Supabase, clear the provider cookie, and
@@ -152,11 +130,8 @@ export async function GET(request: NextRequest) {
     const { idpLogoutUrl, error } = await performLogout(origin);
 
     if (error) {
-      // NextResponse.redirect() always emits an absolute Location header
-      // computed server-side — it is never resolved client-side by the
-      // browser. So the base for building that URL must be the resolved
-      // public `origin`, not `request.url` (which is itself derived from
-      // the same broken internal address `publicOrigin()` exists to fix).
+      // Redirect targets are built from the resolved public `origin`, never
+      // from `request.url` — see lib/origin.ts for why.
       return NextResponse.redirect(
         new URL(`/login?error=${encodeURIComponent(error)}`, origin)
       );
