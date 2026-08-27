@@ -152,21 +152,24 @@ export async function GET(request: NextRequest) {
     const { idpLogoutUrl, error } = await performLogout(origin);
 
     if (error) {
-      // Relative redirect — resolved by the browser against the address it
-      // actually used, so it can't be broken by a proxy/serverless origin.
+      // NextResponse.redirect() always emits an absolute Location header
+      // computed server-side — it is never resolved client-side by the
+      // browser. So the base for building that URL must be the resolved
+      // public `origin`, not `request.url` (which is itself derived from
+      // the same broken internal address `publicOrigin()` exists to fix).
       return NextResponse.redirect(
-        new URL(`/login?error=${encodeURIComponent(error)}`, request.url)
+        new URL(`/login?error=${encodeURIComponent(error)}`, origin)
       );
     }
 
     // IdP end-session hand-off genuinely needs an absolute URL (it leaves
-    // this app); the ordinary case redirects relatively to `/login`.
+    // this app); the ordinary case redirects to `/login` on our own origin.
     if (idpLogoutUrl) {
       return NextResponse.redirect(idpLogoutUrl);
     }
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/login', origin));
   } catch (error) {
     console.error('Unexpected logout error:', error);
-    return NextResponse.redirect(new URL('/login', request.url));
+    return NextResponse.redirect(new URL('/login', publicOrigin(request)));
   }
 }
