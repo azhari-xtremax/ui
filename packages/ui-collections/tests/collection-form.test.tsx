@@ -683,6 +683,39 @@ describe("manual primary key handling", () => {
     meta: { interface: "input", sort: 1, special: ["uuid"], readonly: true, hidden: true },
   };
 
+  // Mirrors `idField()` in services/src/collections.ts EXACTLY — the PK every
+  // collection created through Buildpad's own flow gets. Note what it lacks:
+  // no `special: ["uuid"]` and has_auto_increment:false, so a rule that keys
+  // only off those two reads this as a manually-entered PK and surfaces a
+  // stray `id` control on every create form in the app. Keep this fixture in
+  // sync with idField() if that baseline ever changes.
+  const BASELINE_COLLECTION_PK_FIELD = {
+    field: "id",
+    type: "uuid",
+    meta: { interface: "input", hidden: true, readonly: true },
+    schema: {
+      name: "id",
+      table: "posts",
+      data_type: "uuid",
+      is_primary_key: true,
+      has_auto_increment: false,
+    },
+  };
+
+  // A PK the database fills from its own default (gen_random_uuid(),
+  // nextval(...)). These report has_auto_increment:false but are no more
+  // user-supplied than a serial column.
+  const DB_DEFAULT_PK_FIELD = {
+    field: "id",
+    type: "string",
+    schema: {
+      is_primary_key: true,
+      has_auto_increment: false,
+      default_value: "gen_random_uuid()",
+    },
+    meta: { interface: "input", sort: 1 },
+  };
+
   it("renders a manually-entered string PK as an editable field on create", async () => {
     mockFieldsReadAll.mockResolvedValue([MANUAL_STRING_PK_FIELD, ...SAMPLE_FIELDS]);
 
@@ -731,6 +764,54 @@ describe("manual primary key handling", () => {
 
   it("still hides a generated UUID PK on create (no regression)", async () => {
     mockFieldsReadAll.mockResolvedValue([UUID_PK_FIELD, ...SAMPLE_FIELDS]);
+
+    renderForm({ mode: "create" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("field-title")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("field-id")).not.toBeInTheDocument();
+  });
+
+  it("still hides the baseline collection PK (uuid, no special) on create", async () => {
+    mockFieldsReadAll.mockResolvedValue([
+      BASELINE_COLLECTION_PK_FIELD,
+      ...SAMPLE_FIELDS,
+    ]);
+
+    renderForm({ mode: "create" });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("field-title")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("field-id")).not.toBeInTheDocument();
+  });
+
+  it("keeps the baseline collection PK out of the create payload", async () => {
+    mockFieldsReadAll.mockResolvedValue([
+      BASELINE_COLLECTION_PK_FIELD,
+      ...SAMPLE_FIELDS,
+    ]);
+    mockItemsCreateOne.mockResolvedValueOnce({ id: "generated-uuid" });
+
+    renderForm({ mode: "create" });
+    await waitFor(() => {
+      expect(screen.getByTestId("field-title")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByTestId("field-title"), {
+      target: { value: "New Post" },
+    });
+    fireEvent.click(screen.getByTestId("form-submit-btn"));
+
+    await waitFor(() => {
+      expect(mockItemsCreateOne).toHaveBeenCalled();
+    });
+    expect(mockItemsCreateOne.mock.calls[0][0]).not.toHaveProperty("id");
+  });
+
+  it("still hides a PK the database fills from its own default", async () => {
+    mockFieldsReadAll.mockResolvedValue([DB_DEFAULT_PK_FIELD, ...SAMPLE_FIELDS]);
 
     renderForm({ mode: "create" });
 
