@@ -57,12 +57,17 @@ jobs:
       # `pnpm build:registry` inside the release PR; forgetting it failed
       # `registry:check`, and running it before the bump wrote the wrong
       # `lastChangedIn` values.
+      #
+      # The chain lives in the `version:packages` script, NOT inline here:
+      # changesets/action splits this input on whitespace and execs it directly
+      # rather than through a shell, so an inline `a && b` is passed to
+      # `changeset` as arguments ("Too many arguments passed to changesets").
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
         with:
           publish: pnpm changeset publish
-          version: pnpm changeset version && pnpm build:registry
+          version: pnpm version:packages
           title: 'chore: version packages'
           commit: 'chore: version packages'
         env:
