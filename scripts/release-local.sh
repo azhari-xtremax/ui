@@ -110,14 +110,14 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 ok "working tree clean"
 
-shopt -s nullglob
-CHANGESETS=(.changeset/*.md)
+# Built without nullglob + array expansion, for the bash 3.2 reason above:
+# with no changesets the glob stays literal, so the -e test skips it.
 PENDING=()
-for f in "${CHANGESETS[@]}"; do
+for f in .changeset/*.md; do
+  [[ -e "$f" ]] || continue
   [[ "$(basename "$f")" == "README.md" ]] && continue
   PENDING+=("$f")
 done
-shopt -u nullglob
 CURRENT="$(node -p "require('./packages/cli/package.json').version")"
 
 # Two legitimate ways to be here:
@@ -329,9 +329,15 @@ if ! confirm "Publish these to npm?"; then
   exit 0
 fi
 
-PUBLISH_ARGS=()
-[[ -n "$OTP" ]] && PUBLISH_ARGS+=(--otp "$OTP")
-pnpm changeset publish "${PUBLISH_ARGS[@]}"
+# No array here on purpose: macOS ships bash 3.2, where expanding an EMPTY
+# array ("${arr[@]}") under `set -u` aborts with "unbound variable". That is
+# exactly what happened on the first real 2.0.0 attempt — the script died at
+# the publish call after the tag was already live.
+if [[ -n "$OTP" ]]; then
+  pnpm changeset publish --otp "$OTP"
+else
+  pnpm changeset publish
+fi
 ok "published"
 
 # ─────────────────────────────────────────────────────────────────────────
