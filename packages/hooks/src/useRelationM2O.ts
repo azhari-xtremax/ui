@@ -134,10 +134,43 @@ export function useRelationM2O(
         );
 
         // Resolve one_collection from top-level or meta (DaaS may nest it)
-        const resolvedOneCollection =
+        let resolvedOneCollection =
           relation?.one_collection ??
           (relation?.meta?.one_collection as string | undefined) ??
           null;
+        let fallbackPkColumn: string | undefined;
+
+        // ── 1b. Fallback: field schema ─────────────────────────────────
+        // /api/relations only reports a relation when a live Postgres FK
+        // constraint exists (or daas_relations metadata resolved via it).
+        // If that DDL step failed or was never run — e.g. a mismatched FK
+        // target type, or a scope/M2O metadata collision — the field can
+        // still carry its intended target on daas_fields (physical FK,
+        // daas_relations, or meta.options.related_collection, in that
+        // order — see FieldsService.readOne's own fallback chain). Without
+        // this, a field configured as select-dropdown-m2o with a broken
+        // relation errors out here even though its target is recoverable.
+        if (!resolvedOneCollection) {
+          try {
+            const fieldResp = await apiRequest<{
+              data: {
+                schema?: {
+                  foreign_key_table?: string | null;
+                  foreign_key_column?: string | null;
+                } | null;
+              };
+            }>(`/api/fields/${collection}/${field}`);
+
+            const fkTable = fieldResp.data?.schema?.foreign_key_table;
+            if (fkTable) {
+              resolvedOneCollection = fkTable;
+              fallbackPkColumn =
+                fieldResp.data?.schema?.foreign_key_column ?? undefined;
+            }
+          } catch {
+            // Fallback is best-effort — fall through to the error below.
+          }
+        }
 
         if (!resolvedOneCollection) {
           if (!cancelled) {
@@ -151,11 +184,12 @@ export function useRelationM2O(
         }
 
         const relatedCollectionName = resolvedOneCollection;
-        const fkType = relation!.schema?.data_type || "uuid";
+        const fkType = relation?.schema?.data_type || "uuid";
         const relatedPK =
-          relation!.one_primary ||
-          (relation!.meta?.one_primary as string | undefined) ||
-          relation!.schema?.foreign_key_column ||
+          relation?.one_primary ||
+          (relation?.meta?.one_primary as string | undefined) ||
+          relation?.schema?.foreign_key_column ||
+          fallbackPkColumn ||
           "id";
 
         // ── 2. Fetch related collection meta for display template ─────
@@ -208,7 +242,7 @@ export function useRelationM2O(
             field,
             collection,
             related_collection: relatedCollectionName,
-            meta: relation!.meta ?? null,
+            meta: relation?.meta ?? null,
           },
           isSingleton,
         };
