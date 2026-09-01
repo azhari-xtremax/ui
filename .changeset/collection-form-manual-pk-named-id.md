@@ -1,5 +1,5 @@
 ---
-"@buildpad/ui-collections": patch
+"@buildpad/ui-collections": minor
 ---
 
 CollectionForm: don't strip a manually-entered primary key just because it's named "id".
