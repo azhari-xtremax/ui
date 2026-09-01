@@ -95,6 +95,101 @@ describe('useRelationM2O', () => {
     expect(result.current.relationInfo?.relatedPrimaryKeyField.field).toBe('id');
   });
 
+  it('uses foreign_key_column as the related PK when it is not named "id"', async () => {
+    apiRequestMock.mockImplementation(async (path: string) => {
+      if (path === '/api/relations') {
+        return { data: [] };
+      }
+      if (path === '/api/fields/xtr_cms_teams/service5') {
+        return {
+          data: {
+            schema: {
+              foreign_key_table: 'xtr_cms_services',
+              foreign_key_column: 'service_code',
+            },
+          },
+        };
+      }
+      if (path.startsWith('/api/collections/')) {
+        return { data: { meta: {} } };
+      }
+      throw new Error(`Unexpected apiRequest call: ${path}`);
+    });
+
+    const { result } = renderHook(() => useRelationM2O('xtr_cms_teams', 'service5'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.relationInfo?.relatedCollection.collection).toBe('xtr_cms_services');
+    // Not 'id': the whole point of carrying foreign_key_column through the
+    // fallback is that the related PK need not be named "id". A fixture using
+    // 'id' here passes even if that wiring is deleted, because of the `|| "id"`
+    // tail on the resolution chain.
+    expect(result.current.relationInfo?.relatedPrimaryKeyField.field).toBe('service_code');
+  });
+
+  // The reported scenario: the admin configured the target, but the FK
+  // creation step failed — so there is no constraint and no
+  // schema.foreign_key_table, only meta.options.related_collection.
+  it('falls back to meta.options.related_collection when no physical FK exists', async () => {
+    apiRequestMock.mockImplementation(async (path: string) => {
+      if (path === '/api/relations') {
+        return { data: [] };
+      }
+      if (path === '/api/fields/xtr_cms_teams/service4') {
+        return {
+          data: {
+            schema: { foreign_key_table: null, foreign_key_column: null },
+            meta: {
+              interface: 'select-dropdown-m2o',
+              options: { related_collection: 'xtr_cms_services' },
+            },
+          },
+        };
+      }
+      if (path.startsWith('/api/collections/')) {
+        return { data: { meta: {} } };
+      }
+      throw new Error(`Unexpected apiRequest call: ${path}`);
+    });
+
+    const { result } = renderHook(() => useRelationM2O('xtr_cms_teams', 'service4'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBeNull();
+    expect(result.current.relationInfo?.relatedCollection.collection).toBe('xtr_cms_services');
+  });
+
+  it('prefers the physical FK over meta.options when the two disagree', async () => {
+    apiRequestMock.mockImplementation(async (path: string) => {
+      if (path === '/api/relations') {
+        return { data: [] };
+      }
+      if (path === '/api/fields/xtr_cms_teams/service6') {
+        return {
+          data: {
+            schema: {
+              foreign_key_table: 'xtr_cms_services',
+              foreign_key_column: 'id',
+            },
+            // Stale leftover from an earlier configuration — the live
+            // constraint wins.
+            meta: { options: { related_collection: 'xtr_cms_stale' } },
+          },
+        };
+      }
+      if (path.startsWith('/api/collections/')) {
+        return { data: { meta: {} } };
+      }
+      throw new Error(`Unexpected apiRequest call: ${path}`);
+    });
+
+    const { result } = renderHook(() => useRelationM2O('xtr_cms_teams', 'service6'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.relationInfo?.relatedCollection.collection).toBe('xtr_cms_services');
+  });
+
   it('errors with "No M2O relation found" when both /api/relations and the field-schema fallback come up empty', async () => {
     apiRequestMock.mockImplementation(async (path: string) => {
       if (path === '/api/relations') {

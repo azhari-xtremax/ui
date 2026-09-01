@@ -140,16 +140,30 @@ export function useRelationM2O(
           null;
         let fallbackPkColumn: string | undefined;
 
-        // ── 1b. Fallback: field schema ─────────────────────────────────
+        // ── 1b. Fallback: the field's own record ───────────────────────
         // /api/relations only reports a relation when a live Postgres FK
-        // constraint exists (or daas_relations metadata resolved via it).
+        // constraint exists (or daas_relations metadata resolved via one).
         // If that DDL step failed or was never run — e.g. a mismatched FK
-        // target type, or a scope/M2O metadata collision — the field can
-        // still carry its intended target on daas_fields (physical FK,
-        // daas_relations, or meta.options.related_collection, in that
-        // order — see FieldsService.readOne's own fallback chain). Without
-        // this, a field configured as select-dropdown-m2o with a broken
-        // relation errors out here even though its target is recoverable.
+        // target type, or a scope/M2O metadata collision — the field still
+        // carries its intended target on daas_fields, and one request
+        // recovers it.
+        //
+        // Two tiers, because they fail in different situations and the
+        // second is the common one:
+        //
+        //   1. `schema.foreign_key_table` — the physical FK. Authoritative
+        //      when present, and it brings the related PK column with it.
+        //   2. `meta.options.related_collection` — what the admin actually
+        //      configured. This is the tier that matters when FK creation
+        //      is the step that failed: no constraint exists, so there is
+        //      no `foreign_key_table` to read, and tier 1 alone would
+        //      still error out on a field whose target is sitting right
+        //      here in the response.
+        //
+        // Both tiers come from the same response, so the second costs
+        // nothing and does not depend on the backend folding options into
+        // the schema block. `useRelationM2M` resolves its own broken-
+        // relation case from `meta.options` the same way.
         if (!resolvedOneCollection) {
           try {
             const fieldResp = await apiRequest<{
@@ -157,6 +171,9 @@ export function useRelationM2O(
                 schema?: {
                   foreign_key_table?: string | null;
                   foreign_key_column?: string | null;
+                } | null;
+                meta?: {
+                  options?: Record<string, unknown> | null;
                 } | null;
               };
             }>(`/api/fields/${collection}/${field}`);
@@ -166,6 +183,17 @@ export function useRelationM2O(
               resolvedOneCollection = fkTable;
               fallbackPkColumn =
                 fieldResp.data?.schema?.foreign_key_column ?? undefined;
+            } else {
+              const configuredTarget =
+                fieldResp.data?.meta?.options?.related_collection;
+              if (typeof configuredTarget === "string" && configuredTarget) {
+                resolvedOneCollection = configuredTarget;
+                // No FK constraint means no foreign_key_column to read, so
+                // the related PK falls through to "id" below. That is the
+                // same assumption the pre-existing `|| "id"` tail makes;
+                // detecting it properly (as useRelationM2M/O2M/M2A do) is
+                // a separate change.
+              }
             }
           } catch {
             // Fallback is best-effort — fall through to the error below.
