@@ -1,5 +1,15 @@
 # @buildpad/ui-users
 
+## 2.1.0
+
+### Patch Changes
+
+- @buildpad/ui-interfaces@2.1.0
+- @buildpad/hooks@2.1.0
+- @buildpad/services@2.1.0
+- @buildpad/types@2.1.0
+- @buildpad/ui-table@2.1.0
+
 ## 2.0.0
 
 ### Patch Changes
