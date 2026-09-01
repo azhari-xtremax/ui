@@ -11,4 +11,8 @@ error TS2664: Invalid module name in augmentation, module '@tiptap/core' cannot 
 error TS2339: Property 'markdown' does not exist on type 'Storage'.
 ```
 
-`@tiptap/core` is now registered as a direct dependency of `rich-text-markdown` in the registry, pinned in the CLI's `DEPENDENCY_VERSIONS` map, and recognized by `fix`'s known-package list.
+`@tiptap/core` is now registered as a direct dependency of `rich-text-markdown` in the registry, pinned in the CLI's `DEPENDENCY_VERSIONS` map, and recognized by `fix`'s known-package list. That last part matters on its own: without it, `buildpad fix` would emit `declare module '@tiptap/core';` as an untyped-package stub, which replaces the real module and breaks the very augmentation this fixes.
+
+Note `@tiptap/core` is a *peer* dependency of `@tiptap/react`, not a transitive one, so whether it reaches `node_modules` at all depends on the package manager's auto-peer-install and hoisting behaviour — it was never something the app could rely on.
+
+The same component also imports `@tabler/icons-react` (for `IconCode`/`IconEdit`/`IconPhoto`/`IconTable`/`IconHeading`) without declaring it; that is registered now too.
