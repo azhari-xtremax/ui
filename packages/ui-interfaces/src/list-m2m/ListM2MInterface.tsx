@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Box, Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
+import { Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
 import { IconAlertCircle, IconPlus, IconTrash, IconList } from '@tabler/icons-react';
 import type { M2MRelationInfo, M2MItem } from '@buildpad/hooks';
 import { renderTemplate } from '../list-m2a/render-template';

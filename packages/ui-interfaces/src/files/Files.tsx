@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Group, Stack, Text, Paper, Badge, Tooltip, Pagination, Menu, ActionIcon, Loader } from '@mantine/core';
+import { Button, Group, Stack, Text, Paper, Badge, Tooltip, Pagination, Menu, ActionIcon, Loader } from '@mantine/core';
 import { IconTrash, IconDownload, IconExternalLink, IconDotsVertical, IconUpload, IconFolderOpen } from '@tabler/icons-react';
 import { FileThumbnail, LibraryPickerModal, type FileUpload } from '../upload';
 import '../upload/Upload.css';

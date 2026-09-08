@@ -13,28 +13,23 @@
 
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import {
   AppShell,
   Group,
   ActionIcon,
   Title,
-  Text,
   Breadcrumbs,
   Anchor,
   Burger,
   Box,
   ScrollArea,
   Skeleton,
-  Stack,
-  Divider,
-  Tooltip,
 } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   IconMenu2,
   IconChevronRight,
-  IconBox,
 } from '@tabler/icons-react';
 
 export interface BreadcrumbItem {

@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Badge,
-  Box,
   Button,
   Grid,
   Group,
@@ -15,7 +14,6 @@ import {
   Stack,
   Tabs,
   TagsInput,
-  Text,
   Textarea,
   TextInput,
   Title,

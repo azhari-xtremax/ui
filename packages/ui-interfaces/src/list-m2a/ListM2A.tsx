@@ -52,13 +52,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useDisclosure } from "@mantine/hooks";
-import { 
-    useRelationM2A, 
-    useRelationM2AItems, 
+import {
+    useRelationM2A,
+    useRelationM2AItems,
     useRelationPermissionsM2A,
-    type M2AItem, 
+    type M2AItem,
     type M2ARelationInfo,
-    type ChangesItem,
 } from "@buildpad/hooks";
 import { CollectionList } from "@buildpad/ui-collections";
 import { renderTemplate, resolveDisplayTemplate } from "./render-template";

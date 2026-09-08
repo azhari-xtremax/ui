@@ -26,8 +26,6 @@ import {
     Paper,
     Menu,
     Badge,
-    Collapse,
-    Switch,
 } from '@mantine/core';
 import {
     IconFilter,

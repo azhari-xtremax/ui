@@ -16,7 +16,6 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Container, Group, Text, Alert, Select, Button, Stack, Badge } from '@mantine/core';
 import { IconMap, IconMapPin, IconLine, IconSquare, IconTrash } from '@tabler/icons-react';
 import maplibregl from 'maplibre-gl';
-import type { Map as MaplibreMap, LngLatLike } from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
