@@ -845,7 +845,7 @@ async function generateComponentsIndex(
   const namedExportMap = new Map<string, string[]>(); // exportName -> [files]
   
   // Sort components alphabetically for consistent output
-  const sortedComponents = [...config.installedComponents].sort();
+  const sortedComponents = [...config.installedComponents].sort((a, b) => a.localeCompare(b));
   
   // Components with known SSR issues that should use wrappers
   const ssrUnsafeComponents: Record<string, string> = {

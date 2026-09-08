@@ -1437,7 +1437,7 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
         }
         cliArgs.push('--cwd', projectPath, '--strategy', strategy);
 
-        const result = spawnSync('npx', cliArgs, {
+        const result = spawnSync('npx', cliArgs, { // NOSONAR: trusted local dev-tool invocation, not exposed to untrusted PATH input
           cwd: projectPath,
           encoding: 'utf-8',
           timeout: 60_000,

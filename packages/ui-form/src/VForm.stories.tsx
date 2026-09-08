@@ -590,8 +590,6 @@ const createGroupField = (
     validation: null,
     validation_message: null,
     ...options.meta,
-    // Ensure special is always set for groups
-    ...(options.meta?.special ? {} : {}),
   },
 });
 

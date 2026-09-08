@@ -330,7 +330,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
         )
       }
       maxLength={maxLength}
-      type={type === 'uuid' ? 'text' : 'text'}
+      type="text"
     />
   );
 });
