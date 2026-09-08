@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiRequest, isValidPrimaryKey } from "./utils";
+import { apiRequest } from "./utils";
+import { isExistingItem } from "@buildpad/utils";
 
 // ---------------------------------------------------------------------------
 // Template field extraction helper
@@ -383,7 +384,7 @@ export function useRelationM2OItem(
     async (params?: M2OQueryParams) => {
       const requestId = ++requestIdRef.current;
 
-      if (!relationInfo || !isValidPrimaryKey(primaryKey)) {
+      if (!relationInfo || !isExistingItem(primaryKey)) {
         // If we have inline data (object value) use it directly
         if (inlineData) {
           setItem(inlineData);
