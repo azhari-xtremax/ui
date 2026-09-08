@@ -516,7 +516,7 @@ export async function upgrade(options: UpgradeOptions) {
       ? new Set(regComponent.files.map(f => f.target))
       : new Set(staleness.files.filter(f => f.reason !== 'removed').map(f => f.target));
 
-    const from = installedRecord?.release ?? installedRecord?.version ?? 'unknown';
+    const from = installedRecord?.release ?? installedRecord?.version ?? 'unknown'; // NOSONAR: intentional v1/v2 manifest backward-compat fallback
     console.log(
       chalk.cyan(`  ${componentName}`) +
       chalk.dim(force ? ` re-sync @ ${release} (--force)` : ` ${from} → ${release}`)
@@ -569,7 +569,7 @@ export async function upgrade(options: UpgradeOptions) {
         dryRun,
         fileSpinner,
         getBaseContent: async () => {
-          const baseRaw = await fetchBaseSource(file.source, installed, sourcePackage, installedRecord?.version);
+          const baseRaw = await fetchBaseSource(file.source, installed, sourcePackage, installedRecord?.version); // NOSONAR: intentional v1/v2 manifest backward-compat read
           if (baseRaw === null) return null;
           return transformContent(
             baseRaw, file, regComponent, config, sourcePackage,
@@ -661,7 +661,7 @@ export async function upgrade(options: UpgradeOptions) {
       ? new Set(modFiles.map(f => f.target))
       : new Set(staleness.files.filter(f => f.reason !== 'removed').map(f => f.target));
 
-    const from = installedRecord?.release ?? installedRecord?.version ?? 'unknown';
+    const from = installedRecord?.release ?? installedRecord?.version ?? 'unknown'; // NOSONAR: intentional v1/v2 manifest backward-compat fallback
     console.log(
       chalk.cyan(`  ${moduleName}`) +
       chalk.dim(isAdoption ? ` install @ ${release}` : ` ${from} → ${release}`)
@@ -738,7 +738,7 @@ export async function upgrade(options: UpgradeOptions) {
         fileSpinner,
         getBaseContent: async () => {
           if (isAdoption) return null; // no baseline to merge against
-          const baseRaw = await fetchBaseSource(file.source, installed, sourcePackage, installedRecord?.version);
+          const baseRaw = await fetchBaseSource(file.source, installed, sourcePackage, installedRecord?.version); // NOSONAR: intentional v1/v2 manifest backward-compat read
           if (baseRaw === null) return null;
           return transformLibContent(
             baseRaw, file, moduleName, config, sourcePackage,

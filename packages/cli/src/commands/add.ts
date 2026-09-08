@@ -514,7 +514,7 @@ export function getInstalledStaleness(
   if (!staleness.stale) return { stale: false };
   return {
     stale: true,
-    installedRelease: record.release ?? record.version,
+    installedRelease: record.release ?? record.version, // NOSONAR: intentional v1/v2 manifest backward-compat fallback
     latestRelease: registry.version,
   };
 }
@@ -783,10 +783,10 @@ async function copyComponent(
   }
   
   // Track component version (v1 compat)
-  if (!config.componentVersions) {
-    config.componentVersions = {};
+  if (!config.componentVersions) { // NOSONAR: intentionally writing the deprecated v1 field for backward compat
+    config.componentVersions = {}; // NOSONAR: intentionally writing the deprecated v1 field for backward compat
   }
-  config.componentVersions[component.name] = {
+  config.componentVersions[component.name] = { // NOSONAR: intentionally writing the deprecated v1 field for backward compat
     version: installRelease,
     installedAt: new Date().toISOString(),
     source: sourcePackageFinal,
@@ -800,7 +800,7 @@ async function copyComponent(
       record.installedAt = new Date().toISOString();
       record.release = installRelease;
       record.ref = getRecordedRef();
-      delete record.version;
+      delete record.version; // NOSONAR: migration cleanup of the deprecated v1 field
     }
     config.release = installRelease;
   }
@@ -972,8 +972,8 @@ export async function add(
   }
 
   // Initialize componentVersions if not present
-  if (!config.componentVersions) {
-    config.componentVersions = {};
+  if (!config.componentVersions) { // NOSONAR: intentionally writing the deprecated v1 field for backward compat
+    config.componentVersions = {}; // NOSONAR: intentionally writing the deprecated v1 field for backward compat
   }
 
   const registry = await getRegistry();
@@ -1178,7 +1178,7 @@ export async function add(
     }
 
     // Update registry version (v1 compat)
-    config.registryVersion = registry.version;
+    config.registryVersion = registry.version; // NOSONAR: intentionally writing the deprecated v1 field for backward compat
 
     // Save updated config
     await saveConfig(cwd, config);

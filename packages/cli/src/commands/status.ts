@@ -77,7 +77,7 @@ async function findBuildpadFiles(
             path: fullPath,
             origin: info.origin,
             version: info.version || 'unknown',
-            date: info.date || 'unknown',
+            date: info.date || 'unknown', // NOSONAR: intentional v2-header backward-compat read
             currentSha256,
             modified,
           });
