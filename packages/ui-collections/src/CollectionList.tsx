@@ -999,7 +999,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         // unrecognised payload would print raw JSON into the cell. Every other
         // type falls back to showing the value as stored.
         if (fieldType !== "json") {
-          const raw = typeof value === "object" ? JSON.stringify(value) : String(value);
+          const raw = typeof value === "object" ? JSON.stringify(value) : String(value); // NOSONAR: object branch is guarded above; Sonar doesn't narrow the ternary's else branch
           if (raw === "") return null;
           return (
             <Text size="sm" truncate="end">
@@ -1080,7 +1080,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
 
       // ---------- UUID (truncate) ----------
       if (fieldType === "uuid") {
-        const str = typeof value === "object" ? JSON.stringify(value) : String(value);
+        const str = typeof value === "object" ? JSON.stringify(value) : String(value); // NOSONAR: object branch is guarded above; Sonar doesn't narrow the ternary's else branch
         return (
           <Tooltip label={str} openDelay={300}>
             <Text size="sm" truncate="end" style={{ maxWidth: 120 }}>
@@ -1124,7 +1124,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         
         return (
           <Text size="sm" truncate="end">
-            {typeof value === "object" ? JSON.stringify(value) : String(value)}
+            {typeof value === "object" ? JSON.stringify(value) : String(value) /* NOSONAR: object branch is guarded above; Sonar doesn't narrow the ternary's else branch */}
           </Text>
         );
       }

@@ -182,7 +182,7 @@ function interpolateFilter(
       // scalar (misconfigured filter reference) — embedding its stringified
       // form would corrupt the surrounding JSON, so treat it like a miss.
       if (val === undefined || val === null || typeof val === "object") return "null";
-      return typeof val === "string" ? val.replace(/"/g, '\\"') : String(val);
+      return typeof val === "string" ? val.replace(/"/g, '\\"') : String(val); // NOSONAR: object case already returned above; Sonar doesn't narrow across the earlier guard
     },
   );
   try {

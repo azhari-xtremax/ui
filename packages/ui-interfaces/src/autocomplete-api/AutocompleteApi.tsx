@@ -120,7 +120,7 @@ const getValue = (obj: unknown, path: string): unknown => {
  */
 const stringifyValue = (value: unknown): string => {
     if (value === undefined || value === null) return '';
-    return typeof value === 'object' ? JSON.stringify(value) : String(value);
+    return typeof value === 'object' ? JSON.stringify(value) : String(value); // NOSONAR: object branch is guarded above; Sonar doesn't narrow the ternary's else branch
 };
 
 /**

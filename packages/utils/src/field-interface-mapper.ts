@@ -1205,7 +1205,7 @@ export function formatFieldValue(value: unknown, field: Field): string {
   // shape doesn't match the field's declared type (e.g. a relation object on
   // a field typed as a scalar) — stringify it rather than showing the
   // useless literal "[object Object]".
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
+  return typeof value === "object" ? JSON.stringify(value) : String(value); // NOSONAR: object branch is guarded above; Sonar doesn't narrow the ternary's else branch
 }
 
 /**

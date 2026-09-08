@@ -1129,7 +1129,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
             if (!relatedData) return null;
             const relatedPK = relatedData[relationInfo.relatedPrimaryKeyField.field];
             if (relatedPK === undefined || typeof relatedPK === "object") return null;
-            return `/content/${relationInfo.relatedCollection.collection}/${relatedPK}`;
+            return `/content/${relationInfo.relatedCollection.collection}/${relatedPK}`; // NOSONAR: object case already returned above; Sonar doesn't narrow across the earlier guard
         },
         [enableLink, relationInfo],
     );
