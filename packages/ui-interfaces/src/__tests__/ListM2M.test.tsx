@@ -113,6 +113,8 @@ jest.mock('@buildpad/hooks', () => {
     };
 });
 
+const mockCollectionListProps = jest.fn();
+
 jest.mock('@buildpad/ui-collections', () => ({
     CollectionForm: ({ onSuccess }: any) => (
         <div data-testid="collection-form">
@@ -121,19 +123,23 @@ jest.mock('@buildpad/ui-collections', () => ({
             </button>
         </div>
     ),
-    CollectionList: ({ bulkActions }: any) => (
-        <div data-testid="collection-list">
-            {bulkActions && (
-                <button
-                    onClick={() =>
-                        bulkActions[0].action([42], [{ id: 42, name: 'Announcement' }])
-                    }
-                >
-                    Add Selected
-                </button>
-            )}
-        </div>
-    ),
+    CollectionList: (props: any) => {
+        mockCollectionListProps(props);
+        const { bulkActions } = props;
+        return (
+            <div data-testid="collection-list">
+                {bulkActions && (
+                    <button
+                        onClick={() =>
+                            bulkActions[0].action([42], [{ id: 42, name: 'Announcement' }])
+                        }
+                    >
+                        Add Selected
+                    </button>
+                )}
+            </div>
+        );
+    },
 }));
 
 const TestWrapper = ({ children }: { children: React.ReactNode }) => (
@@ -504,5 +510,32 @@ describe('ListM2M load-items dedupe', () => {
         );
         await waitFor(() => expect(mockLoadItems).toHaveBeenCalledTimes(2));
         expect(mockLastParentPk).toHaveBeenLastCalledWith('+');
+    });
+});
+
+describe('ListM2M "Add Existing" picker requests an exact count', () => {
+    // Regression test: the related-collection picker is always a small,
+    // human-browsed list, never a large primary collection view. The
+    // server's default `estimated` count mode can report a wildly inflated
+    // total on a full first page when the related table has stale/absent
+    // ANALYZE statistics — confirmed on a live deployment where a roles
+    // table (14 real rows, never analyzed) reported 180 until pagination
+    // reached a short page and forced a recount. CollectionList's
+    // `exactCount` prop sidesteps that entirely by asking for a real count
+    // up front, and must be set for this modal specifically.
+    it('renders CollectionList with exactCount when the select modal opens', async () => {
+        render(
+            <TestWrapper>
+                <ListM2M {...defaultProps} />
+            </TestWrapper>,
+        );
+
+        const selectBtn = await screen.findByText('Add Existing');
+        fireEvent.click(selectBtn);
+
+        await screen.findByTestId('collection-list');
+        expect(mockCollectionListProps).toHaveBeenCalledWith(
+            expect.objectContaining({ exactCount: true }),
+        );
     });
 });
