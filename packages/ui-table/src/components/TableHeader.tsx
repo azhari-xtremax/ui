@@ -378,10 +378,10 @@ export const TableHeader: React.FC<TableHeaderProps> = ({
             colSpan={999}
             className="context-menu-cell"
           >
-            <div
+            <div // NOSONAR: click-inside dismiss backdrop, not an interactive control; Escape is handled globally above
               ref={contextMenuRef}
               className="header-context-menu"
-              onClick={() => setContextMenu(null)} // NOSONAR: click-inside dismiss backdrop, not an interactive control; Escape is handled globally above
+              onClick={() => setContextMenu(null)}
             >
               {renderHeaderContextMenu(contextMenu.header)}
             </div>
