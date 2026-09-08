@@ -152,7 +152,7 @@ export function Tags({
     ).filter(Boolean);
     
     if (alphabetize) {
-      processed = [...processed].sort();
+      processed = [...processed].sort((a, b) => a.localeCompare(b));
     }
     
     // Remove duplicates
