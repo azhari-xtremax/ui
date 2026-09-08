@@ -565,7 +565,7 @@ function formatCellValue(
         if (Array.isArray(value)) return formatCount(value.length, t.cell.arrayCount);
         return JSON.stringify(value);
     }
-    return String(value);
+    return String(value); // NOSONAR: value is unreachable as an object here (handled above), so this is always a primitive
 }
 
 // ── Component ──────────────────────────────────────────────────────
@@ -1128,7 +1128,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                 | undefined;
             if (!relatedData) return null;
             const relatedPK = relatedData[relationInfo.relatedPrimaryKeyField.field];
-            if (relatedPK === undefined) return null;
+            if (relatedPK === undefined || typeof relatedPK === "object") return null;
             return `/content/${relationInfo.relatedCollection.collection}/${relatedPK}`;
         },
         [enableLink, relationInfo],

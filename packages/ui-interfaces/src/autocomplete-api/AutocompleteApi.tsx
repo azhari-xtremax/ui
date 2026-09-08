@@ -112,6 +112,18 @@ const getValue = (obj: unknown, path: string): unknown => {
 };
 
 /**
+ * Stringify an extracted value for a combobox label/value. `textPath`/
+ * `valuePath` are consumer-configured dot-paths — if one resolves to a
+ * nested object instead of a leaf field, plain `String()` would render
+ * "[object Object]" and, worse, collide every such result on the same
+ * combobox `value`, breaking selection.
+ */
+const stringifyValue = (value: unknown): string => {
+    if (value === undefined || value === null) return '';
+    return typeof value === 'object' ? JSON.stringify(value) : String(value);
+};
+
+/**
  * AutocompleteAPI Component
  * 
  * A DaaS-compatible autocomplete input that fetches suggestions from an external API.
@@ -223,12 +235,12 @@ export const AutocompleteAPI = forwardRef<HTMLInputElement, AutocompleteAPIProps
                 .map((result: unknown) => {
                     if (textPath && valuePath) {
                         return {
-                            label: String(getValue(result, textPath) ?? ''),
-                            value: String(getValue(result, valuePath) ?? '')
+                            label: stringifyValue(getValue(result, textPath)),
+                            value: stringifyValue(getValue(result, valuePath))
                         };
-                    } 
+                    }
                     if (valuePath) {
-                        const val = String(getValue(result, valuePath) ?? '');
+                        const val = stringifyValue(getValue(result, valuePath));
                         return {
                             label: val,
                             value: val

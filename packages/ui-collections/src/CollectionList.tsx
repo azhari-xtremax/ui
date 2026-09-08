@@ -559,7 +559,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
           .filter(([, v]) => v !== undefined && v !== null)
           .map(([k, v]) => [
             k,
-            typeof v === "object" ? JSON.stringify(v) : String(v),
+            typeof v === "object" ? JSON.stringify(v) : String(v), // NOSONAR: object case is already handled by this ternary
           ]),
       ).toString();
 
@@ -999,7 +999,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         // unrecognised payload would print raw JSON into the cell. Every other
         // type falls back to showing the value as stored.
         if (fieldType !== "json") {
-          const raw = String(value);
+          const raw = typeof value === "object" ? JSON.stringify(value) : String(value);
           if (raw === "") return null;
           return (
             <Text size="sm" truncate="end">
@@ -1080,7 +1080,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
 
       // ---------- UUID (truncate) ----------
       if (fieldType === "uuid") {
-        const str = String(value);
+        const str = typeof value === "object" ? JSON.stringify(value) : String(value);
         return (
           <Tooltip label={str} openDelay={300}>
             <Text size="sm" truncate="end" style={{ maxWidth: 120 }}>
@@ -1124,7 +1124,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         
         return (
           <Text size="sm" truncate="end">
-            {String(value)}
+            {typeof value === "object" ? JSON.stringify(value) : String(value)}
           </Text>
         );
       }

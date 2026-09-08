@@ -178,7 +178,10 @@ function interpolateFilter(
     /\{\{\s*([^}\s]+)\s*\}\}/g, // NOSONAR: disjoint bounded whitespace runs and a negated-class body, linear
     (_match, field: string) => {
       const val = getByPath(parentValues, field);
-      if (val === undefined || val === null) return "null";
+      // An object here means `field` resolved to a nested object rather than a
+      // scalar (misconfigured filter reference) — embedding its stringified
+      // form would corrupt the surrounding JSON, so treat it like a miss.
+      if (val === undefined || val === null || typeof val === "object") return "null";
       return typeof val === "string" ? val.replace(/"/g, '\\"') : String(val);
     },
   );

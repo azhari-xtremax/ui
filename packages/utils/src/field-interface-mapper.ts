@@ -1201,8 +1201,11 @@ export function formatFieldValue(value: unknown, field: Field): string {
     }
   }
 
-  // Default - convert to string
-  return String(value);
+  // Default - convert to string. `value` can still be an object here when its
+  // shape doesn't match the field's declared type (e.g. a relation object on
+  // a field typed as a scalar) — stringify it rather than showing the
+  // useless literal "[object Object]".
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
 /**
