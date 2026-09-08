@@ -446,8 +446,8 @@ function collectUndeclaredImports(registry) {
   // `export {\n  a,\n  b,\n} from '../mod';`, and a newline-free pattern
   // silently skips every one of them — which is why an unregistered module
   // could be re-exported without the check noticing.
-  const RELATIVE_IMPORT = // NOSONAR: alternation branches are disjoint char classes (no {}), so the repetition can't backtrack ambiguously; only ever run over this repo's own trusted source files at build time
-    /(?:^|\n)\s*(?:import|export)\b(?:[^'"{}\n]|\{[^}]*\})*from\s+['"](\.[^'"]+)['"]/g;
+  const RELATIVE_IMPORT =
+    /(?:^|\n)\s*(?:import|export)\b(?:[^'"{}\n]|\{[^}]*\})*from\s+['"](\.[^'"]+)['"]/g; // NOSONAR: alternation branches are disjoint char classes (no {}), so the repetition can't backtrack ambiguously; only ever run over this repo's own trusted source files at build time
 
   for (const component of registry.components ?? registry.items ?? []) {
     const files = component.files ?? [];
