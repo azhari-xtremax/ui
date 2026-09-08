@@ -74,7 +74,7 @@ export interface BooleanProps {
  * @param props - Boolean interface props
  * @returns React component
  */
-export const Boolean: React.FC<BooleanProps> = ({
+export const Boolean: React.FC<BooleanProps> = ({ // NOSONAR: intentional component name matching the DaaS field-type catalog, part of the public API
   value,
   disabled = false,
   readOnly = false,

@@ -152,7 +152,7 @@ const DEFAULT_BASEMAPS: BasemapSource[] = [
  * @param props - Map interface props
  * @returns React component
  */
-export const Map: React.FC<MapProps> = ({
+export const Map: React.FC<MapProps> = ({ // NOSONAR: intentional component name matching the DaaS field-type catalog, part of the public API
   value,
   disabled = false,
   readOnly = false,

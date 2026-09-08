@@ -357,7 +357,7 @@ export const VTable: React.FC<VTableProps> = ({
       if (item.$index !== undefined) {
         return `$index-${item.$index}`;
       }
-      return `item-${Math.random()}`;
+      return `item-${Math.random()}`; // NOSONAR: React list-key fallback, not a secret
     },
     [itemKey],
   );

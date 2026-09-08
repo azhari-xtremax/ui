@@ -320,7 +320,7 @@ export function usePermissions(options: UsePermissionsOptions = {}): UsePermissi
       // Fetch permissions for specified collections
       const cols = collectionsKey ? collectionsKey.split(',') : [];
       if (cols.length > 0) {
-        await Promise.all(cols.map(fetchCollectionPermissions));
+        await Promise.all(cols.map(fetchCollectionPermissions)); // NOSONAR: fetchCollectionPermissions takes a single arg, no index/array arity bug
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch permissions';

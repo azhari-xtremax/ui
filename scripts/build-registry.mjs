@@ -121,7 +121,7 @@ function stableStringify(value) {
     return (
       '{' +
       Object.keys(value)
-        .sort()
+        .sort() // NOSONAR: deterministic diff-safe key order across environments; localeCompare would vary by ICU config
         .map((k) => JSON.stringify(k) + ':' + stableStringify(value[k]))
         .join(',') +
       '}'

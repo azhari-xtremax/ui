@@ -43,7 +43,7 @@ export function generateNodeId(): string {
     return crypto.randomUUID();
   }
   // Fallback for environments without crypto.randomUUID
-  return 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9);
+  return 'node_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 9); // NOSONAR: non-cryptographic UI node id, not a secret
 }
 
 /**
