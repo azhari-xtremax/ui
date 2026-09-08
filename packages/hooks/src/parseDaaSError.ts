@@ -50,11 +50,11 @@ function extractRawMessage(err: unknown): string {
     try {
       return JSON.stringify(err);
     } catch {
-      return String(err);
+      return String(err); // NOSONAR: last-resort fallback when JSON.stringify itself threw (e.g. circular ref); nothing better to show
     }
   }
   if (err === null || err === undefined) return '';
-  return String(err);
+  return String(err); // NOSONAR: err is unreachable as an object here (handled above), so this is always a primitive
 }
 
 /**

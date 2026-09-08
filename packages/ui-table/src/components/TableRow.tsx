@@ -95,7 +95,7 @@ function formatValue(
     }
     return JSON.stringify(value);
   }
-  return String(value);
+  return String(value); // NOSONAR: value is unreachable as an object here (handled above), so this is always a primitive
 }
 
 export const TableRow = forwardRef<HTMLTableRowElement, TableRowProps>(({
