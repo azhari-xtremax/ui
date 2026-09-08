@@ -716,7 +716,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
 
   switch (name) {
-    case 'list_components': {
+    case 'list_components': return (function handleListComponents() {
       const category = (args as any)?.category;
       const components = category
         ? getComponentsByCategory(category)
@@ -730,9 +730,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
-    }
+    })();
 
-    case 'list_lib_modules': {
+    case 'list_lib_modules': return (function handleListLibModules() {
       const libModules = getAllLibModules().map(m => ({
         name: m.name,
         description: m.description,
@@ -750,9 +750,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
-    }
+    })();
 
-    case 'get_component': {
+    case 'get_component': return (function handleGetComponent() {
       const componentName = (args as any)?.name;
       if (!componentName) {
         throw new Error('Component name is required');
@@ -824,9 +824,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
-    }
+    })();
 
-    case 'get_usage_example': {
+    case 'get_usage_example': return (function handleGetUsageExample() {
       const componentName = (args as any)?.component;
       if (!componentName) {
         throw new Error('Component name is required');
@@ -857,9 +857,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           },
         ],
       };
-    }
+    })();
 
-    case 'generate_form': {
+    case 'generate_form': return (function handleGenerateForm() {
       const { collection, fields, mode } = args as any;
       
       const code = `// Copy & Own: cd /path/to/buildpad-ui && pnpm cli add collection-form --project /path/to/your-project
@@ -886,9 +886,9 @@ function ${collection.charAt(0).toUpperCase() + collection.slice(1)}Form() {
           },
         ],
       };
-    }
+    })();
 
-    case 'generate_interface': {
+    case 'generate_interface': return (function handleGenerateInterface() {
       const { type, field, props = {} } = args as any;
 
       // Map interface type to component name
@@ -933,9 +933,9 @@ function Example() {
           },
         ],
       };
-    }
+    })();
 
-    case 'list_packages': {
+    case 'list_packages': return (function handleListPackages() {
       return {
         content: [
           {
@@ -944,9 +944,9 @@ function Example() {
           },
         ],
       };
-    }
+    })();
 
-    case 'get_install_command': {
+    case 'get_install_command': return (function handleGetInstallCommand() {
       const { components, category, all } = args as any;
       
       // NOTE: @buildpad/cli is NOT published to npm. Must use local CLI from cloned repo
@@ -1025,9 +1025,9 @@ pnpm cli init --project /path/to/your-project
           },
         ],
       };
-    }
+    })();
 
-    case 'get_copy_own_info': {
+    case 'get_copy_own_info': return (function handleGetCopyOwnInfo() {
       const info = `## Buildpad Copy & Own Distribution Model
 
 Buildpad uses the **Copy & Own** model (like shadcn/ui) instead of traditional npm packages.
@@ -1095,9 +1095,9 @@ your-project/
           },
         ],
       };
-    }
+    })();
 
-    case 'copy_component': {
+    case 'copy_component': return (function handleCopyComponent() {
       const componentName = (args as any)?.name;
       const includeLib = (args as any)?.includeLib ?? true;
       
@@ -1256,28 +1256,22 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
           },
         ],
       };
-    }
+    })();
 
-    default:
-      if (name === 'get_rbac_pattern') {
-        return handleGetRbacPattern(args as any);
-      }
+    case 'get_rbac_pattern': return handleGetRbacPattern(args as any);
+    case 'get_module_access_pattern': return handleGetModuleAccessPattern(args as any);
 
-      if (name === 'get_module_access_pattern') {
-        return handleGetModuleAccessPattern(args as any);
-      }
+    // --- Phase 5: versioning tools ---
 
-      // --- Phase 5: versioning tools ---
+    case 'get_package_versions': return (function handleGetPackageVersions() {
+      const registry = getRegistry();
+      const packages = (registry as any).packages ?? {};
+      return {
+        content: [{ type: 'text', text: JSON.stringify(packages, null, 2) }],
+      };
+    })();
 
-      if (name === 'get_package_versions') {
-        const registry = getRegistry();
-        const packages = (registry as any).packages ?? {};
-        return {
-          content: [{ type: 'text', text: JSON.stringify(packages, null, 2) }],
-        };
-      }
-
-      if (name === 'list_outdated') {
+    case 'list_outdated': return (function handleListOutdated() {
         const { projectPath } = args as any;
         if (!projectPath) throw new Error('projectPath is required');
         const configPath = join(projectPath, 'buildpad.json');
@@ -1312,9 +1306,9 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
         return {
           content: [{ type: 'text', text: JSON.stringify(outdated, null, 2) }],
         };
-      }
+      })();
 
-      if (name === 'get_component_changelog') {
+    case 'get_component_changelog': return (async function handleGetComponentChangelog() {
         const { target, sinceVersion } = args as any;
         if (!target) throw new Error('target is required');
         const registry = getRegistry();
@@ -1352,9 +1346,9 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
             text: slice || `No changelog entries found${sinceVersion ? ` after version ${sinceVersion}` : ''}.`,
           }],
         };
-      }
+      })();
 
-      if (name === 'get_upgrade_plan') {
+    case 'get_upgrade_plan': return (function handleGetUpgradePlan() {
         const { projectPath, components: requestedComponents } = args as any;
         if (!projectPath) throw new Error('projectPath is required');
         const configPath = join(projectPath, 'buildpad.json');
@@ -1416,9 +1410,9 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
         return {
           content: [{ type: 'text', text: JSON.stringify(plan, null, 2) }],
         };
-      }
+      })();
 
-      if (name === 'apply_upgrade') {
+    case 'apply_upgrade': return (function handleApplyUpgrade() {
         const { projectPath, components: requestedComponents, strategy = 'new-file' } = args as any;
         if (!projectPath) throw new Error('projectPath is required');
         const configPath = join(projectPath, 'buildpad.json');
@@ -1456,8 +1450,9 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
             }, null, 2),
           }],
         };
-      }
+      })();
 
+    default:
       throw new Error(`Unknown tool: ${name}`);
   }
 });
