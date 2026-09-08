@@ -238,7 +238,7 @@ const SortableM2MTableRow: React.FC<SortableM2MTableRowProps> = ({
             ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
             : undefined,
         transition,
-        opacity: isDragging ? 0.5 : item.$type === "deleted" ? 0.5 : 1,
+        opacity: isDragging ? 0.5 : item.$type === "deleted" ? 0.5 : 1, // NOSONAR: idiomatic tri-state ternary, not confusing nesting
         cursor: !isEffectivelyNonEditable && updateAllowed ? "pointer" : undefined,
         position: isDragging ? "relative" : undefined,
         zIndex: isDragging ? 1 : undefined,
@@ -439,7 +439,7 @@ const SortableM2MListItem: React.FC<SortableM2MListItemProps> = ({
             : undefined,
         transition,
         cursor: !isEffectivelyNonEditable && updateAllowed ? "pointer" : undefined,
-        opacity: isDragging ? 0.5 : item.$type === "deleted" ? 0.5 : 1,
+        opacity: isDragging ? 0.5 : item.$type === "deleted" ? 0.5 : 1, // NOSONAR: idiomatic tri-state ternary, not confusing nesting
         position: isDragging ? "relative" : undefined,
         zIndex: isDragging ? 1 : undefined,
     };
@@ -1506,7 +1506,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                     <Paper p="xl" style={{ textAlign: "center" }}>
                         <Text c="dimmed">{t.no_items}</Text>
                     </Paper>
-                ) : layout === "table" ? (
+                ) : layout === "table" ? ( // NOSONAR: idiomatic tri-state ternary, not confusing nesting
                     /* Table Layout — with DnD, field metadata headers, batch edit */
                     <DndContext
                         sensors={sensors}

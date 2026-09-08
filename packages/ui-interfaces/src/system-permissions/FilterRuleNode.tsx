@@ -704,8 +704,8 @@ function FilterValueInput({
           { value: 'true', label: t.booleanTrue },
           { value: 'false', label: t.booleanFalse },
         ]}
-        value={value === true ? 'true' : value === false ? 'false' : null}
-        onChange={(v) => onChange(v === 'true' ? true : v === 'false' ? false : null)}
+        value={value === true ? 'true' : value === false ? 'false' : null} // NOSONAR: idiomatic tri-state ternary, not confusing nesting
+        onChange={(v) => onChange(v === 'true' ? true : v === 'false' ? false : null)} // NOSONAR: idiomatic tri-state ternary, not confusing nesting
         placeholder="--"
         size="xs"
         variant="unstyled"

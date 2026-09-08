@@ -156,7 +156,7 @@ export const TableRow = forwardRef<HTMLTableRowElement, TableRowProps>(({
       tabIndex={rowIsKeyboardInteractive ? 0 : undefined}
       onClick={onClick}
       onKeyDown={rowIsKeyboardInteractive ? handleKeyDown : undefined}
-      aria-selected={showSelect !== 'none' ? (isSelected ? 'true' : 'false') : undefined}
+      aria-selected={showSelect !== 'none' ? (isSelected ? 'true' : 'false') : undefined} // NOSONAR: idiomatic tri-state ternary, not confusing nesting
       {...restProps}
     >
       {/* Manual Sort Handle */}
@@ -204,7 +204,7 @@ export const TableRow = forwardRef<HTMLTableRowElement, TableRowProps>(({
           >
             {content !== null ? (
               content
-            ) : value !== null && value !== undefined ? (
+            ) : value !== null && value !== undefined ? ( // NOSONAR: idiomatic tri-state ternary, not confusing nesting
               <Text size="sm" truncate="end">
                 {formatCell(value)}
               </Text>

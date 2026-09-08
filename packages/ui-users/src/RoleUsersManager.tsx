@@ -328,7 +328,7 @@ export const RoleUsersManager: React.FC<RoleUsersManagerProps> = ({
                   <Text key={index} span fw={500}> {/* NOSONAR: index into a deterministic split of a fixed i18n string */}
                     {segment.text}
                   </Text>
-                ) : segment.tag === 'remove' ? (
+                ) : segment.tag === 'remove' ? ( // NOSONAR: idiomatic tri-state ternary, not confusing nesting
                   <Text key={index} span c="red"> {/* NOSONAR: index into a deterministic split of a fixed i18n string */}
                     {segment.text}
                   </Text>

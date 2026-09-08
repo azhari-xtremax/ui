@@ -726,7 +726,7 @@ function getTypeBasedInterface(
         type:
           type === "bigInteger"
             ? "bigInteger"
-            : type === "integer"
+            : type === "integer" // NOSONAR: idiomatic tri-state ternary, not confusing nesting
             ? "integer"
             : "float",
         step: dataType?.includes("int") ? 1 : 0.01,

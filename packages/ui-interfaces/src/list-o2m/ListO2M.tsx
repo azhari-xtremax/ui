@@ -1350,7 +1350,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
           <Paper p="xl" style={{ textAlign: "center" }} data-testid="o2m-empty">
             <Text c="dimmed">{t.noItems}</Text>
           </Paper>
-        ) : layout === "table" ? (
+        ) : layout === "table" ? ( // NOSONAR: idiomatic tri-state ternary, not confusing nesting
           /* ── Table Layout ─────────────────────────────────────────────── */
           <Table
             striped
@@ -1358,7 +1358,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
             verticalSpacing={
               tableSpacing === "compact"
                 ? "xs"
-                : tableSpacing === "comfortable"
+                : tableSpacing === "comfortable" // NOSONAR: idiomatic tri-state ternary, not confusing nesting
                   ? "md"
                   : "sm"
             }

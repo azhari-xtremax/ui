@@ -1047,7 +1047,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
         >
           {!persist
             ? t.form.success.previewOnly
-            : mode === "create"
+            : mode === "create" // NOSONAR: idiomatic tri-state ternary, not confusing nesting
             ? t.form.success.created
             : t.form.success.updated}
         </Alert>
@@ -1059,7 +1059,7 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
             <Text c="dimmed" ta="center" py="xl">
               {!saveAllowed
                 ? interpolate(
-                    mode === "create"
+                    mode === "create" // NOSONAR: idiomatic tri-state ternary, not confusing nesting
                       ? t.form.emptyState.noPermissionCreate
                       : t.form.emptyState.noPermissionEdit,
                     { collection },

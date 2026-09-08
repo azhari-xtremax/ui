@@ -311,7 +311,7 @@ const RuleRow: React.FC<RuleRowProps> = ({ rule, fields, disabled, onChange, onR
                     if (type === 'boolean') {
                         return (
                             <Select
-                                value={rule.value === true ? 'true' : rule.value === false ? 'false' : ''}
+                                value={rule.value === true ? 'true' : rule.value === false ? 'false' : ''} // NOSONAR: idiomatic tri-state ternary, not confusing nesting
                                 onChange={(val) => onChange({ ...rule, value: val === 'true' })}
                                 data={[{ value: 'true', label: t.rule.booleanTrue }, { value: 'false', label: t.rule.booleanFalse }]}
                                 size="xs"

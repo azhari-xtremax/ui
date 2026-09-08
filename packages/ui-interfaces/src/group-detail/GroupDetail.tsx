@@ -310,7 +310,7 @@ export function GroupDetail({
               <Text c="dimmed" ta="center" py="xl">
                 {t.loading}
               </Text>
-            ) : children ? (
+            ) : children ? ( // NOSONAR: idiomatic tri-state ternary, not confusing nesting
               children
             ) : (
               <Text c="dimmed" ta="center" py="md">

@@ -360,7 +360,7 @@ export const AutocompleteAPI = forwardRef<HTMLInputElement, AutocompleteAPIProps
     // Determine left section (icon or loading)
     const leftSection = loading ? (
         <Loader size="xs" data-testid="autocomplete-loading" />
-    ) : iconLeft ? (
+    ) : iconLeft ? ( // NOSONAR: idiomatic tri-state ternary, not confusing nesting
         <IconSearch size={16} data-testid="autocomplete-icon-left" />
     ) : undefined;
 

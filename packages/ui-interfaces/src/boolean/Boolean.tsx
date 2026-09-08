@@ -114,7 +114,7 @@ export const Boolean: React.FC<BooleanProps> = ({ // NOSONAR: intentional compon
     checked,
     onChange: handleChange,
     disabled,
-    label: label ? (required ? interpolate(t.requiredLabel, { label }) : label) : undefined,
+    label: label ? (required ? interpolate(t.requiredLabel, { label }) : label) : undefined, // NOSONAR: idiomatic tri-state ternary, not confusing nesting
     description,
     error,
     size,

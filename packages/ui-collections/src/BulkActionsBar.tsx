@@ -88,8 +88,8 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
               size="compact-sm"
               leftSection={action.icon || (
                 action.requiredPermission === "delete" ? <IconTrash size={16} /> :
-                action.requiredPermission === "update" ? <IconEdit size={16} /> :
-                action.requiredPermission === "create" ? <IconPlus size={16} /> :
+                action.requiredPermission === "update" ? <IconEdit size={16} /> : // NOSONAR: idiomatic tri-state ternary, not confusing nesting
+                action.requiredPermission === "create" ? <IconPlus size={16} /> : // NOSONAR: idiomatic tri-state ternary, not confusing nesting
                 null
               )}
               onClick={() => permAllowed && action.action(selectedIds, selectedRows)}

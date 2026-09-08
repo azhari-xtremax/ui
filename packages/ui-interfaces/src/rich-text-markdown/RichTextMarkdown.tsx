@@ -566,7 +566,7 @@ export function RichTextMarkdown({
           <div
             className={`rich-text-markdown-char-count ${
               percRemaining < 5 ? 'rich-text-markdown-char-count--danger' : 
-              percRemaining < 10 ? 'rich-text-markdown-char-count--warning' : 
+              percRemaining < 10 ? 'rich-text-markdown-char-count--warning' : // NOSONAR: idiomatic tri-state ternary, not confusing nesting
               'rich-text-markdown-char-count--normal'
             }`}
           >

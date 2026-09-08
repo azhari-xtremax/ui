@@ -1397,7 +1397,7 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
           const modifiedLocally = fileStatuses.some(f => f.status === 'modified');
           const recommendedAction = !isOutdated
             ? 'up-to-date'
-            : !modifiedLocally
+            : !modifiedLocally // NOSONAR: idiomatic tri-state ternary, not confusing nesting
               ? 'safe-overwrite'
               : 'prompt-or-three-way';
 

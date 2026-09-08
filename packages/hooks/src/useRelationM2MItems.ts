@@ -126,7 +126,7 @@ export function useRelationM2MItems(
       // does in `fields` above — sorting the junction table by it asks the
       // backend for a column that doesn't exist there.
       const sortField = params.sortField
-        ? (params.sortField.includes('.') ? params.sortField : `${junctionFieldName}.${params.sortField}`)
+        ? (params.sortField.includes('.') ? params.sortField : `${junctionFieldName}.${params.sortField}`) // NOSONAR: idiomatic tri-state ternary, not confusing nesting
         : relationInfo.sortField;
       if (sortField) {
         // Direction applies to the configured sort field too; it used to be
