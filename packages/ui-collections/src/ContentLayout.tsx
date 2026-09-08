@@ -209,7 +209,7 @@ export const ContentLayout: React.FC<ContentLayoutProps> = ({
                 >
                   {breadcrumbs.map((item, idx) => (
                     <Anchor
-                      key={idx}
+                      key={`${item.href ?? item.label}-${idx}`}
                       href={item.href || '#'}
                       size="xs"
                       c="dimmed"

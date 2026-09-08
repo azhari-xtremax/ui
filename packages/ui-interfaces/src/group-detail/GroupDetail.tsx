@@ -296,7 +296,7 @@ export function GroupDetail({
             >
               <Stack gap="xs">
                 {validationMessages.map((message, index) => (
-                  <Text key={index} size="sm">
+                  <Text key={`${message}-${index}`} size="sm">
                     {message}
                   </Text>
                 ))}

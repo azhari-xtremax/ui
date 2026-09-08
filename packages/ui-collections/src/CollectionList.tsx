@@ -961,7 +961,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
             <Group gap={4} wrap="nowrap">
               {entries.slice(0, 3).map((v, i) => (
                 <Badge
-                  key={i}
+                  key={`${String(v)}-${i}`}
                   variant="light"
                   size="sm"
                   color="gray"

@@ -28,7 +28,7 @@ export function interpolateNodes(template: string, nodes: Record<string, ReactNo
   return template.split(/(\{\w+\})/g).map((part, index) => {
     const match = /^\{(\w+)\}$/.exec(part);
     if (match && match[1] in nodes) {
-      return createElement(Fragment, { key: index }, nodes[match[1]]);
+      return createElement(Fragment, { key: index }, nodes[match[1]]); // NOSONAR: deterministic split of a fixed template string, not a reorderable/stateful list
     }
     return part;
   });

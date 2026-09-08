@@ -624,7 +624,7 @@ export const Color: React.FC<ColorProps> = ({
                 <Group gap="xs">
                   {presets.map((preset, index) => (
                     <Button
-                      key={index}
+                      key={`${preset.color}-${index}`}
                       size="xs"
                       variant="outline"
                       radius="sm"

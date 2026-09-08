@@ -15,7 +15,7 @@ function withNodes(template: string, nodes: Record<string, React.ReactNode>): Re
   return template.split(/(\{\w+\})/g).map((part, index) => {
     const match = /^\{(\w+)\}$/.exec(part);
     if (match && match[1] in nodes) {
-      return <React.Fragment key={index}>{nodes[match[1]]}</React.Fragment>;
+      return <React.Fragment key={index}>{nodes[match[1]]}</React.Fragment>; // NOSONAR: deterministic split of a fixed template string, not a reorderable/stateful list
     }
     return part;
   });

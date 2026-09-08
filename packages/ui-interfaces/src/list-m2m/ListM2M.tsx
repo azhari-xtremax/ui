@@ -1367,13 +1367,13 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                     <Stack gap="xs">
                         <Skeleton height={36} /> {/* Header row */}
                         {Array.from({ length: Math.min(currentLimit, 5) }).map((_, i) => (
-                            <Skeleton key={i} height={40} />
+                            <Skeleton key={i} height={40} /> // NOSONAR: static loading placeholder, no identity to preserve
                         ))}
                     </Stack>
                 ) : (
                     <Stack gap="xs">
                         {Array.from({ length: Math.min(currentLimit, 5) }).map((_, i) => (
-                            <Skeleton key={i} height={56} radius="sm" />
+                            <Skeleton key={i} height={56} radius="sm" /> // NOSONAR: static loading placeholder, no identity to preserve
                         ))}
                     </Stack>
                 )}

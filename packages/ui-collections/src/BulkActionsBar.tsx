@@ -79,7 +79,7 @@ export const BulkActionsBar: React.FC<BulkActionsBarProps> = ({
           (permKey === "delete" && deleteAllowed);
         return (
           <Tooltip
-            key={index}
+            key={action.label}
             label={permAllowed ? action.label : common.notAllowed}
           >
             <Button
