@@ -63,7 +63,7 @@ function extractRawMessage(err: unknown): string {
  * response body, then return it only if it looks like JSON.
  */
 function extractJsonBody(message: string): string | null {
-  const match = message.match(/^API error:\s*\d+\s*-\s*([\s\S]*)$/);
+  const match = message.match(/^API error:\s*\d+\s*-\s*([\s\S]*)$/); // NOSONAR: fixed literals separate each quantifier, no ambiguous overlap
   const body = (match ? match[1] : message).trim();
   if (body.startsWith('{') || body.startsWith('[')) return body;
   return null;

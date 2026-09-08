@@ -175,7 +175,7 @@ function interpolateFilter(
 ): Record<string, unknown> {
   const json = JSON.stringify(filter);
   const interpolated = json.replace(
-    /\{\{\s*([^}\s]+)\s*\}\}/g,
+    /\{\{\s*([^}\s]+)\s*\}\}/g, // NOSONAR: disjoint bounded whitespace runs and a negated-class body, linear
     (_match, field: string) => {
       const val = getByPath(parentValues, field);
       if (val === undefined || val === null) return "null";

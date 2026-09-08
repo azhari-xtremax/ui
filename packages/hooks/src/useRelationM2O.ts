@@ -5,7 +5,7 @@ import { apiRequest, isValidPrimaryKey } from "./utils";
 // Template field extraction helper
 // ---------------------------------------------------------------------------
 
-const TEMPLATE_REGEX = /\{\{(.*?)\}\}/g;
+const TEMPLATE_REGEX = /\{\{(.*?)\}\}/g; // NOSONAR: single lazy quantifier, no nesting, linear
 
 /**
  * Extract field names referenced inside `{{…}}` placeholders so we know which

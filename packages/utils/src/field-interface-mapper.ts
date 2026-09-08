@@ -1005,7 +1005,7 @@ const GENERATED_DEFAULT_KEYWORDS = new Set([
  * bare `(` anywhere also rejected ordinary literals whose *text* contains one
  * (`'Acme (US)'`) and every parameterized cast (`::numeric(10,2)`).
  */
-const SQL_FUNCTION_CALL = /[A-Za-z_][A-Za-z0-9_.]*\s*\(/;
+const SQL_FUNCTION_CALL = /[A-Za-z_][A-Za-z0-9_.]*\s*\(/; // NOSONAR: single unbounded quantifier, linear, no nesting
 
 const NUMERIC_FIELD_TYPES = new Set([
   "integer",

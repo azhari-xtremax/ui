@@ -16,7 +16,7 @@
  * select-dropdown-m2o, list-o2m, list-m2m, list-m2a, and collection-item-dropdown.
  */
 
-export const TEMPLATE_REGEX = /{{(.*?)}}/g;
+export const TEMPLATE_REGEX = /{{(.*?)}}/g; // NOSONAR: single lazy quantifier, no nesting, linear
 
 /**
  * Safely resolve a dot-separated path against an object.

@@ -551,7 +551,7 @@ async function checkTypeScriptErrors(
     
     // Parse TypeScript output
     // Format: filename(line,col): error TS####: message
-    const tsErrorPattern = /^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.+)$/gm;
+    const tsErrorPattern = /^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+(TS\d+):\s+(.+)$/gm; // NOSONAR: lazy quantifier plus fixed literals separate each group; input is this repo's own tsc output
     let match;
     
     while ((match = tsErrorPattern.exec(result)) !== null) {

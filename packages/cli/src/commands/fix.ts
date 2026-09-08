@@ -371,7 +371,7 @@ function collectTypeScriptErrors(cwd: string, config: Config): TsError[] {
     );
 
     const errors: TsError[] = [];
-    const pattern = /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$/gm;
+    const pattern = /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$/gm; // NOSONAR: lazy quantifier plus fixed literals separate each group; input is this repo's own tsc output
     let match;
 
     while ((match = pattern.exec(output)) !== null) {

@@ -143,7 +143,7 @@ function stableStringify(value) {
  */
 export function extractSemverFromTag(tag) {
   if (!tag) return undefined;
-  const m = tag.match(/(\d+)\.(\d+)\.(\d+)/);
+  const m = tag.match(/(\d+)\.(\d+)\.(\d+)/); // NOSONAR: three independent bounded-alphabet quantifiers, linear
   return m ? `${m[1]}.${m[2]}.${m[3]}` : undefined;
 }
 
@@ -446,7 +446,7 @@ function collectUndeclaredImports(registry) {
   // `export {\n  a,\n  b,\n} from '../mod';`, and a newline-free pattern
   // silently skips every one of them — which is why an unregistered module
   // could be re-exported without the check noticing.
-  const RELATIVE_IMPORT =
+  const RELATIVE_IMPORT = // NOSONAR: alternation branches are disjoint char classes (no {}), so the repetition can't backtrack ambiguously; only ever run over this repo's own trusted source files at build time
     /(?:^|\n)\s*(?:import|export)\b(?:[^'"{}\n]|\{[^}]*\})*from\s+['"](\.[^'"]+)['"]/g;
 
   for (const component of registry.components ?? registry.items ?? []) {

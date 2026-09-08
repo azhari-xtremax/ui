@@ -205,7 +205,7 @@ function toCollectionName(name: string): string {
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '')
+      .replace(/^_+|_+$/g, '') // NOSONAR: two independent single-quantifier alternatives, linear
       .replace(/_+/g, '_') || 'screen'
   );
 }

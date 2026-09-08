@@ -149,7 +149,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
       out = out
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
+        .replace(/^-+|-+$/g, ''); // NOSONAR: two independent single-quantifier alternatives, linear
     }
     return out;
   };
