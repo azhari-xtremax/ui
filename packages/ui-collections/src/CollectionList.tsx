@@ -813,16 +813,30 @@ export const CollectionList: React.FC<CollectionListProps> = ({
           <Menu.Label>{t.list.headerMenu.sort}</Menu.Label>
           <div
             role="menuitem"
+            tabIndex={0}
             className="mantine-Menu-item collection-list-context-menu-item"
             onClick={() => handleSortChange({ by: header.value, desc: false })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleSortChange({ by: header.value, desc: false });
+              }
+            }}
           >
             <IconSortAscending size={14} />
             <Text size="sm">{t.list.headerMenu.sortAscending}</Text>
           </div>
           <div
             role="menuitem"
+            tabIndex={0}
             className="mantine-Menu-item collection-list-context-menu-item"
             onClick={() => handleSortChange({ by: header.value, desc: true })}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleSortChange({ by: header.value, desc: true });
+              }
+            }}
           >
             <IconSortDescending size={14} />
             <Text size="sm">{t.list.headerMenu.sortDescending}</Text>
@@ -852,10 +866,17 @@ export const CollectionList: React.FC<CollectionListProps> = ({
             <div
               key={align}
               role="menuitem"
+              tabIndex={0}
               className={`mantine-Menu-item collection-list-context-menu-item${
                 header.align === align ? " active" : ""
               }`}
               onClick={() => handleAlignChange(header.value, align)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleAlignChange(header.value, align);
+                }
+              }}
             >
               {icon}
               <Text size="sm">{label}</Text>
@@ -867,8 +888,15 @@ export const CollectionList: React.FC<CollectionListProps> = ({
           {/* Hide field */}
           <div
             role="menuitem"
+            tabIndex={0}
             className="mantine-Menu-item collection-list-context-menu-item danger"
             onClick={() => removeField(header.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                removeField(header.value);
+              }
+            }}
           >
             <IconEyeOff size={14} />
             <Text size="sm">{t.list.headerMenu.hideField}</Text>

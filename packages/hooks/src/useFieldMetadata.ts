@@ -150,10 +150,9 @@ export function useFieldMetadata(options: UseFieldMetadataOptions): UseFieldMeta
         for (const field of allFields) {
             const entry: FieldMetadataEntry = {
                 field: field.field,
-                name: field.meta?.note
-                    // note is a description, not the name — use field key formatting
-                    ? formatFieldKey(field.field)
-                    : formatFieldKey(field.field),
+                // note is a description, not a name — DaaS has no separate display-name
+                // field, so the formatted field key is always the name.
+                name: formatFieldKey(field.field),
                 type: field.type,
                 display: field.meta?.display ?? null,
                 displayOptions: field.meta?.display_options ?? null,
