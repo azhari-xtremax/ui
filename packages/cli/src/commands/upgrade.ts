@@ -780,12 +780,17 @@ export async function upgrade(options: UpgradeOptions) {
   // `--design` scopes strictly to the design-system lib module (no components).
   let targetComponents: string[] = [];
   let targetLibModules: string[] = [];
+  // Shared by --all and the --force fallback below: both mean "every
+  // installed component/module", just reached via different flags.
+  const selectAllInstalled = () => {
+    targetComponents = config.installedComponents;
+    targetLibModules = config.installedLib;
+  };
 
   if (design) {
     targetLibModules = ['design-system'];
   } else if (all) {
-    targetComponents = config.installedComponents;
-    targetLibModules = config.installedLib;
+    selectAllInstalled();
   } else if (packageFilter) {
     targetComponents = config.installedComponents.filter(name => {
       const reg = registry.components.find(c => c.name === name);
@@ -799,8 +804,7 @@ export async function upgrade(options: UpgradeOptions) {
       else targetComponents.push(name);
     }
   } else if (force) {
-    targetComponents = config.installedComponents;
-    targetLibModules = config.installedLib;
+    selectAllInstalled();
   } else {
     // Default: everything whose upstream content changed, plus anything a
     // previous run left pending. A v2 record has no upstream hash to compare,
