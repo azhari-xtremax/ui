@@ -321,7 +321,6 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         totalCount: hookTotalCount,
         loading: itemsLoading,
         loadItems,
-        createItem,
         createItemWithData,
         removeItem,
         updateItem,
@@ -330,7 +329,6 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         getSelectedPrimaryKeysByCollection,
         getChanges,
         hasChanges,
-        resetChanges,
     } = useRelationM2AItems(
         isDemoMode ? null : (hookRelationInfo as M2ARelationInfo | null), 
         isDemoMode ? null : (primaryKey || null)

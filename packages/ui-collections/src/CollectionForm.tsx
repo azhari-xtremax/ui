@@ -260,8 +260,6 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
   const [createAllowed, setCreateAllowed] = useState(true);
   const [updateAllowed, setUpdateAllowed] = useState(true);
   const [deleteAllowed, setDeleteAllowed] = useState(false);
-  const [readableFieldNames, setReadableFieldNames] = useState<string[] | null>(null);
-  const [writableFieldNames, setWritableFieldNames] = useState<string[] | null>(null);
   // Whether the target collection actually has the `extras` jsonb column that
   // `store: 'extras'` fields write into (guards a cryptic DaaS 500 when absent).
   const [hasExtrasColumn, setHasExtrasColumn] = useState(true);
@@ -357,7 +355,6 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
           readFields = readAccess.fields || null; // null = wildcard
           if (readFields && readFields.includes("*")) readFields = null;
         }
-        setReadableFieldNames(readFields);
 
         // Compute writable field names for the current action
         const actionAccess = mode === "create" ? createAccess : updateAccess;
@@ -366,7 +363,6 @@ export const CollectionForm: React.FC<CollectionFormProps> = ({
           writeFields = actionAccess.fields || null;
           if (writeFields && writeFields.includes("*")) writeFields = null;
         }
-        setWritableFieldNames(writeFields);
 
         // Filter fields based on read permissions, system fields, etc.
         let editableFields = allFields.filter((f) => {

@@ -395,19 +395,6 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     }, [onChange]);
 
     // ----- Actions -----
-    const addRule = useCallback(() => {
-        if (fields.length === 0) return;
-        const firstField = fields[0];
-        const ops = getOperatorsForType(firstField.type);
-        const newRule: FilterRule = {
-            id: uid(),
-            field: firstField.field,
-            operator: ops[0].value,
-            value: ops[0].needsValue ? null : true,
-        };
-        emitChange({ ...rootGroup, rules: [...rootGroup.rules, newRule] });
-    }, [rootGroup, fields, emitChange]);
-
     const addGroup = useCallback(() => {
         const newGroup: FilterGroup = {
             id: uid(),

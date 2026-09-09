@@ -121,7 +121,7 @@ export function FilterRuleNode({
   }, [matchedRelation?.relatedCollection, relatedColumnName]);
 
   // Resolve field type: bare relation → relation operators, dot-notation → related field type, else → local field type
-  let resolvedFieldType = 'string';
+  let resolvedFieldType: string;
   let selectedField: Field | undefined;
 
   if (isRelationAlias) {

@@ -126,7 +126,7 @@ export const ContentLayout: React.FC<ContentLayoutProps> = ({
   detailWidth = 284,
   children,
 }) => {
-  const [sidebarOpened, { toggle: toggleSidebar, close: closeSidebar }] =
+  const [sidebarOpened, { toggle: toggleSidebar }] =
     useDisclosure(true);
   const isMobile = useMediaQuery('(max-width: 768px)');
 

@@ -301,7 +301,6 @@ export const CollectionList: React.FC<CollectionListProps> = ({
   // ----- Permission state (mirrors DaaS useCollectionPermissions) -----
   // Fetched from GET /permissions/me via PermissionsService.getMyCollectionAccess().
   // Empty access map (admin or failed fetch) = assume full access.
-  const [readableFields, setReadableFields] = useState<string[] | null>(null);
   const [createAllowed, setCreateAllowed] = useState(true);
   const [updateAllowed, setUpdateAllowed] = useState(true);
   const [deleteAllowed, setDeleteAllowed] = useState(true);
@@ -369,8 +368,6 @@ export const CollectionList: React.FC<CollectionListProps> = ({
           permFields = readAccess.fields ?? null;
           if (permFields && permFields.includes("*")) permFields = null;
         }
-        setReadableFields(permFields);
-
         // All non-system, non-hidden, non-alias fields
         let visible = fieldsResult.filter((f: Field) => {
           if (SYSTEM_FIELDS.includes(f.field)) return false;
