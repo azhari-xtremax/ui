@@ -143,7 +143,7 @@ function changelogSince(content: string, since?: string): string {
   let inRange = false;
   const result: string[] = [];
   for (const line of lines) {
-    const m = line.match(/^## (\d+\.\d+\.\d+)/);
+    const m = /^## (\d+\.\d+\.\d+)/.exec(line);
     if (m) {
       inRange = compareSemver(m[1], since) > 0;
     }

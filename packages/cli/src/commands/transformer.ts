@@ -548,7 +548,7 @@ export function extractBuildpadDependencies(content: string): string[] {
 
   for (const pattern of patterns) {
     if (pattern.test(content)) {
-      const match = pattern.source.match(/@buildpad\/([^/]+)/);
+      const match = /@buildpad\/([^/]+)/.exec(pattern.source);
       if (match) {
         // Map package names to lib names
         const libName = match[1].replace('ui-', '');
@@ -642,7 +642,7 @@ export function addOriginHeader(
   const header = generateOriginHeader(componentName, sourcePackage, version, sourceSha256);
   
   // If file has "use client", insert header after it
-  const useClientMatch = content.match(/^(["']use client["'];?\s*\n)/);
+  const useClientMatch = /^(["']use client["'];?\s*\n)/.exec(content);
   if (useClientMatch) {
     return useClientMatch[1] + header + content.slice(useClientMatch[0].length);
   }
@@ -714,10 +714,10 @@ export function extractOriginInfo(content: string): {
   /** @deprecated Recorded in buildpad.json since CLI v2. Not present in new-style headers. */
   date?: string;
 } | null {
-  const originMatch = content.match(/@buildpad-origin\s+([^\n*]+)/);
-  const versionMatch = content.match(/@buildpad-version\s+([^\n*]+)/);
-  const sha256Match = content.match(/@buildpad-source-sha256\s+([^\n*]+)/);
-  const dateMatch = content.match(/@buildpad-date\s+([^\n*]+)/);
+  const originMatch = /@buildpad-origin\s+([^\n*]+)/.exec(content);
+  const versionMatch = /@buildpad-version\s+([^\n*]+)/.exec(content);
+  const sha256Match = /@buildpad-source-sha256\s+([^\n*]+)/.exec(content);
+  const dateMatch = /@buildpad-date\s+([^\n*]+)/.exec(content);
   
   if (!originMatch) return null;
   

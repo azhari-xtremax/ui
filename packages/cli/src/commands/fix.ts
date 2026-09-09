@@ -415,7 +415,7 @@ async function fixTypeScriptErrors(
   for (const err of tsErrors) {
     if (err.code === 'TS2307' || err.code === 'TS7016') {
       // Extract module name from message like: Cannot find module 'xxx' or its type declarations
-      const moduleMatch = err.message.match(/(?:Cannot find module|Could not find a declaration file for module)\s+'([^']+)'/);
+      const moduleMatch = /(?:Cannot find module|Could not find a declaration file for module)\s+'([^']+)'/.exec(err.message);
       if (moduleMatch) {
         const moduleSpec = moduleMatch[1];
         // Skip relative imports (handled by fixBrokenImports)
