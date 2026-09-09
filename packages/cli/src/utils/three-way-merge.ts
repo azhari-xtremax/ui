@@ -64,13 +64,15 @@ export function threeWayMerge(ours: string, base: string, theirs: string): Merge
     hasConflicts = true;
     // Standard git-style markers — using "HEAD" rather than parenthetical
     // labels so common merge tools (VS Code, IntelliJ, etc.) recognise them.
-    outputLines.push('<<<<<<< HEAD');
-    outputLines.push(...region.conflict.a);
-    outputLines.push('|||||||');
-    outputLines.push(...region.conflict.o);
-    outputLines.push('=======');
-    outputLines.push(...region.conflict.b);
-    outputLines.push('>>>>>>> upstream');
+    outputLines.push(
+      '<<<<<<< HEAD',
+      ...region.conflict.a,
+      '|||||||',
+      ...region.conflict.o,
+      '=======',
+      ...region.conflict.b,
+      '>>>>>>> upstream',
+    );
   }
 
   return {
