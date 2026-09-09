@@ -26,7 +26,7 @@ export function formatFileSize(bytes: number): string {
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${units[i]}`;
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${units[i]}`;
 }
 
 /**
@@ -98,7 +98,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
  * Check if a value is a valid primary key
  */
 export function isValidPrimaryKey(value: unknown): value is string | number {
-  if (typeof value === 'number') return !isNaN(value);
+  if (typeof value === 'number') return !Number.isNaN(value);
   if (typeof value === 'string') return value.length > 0 && value !== '+';
   return false;
 }

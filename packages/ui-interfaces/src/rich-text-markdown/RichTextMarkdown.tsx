@@ -593,7 +593,7 @@ export function RichTextMarkdown({
                 min="1"
                 aria-label={t.tableDialog.rowsAriaLabel}
                 value={tableDialog.rows}
-                onChange={(e) => setTableDialog(prev => ({ ...prev, rows: parseInt(e.target.value, 10) || 1 }))}
+                onChange={(e) => setTableDialog(prev => ({ ...prev, rows: Number.parseInt(e.target.value, 10) || 1 }))}
                 className="rich-text-markdown-number-input"
               />
             </div>
@@ -604,7 +604,7 @@ export function RichTextMarkdown({
                 min="1"
                 aria-label={t.tableDialog.columnsAriaLabel}
                 value={tableDialog.columns}
-                onChange={(e) => setTableDialog(prev => ({ ...prev, columns: parseInt(e.target.value, 10) || 1 }))}
+                onChange={(e) => setTableDialog(prev => ({ ...prev, columns: Number.parseInt(e.target.value, 10) || 1 }))}
                 className="rich-text-markdown-number-input"
               />
             </div>

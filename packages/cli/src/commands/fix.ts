@@ -378,7 +378,7 @@ function collectTypeScriptErrors(cwd: string, config: Config): TsError[] {
       const [, file, line, col, code, message] = match;
       const rel = path.relative(cwd, file);
       if (rel.includes('components/ui') || rel.includes('lib/buildpad')) {
-        errors.push({ file, line: parseInt(line, 10), col: parseInt(col, 10), code, message });
+        errors.push({ file, line: Number.parseInt(line, 10), col: Number.parseInt(col, 10), code, message });
       }
     }
     return errors;

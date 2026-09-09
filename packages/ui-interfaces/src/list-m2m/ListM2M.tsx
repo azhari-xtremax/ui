@@ -1111,7 +1111,7 @@ export const ListM2M: React.FC<ListM2MProps> = ({
     const handleLimitChange = useCallback(
         (value: string | null) => {
             if (value) {
-                const newLimit = parseInt(value, 10);
+                const newLimit = Number.parseInt(value, 10);
                 setCurrentLimit(newLimit);
                 setCurrentPage(1); // Reset to first page
             }

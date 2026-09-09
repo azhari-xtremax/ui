@@ -45,7 +45,7 @@ function formatFieldName(fieldName: string): string {
 function formatDateForInput(isoString: string): string {
   try {
     const date = new Date(isoString);
-    if (isNaN(date.getTime())) return '';
+    if (Number.isNaN(date.getTime())) return '';
     // Format as YYYY-MM-DDTHH:mm
     return date.toISOString().slice(0, 16);
   } catch {

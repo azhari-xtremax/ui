@@ -62,7 +62,7 @@ function formatSize(
   if (bytes === 0) return `0 ${FILE_SIZE_UNITS[0]}`;
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  const value = parseFloat((bytes / Math.pow(k, i)).toFixed(2));
+  const value = Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2));
   return `${formatNumber(value, { maximumFractionDigits: 2, useGrouping: false })} ${FILE_SIZE_UNITS[i]}`;
 }
 

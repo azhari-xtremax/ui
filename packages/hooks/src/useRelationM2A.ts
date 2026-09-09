@@ -692,7 +692,7 @@ export function useRelationM2AItems(
                                 // the junction `item` column returns a string or number.
                                 itemMap.set(id, item);
                                 itemMap.set(String(id), item);
-                                if (typeof id === 'string' && !isNaN(Number(id))) {
+                                if (typeof id === 'string' && !Number.isNaN(Number(id))) {
                                     itemMap.set(Number(id), item);
                                 }
                             }

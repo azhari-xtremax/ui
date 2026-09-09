@@ -1026,7 +1026,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
       ) {
         try {
           const dateObj = new Date(value as string);
-          if (isNaN(dateObj.getTime())) return null;
+          if (Number.isNaN(dateObj.getTime())) return null;
           if (fieldType === "date") {
             return (
               <Text size="sm" truncate="end">
@@ -1059,7 +1059,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         fieldType === "bigInteger"
       ) {
         const num = Number(value);
-        if (!isNaN(num)) {
+        if (!Number.isNaN(num)) {
           return (
             <Text size="sm" truncate="end">
               {formatNumber(num)}

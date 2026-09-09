@@ -563,7 +563,7 @@ async function checkTypeScriptErrors(
         if (severity === 'error') {
           errors.push({
             file: relativePath,
-            line: parseInt(line, 10),
+            line: Number.parseInt(line, 10),
             message: `${tsCode}: ${message}`,
             code: 'TYPESCRIPT_ERROR',
           });

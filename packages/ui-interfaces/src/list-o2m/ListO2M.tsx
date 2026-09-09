@@ -903,7 +903,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
       ) {
         // Editing a staged-created row — merge into the matching create entry
         // instead of staging an update (a $temp_ id is unresolvable by the backend).
-        const idx = parseInt(currentlyEditing.id.replace("$temp_", ""), 10);
+        const idx = Number.parseInt(currentlyEditing.id.replace("$temp_", ""), 10);
         setChangeset((prev) => ({
           ...prev,
           create: prev.create.map((c) =>
@@ -1004,7 +1004,7 @@ export const ListO2M: React.FC<ListO2MProps> = ({
   const handleRemoveItem = async (item: O2MItem) => {
     // If it's a staged create, remove from changeset
     if (typeof item.id === "string" && item.id.startsWith("$temp_")) {
-      const idx = parseInt(item.id.replace("$temp_", ""), 10);
+      const idx = Number.parseInt(item.id.replace("$temp_", ""), 10);
       setChangeset((prev) => ({
         ...prev,
         create: prev.create.filter((c) => c.$index !== idx),

@@ -105,7 +105,7 @@ program
   .argument('<component>', 'Component name')
   .option('--json', 'Output as JSON')
   .option('-d, --depth <number>', 'Max depth to display', '2')
-  .action((component, options) => tree(component, { ...options, depth: parseInt(options.depth) }));
+  .action((component, options) => tree(component, { ...options, depth: Number.parseInt(options.depth) }));
 
 program
   .command('validate')

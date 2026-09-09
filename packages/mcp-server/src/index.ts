@@ -69,7 +69,7 @@ function hashTransformed(content: string): string {
  */
 function compareSemver(a: string, b: string): number {
   const parse = (v: string) =>
-    v.replace(/^[^0-9]*/, '').split('.').map(n => parseInt(n, 10) || 0);
+    v.replace(/^[^0-9]*/, '').split('.').map(n => Number.parseInt(n, 10) || 0);
   const [a0, a1, a2] = parse(a);
   const [b0, b1, b2] = parse(b);
   if (a0 !== b0) return a0 < b0 ? -1 : 1;
