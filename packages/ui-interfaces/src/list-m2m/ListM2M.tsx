@@ -82,12 +82,14 @@ import {
     useRelationM2M,
     isValidPrimaryKey,
     useFieldMetadata,
+    useRelationMultipleM2M,
+    useRelationPermissionsM2M,
     type M2MRelationInfo,
+    type M2MDisplayItem,
+    type M2MChangesItem,
 } from "@buildpad/hooks";
 import { CollectionList, CollectionForm } from "@buildpad/ui-collections";
 import { renderTemplate, resolveDisplayTemplate, splitJunctionTemplateFields, DEFAULT_RELATIONAL_FIELDS } from "../list-m2a/render-template";
-import { useRelationMultipleM2M, type M2MDisplayItem, type M2MChangesItem } from "@buildpad/hooks";
-import { useRelationPermissionsM2M } from "@buildpad/hooks";
 import { useBuildpadI18n, useBuildpadTranslations } from "@buildpad/services";
 import type { DeepPartial, PluralForms } from "@buildpad/utils";
 import { interpolate, type M2MTranslations } from "./translations";
