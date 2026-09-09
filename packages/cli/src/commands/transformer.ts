@@ -686,7 +686,7 @@ export function stripOriginHeader(content: string): string {
 export function hashTransformed(content: string): string {
   const stripped = stripOriginHeader(content);
   // Normalise CRLF → LF
-  const normalised = stripped.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const normalised = stripped.replaceAll(/\r\n/g, '\n').replaceAll(/\r/g, '\n');
   // Ensure exactly one trailing newline
   const withTrailingNewline = normalised.trimEnd() + '\n';
   return sha256(withTrailingNewline);

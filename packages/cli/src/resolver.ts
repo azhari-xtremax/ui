@@ -107,7 +107,7 @@ export function getRecordedRef(): string {
  * names like `feat/foo` still resolve; `@` and other specials are encoded.
  */
 export function encodeRef(ref: string): string {
-  return encodeURIComponent(ref).replace(/%2F/g, '/');
+  return encodeURIComponent(ref).replaceAll(/%2F/g, '/');
 }
 
 /**

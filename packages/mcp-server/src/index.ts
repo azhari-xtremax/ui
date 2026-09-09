@@ -58,7 +58,7 @@ function stripOriginHeader(content: string): string {
  */
 function hashTransformed(content: string): string {
   const stripped = stripOriginHeader(content);
-  const normalised = stripped.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const normalised = stripped.replaceAll(/\r\n/g, '\n').replaceAll(/\r/g, '\n');
   const withNewline = normalised.trimEnd() + '\n';
   return createHash('sha256').update(withNewline, 'utf8').digest('hex');
 }

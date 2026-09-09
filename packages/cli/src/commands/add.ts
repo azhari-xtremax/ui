@@ -99,7 +99,7 @@ const COMPONENT_ALIASES: Record<string, string> = {
  * Find component with smart matching and suggestions
  */
 function findComponentWithSuggestions(name: string, registry: Registry): ComponentEntry | null {
-  const normalized = name.toLowerCase().replace(/-/g, '');
+  const normalized = name.toLowerCase().replaceAll(/-/g, '');
   
   // Direct match by name
   const directMatch = registry.components.find(
@@ -115,8 +115,8 @@ function findComponentWithSuggestions(name: string, registry: Registry): Compone
   
   // Fuzzy match (remove dashes)
   const fuzzyMatch = registry.components.find(
-    c => c.name.toLowerCase().replace(/-/g, '') === normalized ||
-         c.title.toLowerCase().replace(/-/g, '') === normalized
+    c => c.name.toLowerCase().replaceAll(/-/g, '') === normalized ||
+         c.title.toLowerCase().replaceAll(/-/g, '') === normalized
   );
   if (fuzzyMatch) return fuzzyMatch;
   
@@ -137,8 +137,8 @@ function findComponentWithSuggestions(name: string, registry: Registry): Compone
   const suggestions = registry.components
     .map(c => ({
       component: c,
-      score: calculateSimilarity(normalized, c.name.replace(/-/g, '')) +
-             calculateSimilarity(normalized, c.title.toLowerCase().replace(/-/g, '')) +
+      score: calculateSimilarity(normalized, c.name.replaceAll(/-/g, '')) +
+             calculateSimilarity(normalized, c.title.toLowerCase().replaceAll(/-/g, '')) +
              (c.description.toLowerCase().includes(name.toLowerCase()) ? 0.3 : 0)
     }))
     .filter(s => s.score > 0.2)

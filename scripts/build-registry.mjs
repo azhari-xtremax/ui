@@ -97,7 +97,7 @@ function computeFileSha256(source) {
   // produces hashes that can never match an LF checkout, so `--check`
   // fails permanently on CI. The CLI's own hashTransformed() already
   // normalises the same way.
-  const text = readFileSync(fullPath, 'utf8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const text = readFileSync(fullPath, 'utf8').replaceAll(/\r\n/g, '\n').replaceAll(/\r/g, '\n');
   return sha256(text);
 }
 

@@ -89,7 +89,7 @@ function formatFieldKey(key: string): string {
     // Handle dot-path fields (e.g. "user_id.email" → "Email")
     const lastPart = key.includes('.') ? key.split('.').pop()! : key;
     return lastPart
-        .replace(/_/g, ' ')
+        .replaceAll(/_/g, ' ')
         .replace(/\b\w/g, (l) => l.toUpperCase());
 }
 

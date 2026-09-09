@@ -26,7 +26,7 @@ export interface MergeResult {
  * would conflict on every line.
  */
 function normalizeLineEndings(text: string): string {
-  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return text.replaceAll(/\r\n/g, '\n').replaceAll(/\r/g, '\n');
 }
 
 /**

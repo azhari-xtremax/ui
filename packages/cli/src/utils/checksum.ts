@@ -63,7 +63,7 @@ export function verifySourceSha256(
   expected?: string
 ): boolean {
   if (!expected) return true;
-  const normalised = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const normalised = content.replaceAll(/\r\n/g, '\n').replaceAll(/\r/g, '\n');
   const actual = createHash('sha256').update(normalised).digest('hex');
   if (actual === expected) return true;
   console.warn(
