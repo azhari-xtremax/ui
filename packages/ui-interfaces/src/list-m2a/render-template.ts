@@ -72,7 +72,7 @@ export interface RenderTemplateOptions {
  */
 export function renderTemplate(
     template: string,
-    data: Record<string, unknown> | unknown,
+    data: unknown,
     options: RenderTemplateOptions = {},
 ): string {
     const { fallback = '', keepUnresolved = false } = options;

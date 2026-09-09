@@ -18,7 +18,7 @@ import { IconAlertTriangle, IconChevronDown, IconChevronRight, IconX } from '@ta
 import type { Field } from '@buildpad/types';
 import { useBuildpadTranslations } from '@buildpad/services';
 import { interpolate, type DeepPartial, type InterfacesTranslations } from '@buildpad/utils';
-import type { DynamicValue, FilterNode, FilterOperator, FilterValue, RelationInfo } from './PermissionFilterTypes';
+import type { FilterNode, FilterOperator, FilterValue, RelationInfo } from './PermissionFilterTypes';
 import { getDynamicValueLabels, getOperatorsForRelation, getOperatorsForType } from './PermissionFilterTypes';
 import { fetchCollectionFields } from './permissionMetadata';
 
@@ -418,7 +418,7 @@ export function FilterRuleNode({
           <FilterValueInput
             field={selectedField}
             operator={selectedOperator}
-            value={(node.value ?? null) as FilterValue | DynamicValue}
+            value={(node.value ?? null) as FilterValue}
             isDynamic={isDynamicValue}
             dynamicOptions={dynamicVariableOptions}
             onChange={(value) => onUpdate(node.id, { value })}
@@ -583,10 +583,10 @@ export function FilterRuleNode({
 interface FilterValueInputProps {
   field?: Field;
   operator: { value: string; label: string; requiresValue: boolean; valueType: string };
-  value: FilterValue | DynamicValue;
+  value: FilterValue;
   isDynamic: boolean;
   dynamicOptions: { value: string; label: string }[];
-  onChange: (value: FilterValue | DynamicValue) => void;
+  onChange: (value: FilterValue) => void;
   /** Resolved dictionary strings (aria-labels, range separator, booleans) */
   t: FilterRuleNodeStrings;
 }
