@@ -502,7 +502,7 @@ async function upgradeOneComponent(
   const pendingCount = newFiles.filter(f => f.state === 'pending').length;
 
   if (!dryRun) {
-    if (!config.components) config.components = {};
+    config.components ??= {};
     const record: ComponentInstall = {
       release,
       ref,
@@ -687,7 +687,7 @@ async function upgradeOneLibModule(
   const pendingCount = newFiles.filter(f => f.state === 'pending').length;
 
   if (!dryRun) {
-    if (!config.lib) config.lib = {};
+    config.lib ??= {};
     config.lib[moduleName] = {
       release,
       ref,

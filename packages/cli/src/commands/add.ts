@@ -376,7 +376,7 @@ export async function copyLibModule(
 
   // v3: record per-file checksums in `config.lib[moduleName]`
   if ((config.schemaVersion ?? 1) >= 2 && writtenFiles.length > 0 && primarySource) {
-    if (!config.lib) config.lib = {};
+    config.lib ??= {};
     config.lib[moduleName] = {
       release,
       ref,
@@ -745,7 +745,7 @@ async function copyComponent(
     // `sourceSha256` is what a later `outdated` compares against; `ref` is the
     // exact diff3 base for a later `upgrade`.
     if ((config.schemaVersion ?? 1) >= 2) {
-      if (!config.components) config.components = {};
+      config.components ??= {};
       if (!config.components[component.name]) {
         config.components[component.name] = {
           release,
@@ -794,7 +794,7 @@ async function copyComponent(
 
   // v3: update the components map installedAt + the project-level release
   if ((config.schemaVersion ?? 1) >= 2) {
-    if (!config.components) config.components = {};
+    config.components ??= {};
     const record = config.components[component.name];
     if (record) {
       record.installedAt = new Date().toISOString();
