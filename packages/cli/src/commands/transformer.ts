@@ -5,7 +5,7 @@
  * This is the core of the Copy & Own model - making copied files self-contained.
  */
 
-import path from 'path';
+import path from 'node:path';
 import { sha256 } from '../utils/checksum.js';
 import type { Config } from './init.js';
 

@@ -7,7 +7,7 @@
  * This makes the hash independent of the platform and the install date.
  */
 
-import { createHash } from 'crypto';
+import { createHash } from 'node:crypto';
 
 /**
  * Return the SHA-256 hex digest of `data`.

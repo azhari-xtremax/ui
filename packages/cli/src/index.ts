@@ -13,7 +13,7 @@
  */
 
 import { Command } from 'commander';
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 import { init } from './commands/init.js';
 import { add } from './commands/add.js';
 import { list } from './commands/list.js';

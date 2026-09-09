@@ -8,7 +8,7 @@
  */
 
 import fs from 'fs-extra';
-import path from 'path';
+import path from 'node:path';
 import chalk from 'chalk';
 import { loadConfig, type Config } from './init.js';
 import { extractOriginInfo, hasBuildpadOrigin, hashTransformed } from './transformer.js';

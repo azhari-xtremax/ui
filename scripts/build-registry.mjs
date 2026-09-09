@@ -23,11 +23,11 @@
  *   pnpm registry:check
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { createHash } from 'crypto';
-import { join, dirname } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { execSync } from 'child_process';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { join, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { execSync } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

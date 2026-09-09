@@ -13,11 +13,11 @@
  */
 
 import fs from 'fs-extra';
-import path from 'path';
+import path from 'node:path';
 import chalk from 'chalk';
 import ora from 'ora';
 import fg from 'fast-glob';
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
 import { type Config, loadConfig } from './init.js';
 
 interface ValidationResult {

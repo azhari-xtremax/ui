@@ -12,7 +12,7 @@
  */
 
 import fs from 'fs-extra';
-import path from 'path';
+import path from 'node:path';
 import chalk from 'chalk';
 import { init } from './init.js';
 import { add } from './add.js';
@@ -77,7 +77,7 @@ export async function bootstrap(options: {
 
     try {
       // Run pnpm install to resolve everything from package.json
-      const { execSync } = await import('child_process');
+      const { execSync } = await import('node:child_process');
       const hasPnpmLock = fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'));
       const hasYarnLock = fs.existsSync(path.join(cwd, 'yarn.lock'));
       const hasBunLock = fs.existsSync(path.join(cwd, 'bun.lockb'));
