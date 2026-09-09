@@ -175,12 +175,12 @@ export interface CollectionListProps {
 }
 
 // System fields to exclude from default display
-const SYSTEM_FIELDS = [
+const SYSTEM_FIELDS = new Set([
   "user_created",
   "user_updated",
   "date_created",
   "date_updated",
-];
+]);
 
 // Relational fields with no real flat column value — can't be requested as a
 // bare name in fields= (there's no single column to select), only via a
@@ -370,7 +370,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         }
         // All non-system, non-hidden, non-alias fields
         let visible = fieldsResult.filter((f: Field) => {
-          if (SYSTEM_FIELDS.includes(f.field)) return false;
+          if (SYSTEM_FIELDS.has(f.field)) return false;
           if (f.type === "alias") return false;
           // Some DaaS backends don't mark O2M/M2M/M2A relational fields with
           // type: "alias" even though they have no real flat column value —

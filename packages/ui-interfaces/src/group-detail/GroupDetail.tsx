@@ -146,10 +146,10 @@ export function GroupDetail({
       return [];
     }
 
-    const fieldNames = fields.map((field) => field.field);
-    
+    const fieldNames = new Set(fields.map((field) => field.field));
+
     const errors = validationErrors.reduce((acc, error) => {
-      if (!fieldNames.includes(error.field)) {
+      if (!fieldNames.has(error.field)) {
         return acc;
       }
 
