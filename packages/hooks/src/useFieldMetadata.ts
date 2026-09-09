@@ -89,8 +89,11 @@ function formatFieldKey(key: string): string {
     // Handle dot-path fields (e.g. "user_id.email" → "Email")
     const lastPart = key.includes('.') ? key.split('.').pop()! : key;
     return lastPart
-        .replaceAll(/_/g, ' ')
-        .replace(/\b\w/g, (l) => l.toUpperCase());
+        // Global regex .replace() is equivalent to .replaceAll() here — kept
+        // as .replace() since consumer packages (e.g. ui-users) still target
+        // ES2020, which predates String.prototype.replaceAll (ES2021).
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (l: string) => l.toUpperCase());
 }
 
 /** Determine column width from field metadata */
