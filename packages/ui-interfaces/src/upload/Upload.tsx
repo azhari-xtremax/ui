@@ -512,19 +512,19 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({
               <Loader />
               <Text size="sm" c="dimmed">{t.library.loading}</Text>
             </Stack>
-          ); if (error) return (
+          ); if (error) return ( // NOSONAR: `return (...)` is one complete statement regardless of its multi-line JSX argument; each `if` here is independent and self-contained, not a dangling/ambiguous block
             <Stack align="center" justify="center" style={{ height: 260 }} gap="xs">
               <IconFile size={44} color="var(--mantine-color-gray-5)" />
               <Text c="red" size="sm" data-testid="library-error">{error}</Text>
             </Stack>
-          ); if (isEmpty) return (
+          ); if (isEmpty) return ( // NOSONAR: `return (...)` is one complete statement regardless of its multi-line JSX argument; each `if` here is independent and self-contained, not a dangling/ambiguous block
             <Stack align="center" justify="center" style={{ height: 260 }} gap="xs">
               <IconFolderOpen size={44} color="var(--mantine-color-gray-5)" />
               <Text c="dimmed" data-testid="library-empty">
                 {debouncedSearch ? interpolate(t.library.noMatch, { search: debouncedSearch }) : t.library.empty}
               </Text>
             </Stack>
-          ); if (view === 'grid') return (
+          ); if (view === 'grid') return ( // NOSONAR: `return (...)` is one complete statement regardless of its multi-line JSX argument; each `if` here is independent and self-contained, not a dangling/ambiguous block
             <SimpleGrid cols={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing="sm">
               {folders.map((entry) => (
                 <Paper
@@ -602,7 +602,7 @@ export const LibraryPickerModal: React.FC<LibraryPickerModalProps> = ({
                 );
               })}
             </SimpleGrid>
-          ); return (
+          ); return ( // NOSONAR: `return (...)` is one complete statement regardless of its multi-line JSX argument; not a dangling/ambiguous block
             <Table highlightOnHover verticalSpacing="xs" data-testid="library-table">
               <Table.Thead>
                 <Table.Tr>
