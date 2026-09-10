@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@/test-utils';
-import Map from './Map';
+import { render, screen, fireEvent } from '@testing-library/react';
+import Map from '../map/Map';
 
 describe('Map', () => {
   it('renders with default props', () => {

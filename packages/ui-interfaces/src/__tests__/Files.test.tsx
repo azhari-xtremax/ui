@@ -2,9 +2,10 @@ import React from 'react';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
-import { Files } from '../Files';
+import { Files } from '../files/Files';
 
-jest.mock('@/lib/api', () => ({
+jest.mock('@buildpad/hooks', () => ({
+  ...jest.requireActual('@buildpad/hooks'),
   daasAPI: {
     getFile: jest.fn(async (id: string) => ({
       id,
@@ -19,7 +20,7 @@ jest.mock('@/lib/api', () => ({
   },
 }));
 
-jest.mock('../../Upload', () => ({
+jest.mock('../upload', () => ({
   __esModule: true,
   Upload: ({ onInput, fromUser, fromUrl, fromLibrary }: any) => (
     <button

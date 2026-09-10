@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
 import axios from 'axios';
-import { AutocompleteAPI } from '../AutocompleteAPI';
+import { AutocompleteAPI } from '../autocomplete-api';
 
 // Mock axios
 jest.mock('axios');
