@@ -15,7 +15,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   PACKAGES,
@@ -599,9 +599,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 
 /**
- * Handle tool execution
+ * Handle tool execution. Exported (not just passed inline to
+ * setRequestHandler) so it can be invoked directly in tests without going
+ * through the MCP stdio transport.
  */
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+export async function handleCallToolRequest(request: { params: { name: string; arguments?: unknown } }) {
   const { name, arguments: args } = request.params;
 
   switch (name) {
@@ -1344,7 +1346,9 @@ import { ${component!.title} } from '@/components/ui/${component!.name}';
     default:
       throw new Error(`Unknown tool: ${name}`);
   }
-});
+}
+
+server.setRequestHandler(CallToolRequestSchema, handleCallToolRequest);
 
 /**
  * Generate RBAC pattern with MCP tool call sequences
@@ -1606,7 +1610,12 @@ async function main() {
   console.error('Buildpad MCP Server running on stdio');
 }
 
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+// Only auto-start when run directly (`node dist/index.js`), not when
+// imported — lets tests import this module's exports without booting the
+// stdio transport.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });
+}
