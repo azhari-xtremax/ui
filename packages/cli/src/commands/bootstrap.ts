@@ -95,6 +95,7 @@ export async function bootstrap(options: {
       execSync(installCmd, { cwd, stdio: 'inherit' });
       console.log(chalk.green('\n✓ Dependencies installed!'));
     } catch (error) {
+      console.error(error);
       console.log(chalk.yellow('\n⚠ Dependency installation had issues. Run "pnpm install" manually.'));
     }
   } else {

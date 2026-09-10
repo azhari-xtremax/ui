@@ -400,6 +400,7 @@ export const FileImage: React.FC<FileImageProps> = ({
         color: 'green',
       });
     } catch (e) {
+      console.error('File download failed:', e);
       notifications.show({ title: t.notifications.downloadFailed.title, message: t.notifications.downloadFailed.message, color: 'red' });
     }
   }, [image, t]);
@@ -417,6 +418,7 @@ export const FileImage: React.FC<FileImageProps> = ({
       setEditOpen(false);
       notifications.show({ title: t.notifications.saved.title, message: t.notifications.saved.message, color: 'green' });
     } catch (e) {
+      console.error('File details update failed:', e);
       notifications.show({ title: t.notifications.updateFailed.title, message: t.notifications.updateFailed.message, color: 'red' });
     }
   }, [image, editTitle, editDescription, t]);
