@@ -1751,6 +1751,14 @@ export const ListO2M: React.FC<ListO2MProps> = ({
               <CollectionList
                 collection={relationInfo.relatedCollection.collection}
                 enableSelection
+                // Always a small, human-browsed picker — never a large
+                // primary collection view — so a real count is worth it: the
+                // default estimated mode can report a wildly inflated total
+                // on a full first page when the related table has
+                // stale/absent ANALYZE statistics (small, rarely-mutated
+                // tables are exactly what autovacuum's threshold skips),
+                // uncorrected until pagination reaches a short page.
+                exactCount
                 filter={
                   primaryKey && primaryKey !== "+"
                     ? {
