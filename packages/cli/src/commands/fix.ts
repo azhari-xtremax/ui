@@ -407,7 +407,6 @@ async function fixTypeScriptErrors(
   if (tsErrors.length === 0) return result;
 
   // ── Phase 1: Collect missing npm packages from TS2307 ──────────
-  const missingModules = new Set<string>();
   const missingNpmPackages = new Set<string>();
   const undeclaredModules = new Set<string>();
   const suppressTargets: { file: string; line: number; message: string }[] = [];
@@ -424,7 +423,6 @@ async function fixTypeScriptErrors(
         if (moduleSpec.startsWith('@buildpad/')) continue;
 
         const pkgName = extractPackageName(moduleSpec);
-        missingModules.add(moduleSpec);
 
         if (KNOWN_NPM_PACKAGES.has(pkgName)) {
           missingNpmPackages.add(pkgName);
