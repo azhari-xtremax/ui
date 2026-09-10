@@ -98,7 +98,7 @@ const COMPONENT_ALIASES: Record<string, string> = {
 /**
  * Find component with smart matching and suggestions
  */
-function findComponentWithSuggestions(name: string, registry: Registry): ComponentEntry | null {
+export function findComponentWithSuggestions(name: string, registry: Registry): ComponentEntry | null {
   const normalized = name.toLowerCase().replaceAll(/-/g, '');
   
   // Direct match by name
