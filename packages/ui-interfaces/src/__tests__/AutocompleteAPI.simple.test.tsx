@@ -154,7 +154,7 @@ describe('AutocompleteAPI', () => {
       await user.type(input, 'test');
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalledWith('Error fetching autocomplete results:', expect.any(Error));
+        expect(consoleSpy).toHaveBeenCalledWith('[AutocompleteAPI] Error fetching results:', expect.any(Error));
       });
 
       consoleSpy.mockRestore();

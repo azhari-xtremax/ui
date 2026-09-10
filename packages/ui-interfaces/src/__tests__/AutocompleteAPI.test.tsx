@@ -43,7 +43,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.getByRole('textbox')).toBeInTheDocument();
     });
 
     it('renders with label', () => {
@@ -80,7 +80,7 @@ describe('AutocompleteAPI', () => {
       );
 
       expect(screen.getByText('URL configuration is required')).toBeInTheDocument();
-      expect(screen.getByRole('combobox')).toBeDisabled();
+      expect(screen.getByRole('textbox')).toBeDisabled();
     });
   });
 
@@ -98,12 +98,13 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'Unit');
 
       await waitFor(() => {
         expect(mockedAxios.get).toHaveBeenCalledWith(
-          'https://usmanlive.com/wp-json/api/countries?q=Unit'
+          'https://usmanlive.com/wp-json/api/countries?q=Unit',
+          expect.objectContaining({ signal: expect.anything() }),
         );
       }, { timeout: 200 });
     });
@@ -121,12 +122,13 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'test');
 
       await waitFor(() => {
         expect(mockedAxios.get).toHaveBeenCalledWith(
-          'https://usmanlive.com/wp-json/api/countries?q=test&limit=5'
+          'https://usmanlive.com/wp-json/api/countries?q=test&limit=5',
+          expect.objectContaining({ signal: expect.anything() }),
         );
       });
     });
@@ -147,11 +149,11 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'test');
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalledWith('Error fetching autocomplete results:', expect.any(Error));
+        expect(consoleSpy).toHaveBeenCalledWith('[AutocompleteAPI] Error fetching results:', expect.any(Error));
       });
 
       consoleSpy.mockRestore();
@@ -173,12 +175,12 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'test');
 
       await waitFor(() => {
         expect(consoleSpy).toHaveBeenCalledWith(
-          'Expected results type of array, "string" received'
+          '[AutocompleteAPI] Expected results type of array, "string" received'
         );
       });
 
@@ -202,7 +204,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'Unit');
 
       await waitFor(() => {
@@ -227,7 +229,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'U');
 
       await waitFor(() => {
@@ -260,7 +262,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'Unit');
 
       await waitFor(() => {
@@ -284,7 +286,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'test');
 
       // Should not call API immediately
@@ -295,7 +297,8 @@ describe('AutocompleteAPI', () => {
 
       await waitFor(() => {
         expect(mockedAxios.get).toHaveBeenCalledWith(
-          'https://usmanlive.com/wp-json/api/countries?q=test'
+          'https://usmanlive.com/wp-json/api/countries?q=test',
+          expect.objectContaining({ signal: expect.anything() }),
         );
       });
     });
@@ -314,7 +317,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'test');
 
       // Should not call API immediately
@@ -325,7 +328,8 @@ describe('AutocompleteAPI', () => {
 
       await waitFor(() => {
         expect(mockedAxios.get).toHaveBeenCalledWith(
-          'https://usmanlive.com/wp-json/api/countries?q=test'
+          'https://usmanlive.com/wp-json/api/countries?q=test',
+          expect.objectContaining({ signal: expect.anything() }),
         );
       });
     });
@@ -345,7 +349,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'test');
 
       expect(onChange).toHaveBeenCalledWith('test');
@@ -366,7 +370,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       
       await user.click(input);
       expect(onFocus).toHaveBeenCalled();
@@ -415,7 +419,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'U');
 
       await waitFor(() => {
@@ -435,7 +439,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      expect(screen.getByRole('combobox')).toBeDisabled();
+      expect(screen.getByRole('textbox')).toBeDisabled();
     });
 
     it('can be required', () => {
@@ -449,7 +453,7 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      expect(screen.getByRole('combobox')).toBeRequired();
+      expect(screen.getByRole('textbox')).toBeRequired();
     });
 
     it('shows error state', () => {
@@ -507,12 +511,13 @@ describe('AutocompleteAPI', () => {
         </TestWrapper>
       );
 
-      const input = screen.getByRole('combobox');
+      const input = screen.getByRole('textbox');
       await user.type(input, 'Unit');
 
       await waitFor(() => {
         expect(mockedAxios.get).toHaveBeenCalledWith(
-          'https://usmanlive.com/wp-json/api/countries?q=Unit'
+          'https://usmanlive.com/wp-json/api/countries?q=Unit',
+          expect.objectContaining({ signal: expect.anything() }),
         );
       });
 
