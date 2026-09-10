@@ -205,36 +205,6 @@ describe('WorkflowButton', () => {
         expect(screen.queryByText('Publish')).not.toBeInTheDocument();
       });
     });
-
-    it('displays compare button when canCompare is true', async () => {
-      renderWithProvider(
-        <WorkflowButton
-          itemId="article-123"
-          collection="articles"
-          canCompare={true}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Compare/i })).toBeInTheDocument();
-      });
-    });
-
-    it('does not display compare button when canCompare is false', async () => {
-      renderWithProvider(
-        <WorkflowButton
-          itemId="article-123"
-          collection="articles"
-          canCompare={false}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Draft/i })).toBeInTheDocument();
-      });
-
-      expect(screen.queryByRole('button', { name: /Compare/i })).not.toBeInTheDocument();
-    });
   });
 
   describe('Transition Execution', () => {

@@ -22,6 +22,13 @@ jest.mock('@buildpad/hooks', () => ({
 
 jest.mock('../upload', () => ({
   __esModule: true,
+  // Files imports FileThumbnail and LibraryPickerModal from this barrel too;
+  // leaving them out of the mock renders them as undefined elements.
+  FileThumbnail: ({ file }: any) => (
+    <div data-testid={`thumb-${file?.id ?? 'unknown'}`} />
+  ),
+  LibraryPickerModal: ({ opened }: any) =>
+    opened ? <div data-testid="library-picker" /> : null,
   Upload: ({ onInput, fromUser, fromUrl, fromLibrary }: any) => (
     <button
       type="button"

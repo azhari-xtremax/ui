@@ -1,6 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent } from '@testing-library/react';
+import { MantineProvider } from '@mantine/core';
 import Map from '../map/Map';
+
+// The suite previously imported a consumer-app '@/test-utils' helper whose
+// render wrapped in MantineProvider. That module doesn't exist here, so wrap
+// locally — every Mantine component throws without the provider.
+const render = (ui: React.ReactNode) =>
+  rtlRender(<MantineProvider>{ui}</MantineProvider>);
 
 describe('Map', () => {
   it('renders with default props', () => {
