@@ -9,4 +9,4 @@ The list fetch relies on the server's default `estimated` count mode, which is c
 
 `exactCount` (default `false`) sends `count=exact`, which makes the server return a real count with `meta.total_estimated: false` — the flag `CollectionList` already pins on. It stays off for primary collection views, where `estimated` is what keeps the component cheap.
 
-The "Add Existing" pickers in `ListM2M` and `ListO2M` opt in: they are always small, human-browsed modals, so a real count is worth the marginal cost.
+The "Add Existing" pickers in `ListM2M`, `ListO2M` and `ListM2A` opt in: they are always small, human-browsed modals, so a real count is worth the marginal cost.
