@@ -657,7 +657,6 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         reorderItems,
         getSelectedRelatedPKs,
         stagedRelatedData,
-        getChanges,
         hasChanges,
         setLocalChanges,
         resetChanges,
@@ -1103,10 +1102,6 @@ export const ListM2M: React.FC<ListM2MProps> = ({
             return new Set(visibleItems.map((item) => item.id as string | number));
         });
     }, [visibleItems]);
-
-    const handleDeselectAll = useCallback(() => {
-        setSelectedIds(new Set());
-    }, []);
 
     const handleLimitChange = useCallback(
         (value: string | null) => {

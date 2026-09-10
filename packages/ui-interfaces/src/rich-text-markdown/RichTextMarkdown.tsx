@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { RichTextEditor, Link, type RichTextEditorLabels } from '@mantine/tiptap';
 import '@mantine/tiptap/styles.css';
 import { useBuildpadTranslations } from '@buildpad/services';

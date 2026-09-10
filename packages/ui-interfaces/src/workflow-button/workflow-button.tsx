@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Menu,
@@ -63,11 +63,9 @@ export function WorkflowButton({
   // error message, so no separate client is needed here)
   const {
     workflowInstance,
-    workflowInstanceId,
     commands: contextCommands,
     errorMessage,
     loading,
-    fetchWorkflowInstance,
     executeTransition,
   } = useWorkflow({
     itemId,

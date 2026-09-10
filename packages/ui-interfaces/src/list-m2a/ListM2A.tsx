@@ -58,7 +58,6 @@ import {
     useRelationPermissionsM2A,
     type M2AItem, 
     type M2ARelationInfo,
-    type ChangesItem,
 } from "@buildpad/hooks";
 import { CollectionList } from "@buildpad/ui-collections";
 import { renderTemplate, resolveDisplayTemplate } from "./render-template";
@@ -322,7 +321,6 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         totalCount: hookTotalCount,
         loading: itemsLoading,
         loadItems,
-        createItem,
         createItemWithData,
         removeItem,
         updateItem,
@@ -331,7 +329,6 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         getSelectedPrimaryKeysByCollection,
         getChanges,
         hasChanges,
-        resetChanges,
     } = useRelationM2AItems(
         isDemoMode ? null : (hookRelationInfo as M2ARelationInfo | null), 
         isDemoMode ? null : (primaryKey || null)

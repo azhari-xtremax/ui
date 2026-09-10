@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Box, Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
+import { Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
 import { IconAlertCircle, IconPlus, IconTrash, IconList } from '@tabler/icons-react';
 import type { M2MRelationInfo, M2MItem } from '@buildpad/hooks';
 import { renderTemplate } from '../list-m2a/render-template';
@@ -96,17 +96,11 @@ export const ListM2MInterface: React.FC<ListM2MInterfaceProps> = ({
   onChange,
   collection,
   field,
-  primaryKey,
-  relationInfo,
   loading = false,
-  layout = 'list',
-  fields = ['id'],
   template,
   disabled = false,
   enableCreate = true,
   enableSelect = true,
-  enableLink = false,
-  limit = 15,
   label,
   description,
   error,
@@ -114,7 +108,6 @@ export const ListM2MInterface: React.FC<ListM2MInterfaceProps> = ({
   renderItemList,
   renderSelectModal,
   renderCreateModal,
-  renderEditModal,
   'data-testid': testId,
   translations,
 }) => {
