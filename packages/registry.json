@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/buildpad-ai/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T08:44:35.321Z",
+  "generatedAt": "2026-09-10T08:49:17.484Z",
   "version": "2.3.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -1593,7 +1593,7 @@
         {
           "source": "ui-interfaces/src/system-permissions/SystemPermissions.tsx",
           "target": "components/ui/system-permissions.tsx",
-          "sourceSha256": "07015af3e71eff0b0a52be7f346b304d97fb870e00c9eed69d76af33c7ed2abc"
+          "sourceSha256": "270ec296d45cbeaa8358076439b25ff09d8732012c72274c85071bdd27edb926"
         },
         {
           "source": "ui-interfaces/src/system-permissions/SystemPermissions.css",
@@ -1603,37 +1603,37 @@
         {
           "source": "ui-interfaces/src/system-permissions/PermissionDetailModal.tsx",
           "target": "components/ui/permission-detail-modal.tsx",
-          "sourceSha256": "e4e31267d0b496b087d0dd1ca4d711163cf7f419b3939691e45754cbbf085b2e"
+          "sourceSha256": "76985791d2d6f9cf27a8d31a4d48b357761f45e4bcea8fe2fb5dd58e19018da7"
         },
         {
           "source": "ui-interfaces/src/system-permissions/PermissionFieldsTab.tsx",
           "target": "components/ui/permission-fields-tab.tsx",
-          "sourceSha256": "ab6313e8660f8aebaa8d7c57d142521d74dbbb551733a4880fb690fe605f7aaf"
+          "sourceSha256": "b6be4ee6a51bb8631ab436a3227b11d021ec204a6d57b74bc9a6690d86caf657"
         },
         {
           "source": "ui-interfaces/src/system-permissions/PermissionFilterTab.tsx",
           "target": "components/ui/permission-filter-tab.tsx",
-          "sourceSha256": "7ec6ce8de695c5d93dc2eb6a73a17b92d423afc458984c1789d976eed3452fe5"
+          "sourceSha256": "c7aa642d16c45b07a5c8195bd22f099c64647df14f8250dbd8146d0897478491"
         },
         {
           "source": "ui-interfaces/src/system-permissions/PermissionValidationTab.tsx",
           "target": "components/ui/permission-validation-tab.tsx",
-          "sourceSha256": "3566d0981c79e366d25f30739845e7c80e0a391a3df30e513816b57276ee59d7"
+          "sourceSha256": "31252d8a1f4ee42561cbff8cc991d5b2f3e1aa3f93fbcb67333b07b6d37d2381"
         },
         {
           "source": "ui-interfaces/src/system-permissions/PermissionPresetsTab.tsx",
           "target": "components/ui/permission-presets-tab.tsx",
-          "sourceSha256": "16fa1c33926aac714e879b6ba5313144848368744961a8abc2669c434060cbb3"
+          "sourceSha256": "95eb7d6a220ce86182b3ca20d59e36fd4b02b6a595e1bd071dd5ca602c05a3fb"
         },
         {
           "source": "ui-interfaces/src/system-permissions/FilterRuleBuilder.tsx",
           "target": "components/ui/filter-rule-builder.tsx",
-          "sourceSha256": "3cf89b30cff691613c849f8eba849daf857cc45d579d14617025a2d9a5affdea"
+          "sourceSha256": "3cb6813ed38161c11dc318d5d632c39c26d1364af61f5dd5758dac7f70262b3d"
         },
         {
           "source": "ui-interfaces/src/system-permissions/FilterRuleNode.tsx",
           "target": "components/ui/filter-rule-node.tsx",
-          "sourceSha256": "aa36dd9d00efadb3e34630a561881615d12c364d22094202d51cf08d3fa1d155"
+          "sourceSha256": "d813ab3d053a1d74a4531e5a0afdb910e1764bc39281cc22f68d11e469b9ca94"
         },
         {
           "source": "ui-interfaces/src/system-permissions/PermissionFilterTypes.ts",
@@ -1691,7 +1691,7 @@
         {
           "source": "ui-interfaces/src/input-block-editor/InputBlockEditor.tsx",
           "target": "components/ui/input-block-editor.tsx",
-          "sourceSha256": "4d92003ed9a30edd739a8b2fd3c724b9ed524b5010dc0558515e93dccc320692"
+          "sourceSha256": "5e24548acd7ec8e395f1f1f3435fc1f443679301d504cbacd35fb057d641b90e"
         },
         {
           "source": "ui-interfaces/src/input-block-editor/InputBlockEditor.css",
@@ -2304,7 +2304,7 @@
         {
           "source": "ui-interfaces/src/files/Files.tsx",
           "target": "components/ui/files.tsx",
-          "sourceSha256": "d4893a6cd85a318e683690c039a231c02009435a6ee2da8e8fd6c3fda99cca80"
+          "sourceSha256": "b07de4e032211a2a4688e5606120896be6f9d7dad61c3b928ac81f9824120641"
         }
       ],
       "dependencies": [
@@ -2428,12 +2428,12 @@
         {
           "source": "ui-interfaces/src/list-m2m/ListM2M.tsx",
           "target": "components/ui/list-m2m.tsx",
-          "sourceSha256": "4d3aa8719f39fec52f79349750b1d1b06159716e059aacf27968521af3747f9f"
+          "sourceSha256": "37f4ba67f50103ea9a8d8545da9f12f25cebbeb54a1d0d63a5444d585fb00d4b"
         },
         {
           "source": "ui-interfaces/src/list-m2m/ListM2MInterface.tsx",
           "target": "components/ui/list-m2m-interface.tsx",
-          "sourceSha256": "f89c5880fcc78b9105c13afccb77a84017a390525c88c59a5bc743668b974462"
+          "sourceSha256": "6db53ced74d9553646c9c90dbf089b3748c62cc00995f0b56b73f1a43ae48148"
         },
         {
           "source": "ui-interfaces/src/list-m2m/translations.ts",
@@ -2490,7 +2490,7 @@
         {
           "source": "ui-interfaces/src/select-dropdown-m2o/SelectDropdownM2OInterface.tsx",
           "target": "components/ui/select-dropdown-m2o-interface.tsx",
-          "sourceSha256": "eb3bcd8958279c0f59c0a87f19d279cbbe964ad6446e74d5df952111af38adac"
+          "sourceSha256": "2fade0e17b9f460537c05ca24839277b178df6b36998b9459207448e73489e4d"
         }
       ],
       "dependencies": [
@@ -2590,7 +2590,7 @@
         {
           "source": "ui-interfaces/src/list-m2a/ListM2A.tsx",
           "target": "components/ui/list-m2a.tsx",
-          "sourceSha256": "c48fcbc278adcec6cffb1d226e9e1fe4df47413abb57ac93c91f1f83d97d8368"
+          "sourceSha256": "899deb14acb79ca3280409b6a59229aa68a308f2500ad13f71a1190baded7956"
         },
         {
           "source": "ui-interfaces/src/list-m2a/JunctionItemForm.tsx",
@@ -2917,7 +2917,7 @@
         {
           "source": "ui-interfaces/src/rich-text-markdown/RichTextMarkdown.tsx",
           "target": "components/ui/rich-text-markdown.tsx",
-          "sourceSha256": "ce0641e080609436d3f525864b44332a10e3801b022f509bbe1b3134b247f218"
+          "sourceSha256": "4bff000aaf49c6a1f3e65d690aed2083b63cc53f17c0ea44dfd7017d7f4e0f76"
         },
         {
           "source": "ui-interfaces/src/rich-text-markdown/RichTextMarkdown.css",
@@ -3408,7 +3408,7 @@
         {
           "source": "ui-interfaces/src/map/MapWithRealMap.tsx",
           "target": "components/ui/map-with-real-map.tsx",
-          "sourceSha256": "baa437eef59e105ae6ead19b26ce039e23a45bf097432e673ad578ad81a8a180"
+          "sourceSha256": "455bf938612ff0eb3676c59f332d53ddd20d1bab38e3e389fcea7dc7d3994f64"
         }
       ],
       "dependencies": [
@@ -3451,7 +3451,7 @@
         {
           "source": "ui-interfaces/src/workflow-button/workflow-button.tsx",
           "target": "components/ui/workflow-button/workflow-button.tsx",
-          "sourceSha256": "0081f03a4004f9714a73a9f1b650171635727b3935913dea022ca592386b539c"
+          "sourceSha256": "d73a774e35388c067b6b19b2e744409cd6f6813b8f0a7b5d879510d288ae3c68"
         },
         {
           "source": "ui-interfaces/src/workflow-button/use-workflow.ts",

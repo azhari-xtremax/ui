@@ -16,7 +16,6 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Container, Group, Text, Alert, Select, Button, Stack, Badge } from '@mantine/core';
 import { IconMap, IconMapPin, IconLine, IconSquare, IconTrash } from '@tabler/icons-react';
 import maplibregl from 'maplibre-gl';
-import type { Map as MaplibreMap, LngLatLike } from 'maplibre-gl';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
@@ -27,17 +26,6 @@ import { defaultTranslations, interpolate, type DeepPartial, type InterfacesTran
 interface GeoJSONGeometry {
   type: string;
   coordinates: number[] | number[][] | number[][][];
-}
-
-interface GeoJSONFeature {
-  type: 'Feature';
-  geometry: GeoJSONGeometry;
-  properties: Record<string, unknown>;
-}
-
-interface GeoJSONFeatureCollection {
-  type: 'FeatureCollection';
-  features: GeoJSONFeature[];
 }
 
 // Re-export types from Map component to avoid duplication
@@ -142,13 +130,11 @@ const DEFAULT_BASEMAPS: BasemapSource[] = [
 // Custom control for fit bounds. Not a React component, so the button title
 // is handed in by the component that owns the dictionary.
 class FitBoundsControl {
-  private map: maplibregl.Map | undefined;
   private container: HTMLDivElement | undefined;
 
   constructor(private readonly title: string = defaultTranslations.interfaces.map.controls.fitBounds) {}
 
-  onAdd(map: maplibregl.Map) {
-    this.map = map;
+  onAdd(_map: maplibregl.Map) {
     this.container = document.createElement('div');
     this.container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
 
@@ -169,7 +155,6 @@ class FitBoundsControl {
     if (this.container?.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
-    this.map = undefined;
   }
 
   private fitBounds() {

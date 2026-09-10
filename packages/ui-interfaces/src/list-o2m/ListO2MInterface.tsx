@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Box, Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
-import { IconAlertCircle, IconPlus, IconTrash, IconList } from '@tabler/icons-react';
+import { Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
+import { IconAlertCircle, IconPlus, IconTrash } from '@tabler/icons-react';
 import type { O2MRelationInfo, O2MItem } from '@buildpad/hooks';
 import { useBuildpadTranslations } from '@buildpad/services';
 import { interpolate, type DeepPartial, type InterfacesTranslations } from '@buildpad/utils';
@@ -80,22 +80,16 @@ export const ListO2MInterface: React.FC<ListO2MInterfaceProps> = ({
   onChange,
   collection,
   field,
-  primaryKey,
-  relationInfo,
   loading = false,
-  layout = 'list',
-  fields = ['id'],
   template,
   disabled = false,
   enableCreate = true,
-  limit = 15,
   label,
   description,
   error,
   required = false,
   renderItemList,
   renderCreateModal,
-  renderEditModal,
   'data-testid': testId,
   translations,
 }) => {
