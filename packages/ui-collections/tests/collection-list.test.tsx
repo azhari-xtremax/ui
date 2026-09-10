@@ -249,6 +249,43 @@ describe("CollectionList", () => {
   });
 
   // =====================================================================
+  // exactCount
+  // =====================================================================
+  describe("exactCount", () => {
+    // Regression coverage for the pagination bug where the server's default
+    // `estimated` count mode can report a wildly inflated total on a full
+    // first page when the queried table has stale/absent ANALYZE
+    // statistics — confirmed on a live deployment where a roles table (14
+    // real rows, never analyzed) reported 180 until pagination reached a
+    // short page and forced a recount. Small, human-browsed embeds (the
+    // "Add Existing" picker in ListM2M/ListO2M) opt into a real count via
+    // this prop instead.
+    it("omits count= by default (estimated mode)", async () => {
+      renderList();
+
+      await waitFor(() => {
+        const itemsCall = mockApiRequest.mock.calls.find(
+          (call) => !String(call[0]).includes("aggregate"),
+        );
+        expect(itemsCall).toBeTruthy();
+        expect(String(itemsCall![0])).not.toContain("count=");
+      });
+    });
+
+    it("requests count=exact when exactCount is true", async () => {
+      renderList({ exactCount: true });
+
+      await waitFor(() => {
+        const itemsCall = mockApiRequest.mock.calls.find(
+          (call) => !String(call[0]).includes("aggregate"),
+        );
+        expect(itemsCall).toBeTruthy();
+        expect(String(itemsCall![0])).toContain("count=exact");
+      });
+    });
+  });
+
+  // =====================================================================
   // Create button
   // =====================================================================
   describe("create button", () => {

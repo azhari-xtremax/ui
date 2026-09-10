@@ -58,7 +58,6 @@ import {
     useRelationPermissionsM2A,
     type M2AItem, 
     type M2ARelationInfo,
-    type ChangesItem,
 } from "@buildpad/hooks";
 import { CollectionList } from "@buildpad/ui-collections";
 import { renderTemplate, resolveDisplayTemplate } from "./render-template";
@@ -322,7 +321,6 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         totalCount: hookTotalCount,
         loading: itemsLoading,
         loadItems,
-        createItem,
         createItemWithData,
         removeItem,
         updateItem,
@@ -331,7 +329,6 @@ export const ListM2A: React.FC<ListM2AProps> = ({
         getSelectedPrimaryKeysByCollection,
         getChanges,
         hasChanges,
-        resetChanges,
     } = useRelationM2AItems(
         isDemoMode ? null : (hookRelationInfo as M2ARelationInfo | null), 
         isDemoMode ? null : (primaryKey || null)
@@ -1288,6 +1285,16 @@ export const ListM2A: React.FC<ListM2AProps> = ({
                         <CollectionList
                             collection={selectedCollection}
                             enableSelection
+                            // Always a small, human-browsed picker — never a
+                            // large primary collection view — so a real count
+                            // is worth it: the default estimated mode can
+                            // report a wildly inflated total on a full first
+                            // page when the related table has stale/absent
+                            // ANALYZE statistics (small, rarely-mutated
+                            // tables are exactly what autovacuum's threshold
+                            // skips), uncorrected until pagination reaches a
+                            // short page.
+                            exactCount
                             filter={!allowDuplicates ? (() => {
                                 const selectedByCollection = getSelectedPrimaryKeysByCollection();
                                 const selectedIds = selectedByCollection[selectedCollection] || [];

@@ -172,6 +172,22 @@ export interface CollectionListProps {
    * Forwarded to the toolbar, footer, filter panel and delete dialog.
    */
   translations?: DeepPartial<CollectionsTranslations>;
+  /**
+   * Request an exact row count instead of the server's default `estimated`
+   * mode. Off by default — `estimated` is what keeps this component cheap on
+   * a large primary collection view, and the meta.total_estimated pinning
+   * above already corrects an *under*-count once a page contradicts it.
+   *
+   * It cannot correct an *over*-count on a full first page, though: a table
+   * with stale or absent ANALYZE statistics (small, rarely-mutated
+   * collections — think a roles table — are exactly what autovacuum's
+   * threshold skips) can report a wildly inflated planner estimate that
+   * nothing contradicts until pagination reaches a short page. Set this to
+   * true for embeds that are always a small, human-browsed picker — e.g. the
+   * "Add Existing" modal in ListM2M / ListO2M — where correctness is worth
+   * far more than the marginal cost of a real count.
+   */
+  exactCount?: boolean;
 }
 
 // System fields to exclude from default display
@@ -237,6 +253,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
   onPermissionsLoaded,
   renderCell: consumerRenderCell,
   translations,
+  exactCount = false,
 }) => {
   // ----- Strings & formatters (prop > provider dictionary > English defaults) -----
   const t = useBuildpadTranslations((d) => d.collections, translations);
@@ -516,6 +533,9 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         limit,
         page,
       };
+      if (exactCount) {
+        query.count = "exact";
+      }
 
       // Fields to fetch — always include PK
       const fieldsToFetch = [...visibleFieldKeys];
@@ -633,6 +653,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
     archiveField,
     archiveFilterMode,
     archiveValue,
+    exactCount,
     t,
   ]);
 

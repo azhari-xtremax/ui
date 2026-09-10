@@ -657,7 +657,6 @@ export const ListM2M: React.FC<ListM2MProps> = ({
         reorderItems,
         getSelectedRelatedPKs,
         stagedRelatedData,
-        getChanges,
         hasChanges,
         setLocalChanges,
         resetChanges,
@@ -1103,10 +1102,6 @@ export const ListM2M: React.FC<ListM2MProps> = ({
             return new Set(visibleItems.map((item) => item.id as string | number));
         });
     }, [visibleItems]);
-
-    const handleDeselectAll = useCallback(() => {
-        setSelectedIds(new Set());
-    }, []);
 
     const handleLimitChange = useCallback(
         (value: string | null) => {
@@ -1747,6 +1742,16 @@ export const ListM2M: React.FC<ListM2MProps> = ({
                         <CollectionList
                             collection={relationInfo.relatedCollection.collection}
                             enableSelection
+                            // Always a small, human-browsed picker — never a
+                            // large primary collection view — so a real count
+                            // is worth it: the default estimated mode can
+                            // report a wildly inflated total on a full first
+                            // page when the related table has stale/absent
+                            // ANALYZE statistics (small, rarely-mutated
+                            // tables, e.g. roles, are exactly what
+                            // autovacuum's threshold skips), uncorrected
+                            // until pagination reaches a short page.
+                            exactCount
                             // Load whatever the row-display template needs, so a
                             // picked row already carries it and the staged label
                             // resolves without a second fetch.
