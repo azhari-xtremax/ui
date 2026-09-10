@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Box, Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
-import { IconAlertCircle, IconPlus, IconTrash, IconList, IconX } from '@tabler/icons-react';
+import { Text, Stack, Alert, Paper, Group, ActionIcon, Button } from '@mantine/core';
+import { IconAlertCircle, IconPlus, IconList, IconX } from '@tabler/icons-react';
 import type { M2ORelationInfo, M2OItem } from '@buildpad/hooks';
 import { useBuildpadTranslations } from '@buildpad/services';
 import { interpolate, type DeepPartial, type InterfacesTranslations } from '@buildpad/utils';
