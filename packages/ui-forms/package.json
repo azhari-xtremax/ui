@@ -222,7 +222,10 @@
     "typescript": "^5.8.3",
     "vite": "^6.0.0",
     "vitest": "^2.0.0",
-    "@vitest/coverage-v8": "2.1.9"
+    "@vitest/coverage-v8": "2.1.9",
+    "jsdom": "^25.0.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/jest-dom": "^6.0.0"
   },
   "private": true,
   "keywords": [
