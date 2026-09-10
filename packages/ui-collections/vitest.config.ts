@@ -29,6 +29,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
+      // A pre-existing bulk-actions-bar failure is unrelated noise that
+      // shouldn't block the lcov report from being written for SonarQube.
+      reportOnFailure: true,
     },
   },
 });
