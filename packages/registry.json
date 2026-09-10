@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/buildpad-ai/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-09-03T08:44:35.321Z",
+  "generatedAt": "2026-09-10T08:53:55.039Z",
   "version": "2.3.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -2428,7 +2428,7 @@
         {
           "source": "ui-interfaces/src/list-m2m/ListM2M.tsx",
           "target": "components/ui/list-m2m.tsx",
-          "sourceSha256": "4d3aa8719f39fec52f79349750b1d1b06159716e059aacf27968521af3747f9f"
+          "sourceSha256": "ba53ca8380120c78fc618027d663b2aa928ae83bd46631eaa11fed5ea53d30d3"
         },
         {
           "source": "ui-interfaces/src/list-m2m/ListM2MInterface.tsx",
@@ -2543,7 +2543,7 @@
         {
           "source": "ui-interfaces/src/list-o2m/ListO2M.tsx",
           "target": "components/ui/list-o2m.tsx",
-          "sourceSha256": "2f84d31f639b13655b6423526fee5e8b90a224d5e6cf1ae189ce10b6e5f08372"
+          "sourceSha256": "9432c0ba28343f3dd9c4935bed1010eee11b1e9cce6e0fa242300ee80c24f95c"
         }
       ],
       "dependencies": [
@@ -3222,7 +3222,7 @@
         {
           "source": "ui-collections/src/CollectionList.tsx",
           "target": "components/ui/collection-list.tsx",
-          "sourceSha256": "dec188c9325e4d79ee6e238194118fdc182ffdad41a9afc0bfb378caa764ef42"
+          "sourceSha256": "6396b108490d2522191d88cccd3a38bc64968b213d3d9c7f0e528011b90b73b6"
         },
         {
           "source": "ui-collections/src/CollectionList.css",
