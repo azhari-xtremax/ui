@@ -169,3 +169,59 @@ describe('migrate — v1 to v3', () => {
     expect(after).toEqual(before);
   });
 });
+
+describe('migrate — v2 to v3', () => {
+  test('backfills the upstream baseline for an existing per-file record, keeping local hashes', async () => {
+    const targetAbs = path.join(tmpdir, 'components/ui/demo.tsx');
+    await fs.ensureDir(path.dirname(targetAbs));
+    await fs.writeFile(targetAbs, DEMO_SOURCE);
+    const globalsAbs = path.join(tmpdir, 'app/globals.css');
+    await fs.ensureDir(path.dirname(globalsAbs));
+    await fs.writeFile(globalsAbs, GLOBALS_SOURCE);
+
+    await fs.writeJSON(path.join(tmpdir, 'buildpad.json'), {
+      $schema: 'https://buildpad.dev/schema.json',
+      schemaVersion: 2,
+      model: 'copy-own',
+      tsx: true,
+      srcDir: false,
+      aliases: { components: '@/components/ui', lib: '@/lib/buildpad' },
+      installedLib: ['design-system'],
+      installedComponents: ['demo'],
+      components: {
+        demo: {
+          release: '1.0.0',
+          sourcePackage: '@buildpad/ui-interfaces',
+          installedAt: '2026-01-01T00:00:00Z',
+          // Already has a local hash + state — backfillRecord's fast path
+          // (no historic-registry fetch needed) keeps it as-is.
+          files: [{ target: 'components/ui/demo.tsx', sourceSha256: 'local-hash', state: 'clean' }],
+        },
+      },
+      lib: {
+        'design-system': {
+          release: '1.0.0',
+          sourcePackage: '@buildpad/cli',
+          installedAt: '2026-01-01T00:00:00Z',
+          files: [{ target: 'app/globals.css', sourceSha256: 'local-hash-2', state: 'clean' }],
+        },
+      },
+    });
+
+    await migrate({ cwd: tmpdir });
+
+    const after = await readManifest();
+    expect(after.schemaVersion).toBe(3);
+    expect(after.components.demo.files[0]).toMatchObject({
+      target: 'components/ui/demo.tsx',
+      sourceSha256: 'local-hash',
+      state: 'clean',
+    });
+    expect(after.components.demo.sourcePackage).toBe('@buildpad/ui-interfaces');
+    expect(after.lib['design-system'].files[0]).toMatchObject({
+      target: 'app/globals.css',
+      sourceSha256: 'local-hash-2',
+      state: 'clean',
+    });
+  });
+});

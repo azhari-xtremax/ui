@@ -5,12 +5,19 @@
  * (no MCP transport needed now that the handler is exported). Uses the
  * real embedded registry data rather than mocking it.
  */
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { handleCallToolRequest } from '../src/index.js';
-import { getAllComponents } from '../src/registry.js';
+
+const spawnSyncMock = vi.fn();
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
+  spawnSync: spawnSyncMock,
+}));
+
+const { handleCallToolRequest } = await import('../src/index.js');
+const { getAllComponents, getRegistry } = await import('../src/registry.js');
 
 function call(name: string, args?: unknown) {
   return handleCallToolRequest({ params: { name, arguments: args } });
@@ -184,5 +191,138 @@ describe('handleCallToolRequest — list_outdated', () => {
     fs.writeFileSync(path.join(tmpdir, 'buildpad.json'), JSON.stringify({ components: {} }));
     const result = JSON.parse(firstText(await call('list_outdated', { projectPath: tmpdir })));
     expect(result).toEqual([]);
+  });
+});
+
+describe('handleCallToolRequest — get_component with a lib module name', () => {
+  test('returns lib-module info instead of a component when the name matches a lib module', async () => {
+    const registry = getRegistry();
+    const [libName] = Object.keys(registry.lib);
+    const result = JSON.parse(firstText(await call('get_component', { name: libName })));
+    expect(result.type).toBe('lib-module');
+    expect(result.name).toBe(libName);
+  });
+});
+
+describe('handleCallToolRequest — copy_component', () => {
+  test('returns full source files for a real component, with peer dependencies', async () => {
+    const [first] = getAllComponents();
+    const result = JSON.parse(firstText(await call('copy_component', { name: first.name, includeLib: false })));
+    expect(result.component).toBe(first.name);
+    expect(Array.isArray(result.files)).toBe(true);
+    expect(result.peerDependencies).toEqual(first.dependencies);
+  });
+
+  test('resolves internal lib dependencies transitively when includeLib is true', async () => {
+    const registry = getRegistry();
+    const withDeps = getAllComponents().find(c => c.internalDependencies?.length);
+    if (!withDeps) return; // registry shape may change; skip rather than fail spuriously
+
+    const result = JSON.parse(firstText(await call('copy_component', { name: withDeps.name, includeLib: true })));
+    expect(result.libFiles).toBeDefined();
+    expect(result.libFiles.some((f: { module: string }) => withDeps.internalDependencies!.includes(f.module))).toBe(true);
+    void registry;
+  });
+
+  test('throws when the name matches neither a component nor a lib module', async () => {
+    await expect(call('copy_component', { name: 'not-a-real-thing' })).rejects.toThrow('Component not found');
+  });
+});
+
+describe('handleCallToolRequest — get_component_changelog', () => {
+  test('throws when target matches no known package or component', async () => {
+    await expect(call('get_component_changelog', { target: 'not-a-real-target' })).rejects.toThrow('Cannot find changelog');
+  });
+
+  test('reports changelog unavailable when the fetch fails', async () => {
+    const registry = getRegistry();
+    const [pkgName] = Object.keys(registry.packages ?? {});
+    if (!pkgName) return;
+
+    const fetchMock = vi.fn(async () => { throw new Error('network down'); });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const text = firstText(await call('get_component_changelog', { target: pkgName }));
+      expect(text).toContain('Changelog unavailable');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('handleCallToolRequest — get_upgrade_plan', () => {
+  let tmpdir: string;
+
+  beforeEach(() => {
+    tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'buildpad-mcp-plan-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpdir, { recursive: true, force: true });
+  });
+
+  test('requires projectPath', async () => {
+    await expect(call('get_upgrade_plan', {})).rejects.toThrow('projectPath is required');
+  });
+
+  test('marks a component with no recorded hash as needing a safe overwrite', async () => {
+    const [first] = getAllComponents();
+    const target = first.files[0].target;
+
+    fs.writeFileSync(
+      path.join(tmpdir, 'buildpad.json'),
+      JSON.stringify({
+        release: '0.0.1',
+        srcDir: false,
+        components: { [first.name]: { release: '0.0.1', files: [{ target }] } },
+      }),
+    );
+
+    const plan = JSON.parse(firstText(await call('get_upgrade_plan', { projectPath: tmpdir })));
+    expect(plan).toHaveLength(1);
+    expect(plan[0].isOutdated).toBe(true);
+    expect(plan[0].files[0].status).toBe('missing');
+    expect(plan[0].recommendedAction).toBe('safe-overwrite');
+  });
+});
+
+describe('handleCallToolRequest — apply_upgrade', () => {
+  let tmpdir: string;
+
+  beforeEach(() => {
+    tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'buildpad-mcp-apply-'));
+    fs.writeFileSync(path.join(tmpdir, 'buildpad.json'), JSON.stringify({ components: {} }));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpdir, { recursive: true, force: true });
+    spawnSyncMock.mockReset();
+  });
+
+  test('requires projectPath', async () => {
+    await expect(call('apply_upgrade', {})).rejects.toThrow('projectPath is required');
+  });
+
+  test('throws when buildpad.json is missing', async () => {
+    fs.rmSync(path.join(tmpdir, 'buildpad.json'));
+    await expect(call('apply_upgrade', { projectPath: tmpdir })).rejects.toThrow('buildpad.json not found');
+  });
+
+  test('invokes the CLI via spawnSync and reports its result', async () => {
+    spawnSyncMock.mockReturnValue({
+      status: 0,
+      stdout: 'upgraded 1 component',
+      stderr: '',
+    });
+
+    const result = JSON.parse(firstText(await call('apply_upgrade', { projectPath: tmpdir, components: ['demo'] })));
+
+    expect(result.success).toBe(true);
+    expect(result.stdout).toContain('upgraded');
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      'npx',
+      expect.arrayContaining(['@buildpad/cli', 'upgrade', 'demo']),
+      expect.any(Object),
+    );
   });
 });
