@@ -8,6 +8,8 @@ const config = {
     '^@buildpad/services$': '<rootDir>/../services/src/index.ts',
     '^@buildpad/hooks$': '<rootDir>/../hooks/src/index.ts',
     '^@buildpad/utils$': '<rootDir>/../utils/src/index.ts',
+    '^@buildpad/ui-form$': '<rootDir>/../ui-form/src/index.ts',
+    '^@buildpad/ui-table$': '<rootDir>/../ui-table/src/index.ts',
     // marked only publishes ESM/UMD; point Jest at the UMD (CJS) build.
     '^marked$': '<rootDir>/../../node_modules/marked/lib/marked.umd.js',
   },

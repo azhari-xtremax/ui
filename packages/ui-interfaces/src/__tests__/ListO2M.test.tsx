@@ -33,6 +33,7 @@ jest.mock("@buildpad/hooks", () => ({
 
 // The edit/select modals render a full CollectionForm / CollectionList. Stub
 // them down to a single button that fires the callback under test.
+const mockCollectionListProps = jest.fn();
 jest.mock("@buildpad/ui-collections", () => {
   const R = require("react");
   return {
@@ -57,15 +58,18 @@ jest.mock("@buildpad/ui-collections", () => {
         "save",
       );
     },
-    CollectionList: ({ bulkActions }: any) =>
-      R.createElement(
+    CollectionList: (props: any) => {
+      mockCollectionListProps(props);
+      const { bulkActions } = props;
+      return R.createElement(
         "button",
         {
           "data-testid": "mock-add-selected",
           onClick: () => bulkActions[0].action((globalThis as any).__pickIds ?? ["p9"]),
         },
         "add selected",
-      ),
+      );
+    },
   };
 });
 
@@ -262,6 +266,26 @@ describe("ListO2M — Add Existing on an unsaved parent", () => {
     await waitFor(() => expect(screen.getByTestId("o2m-remove-p9")).toBeInTheDocument());
 
     expect(screen.queryByTestId("o2m-select-btn")).not.toBeInTheDocument();
+  });
+
+  // Regression test: the related-collection picker is always a small,
+  // human-browsed list, never a large primary collection view. The server's
+  // default `estimated` count mode can report a wildly inflated total on a
+  // full first page when the related table has stale/absent ANALYZE
+  // statistics — confirmed on a live deployment where a roles table (14
+  // real rows, never analyzed) reported 180 until pagination reached a
+  // short page and forced a recount. CollectionList's `exactCount` prop
+  // sidesteps that by asking for a real count up front, and must be set
+  // for this modal specifically.
+  it("requests an exact count for the Add Existing picker", async () => {
+    render(wrap(<ListO2M {...BASE_PROPS} primaryKey="+" value={[]} />));
+
+    fireEvent.click(await screen.findByTestId("o2m-select-btn"));
+    await screen.findByTestId("mock-add-selected");
+
+    expect(mockCollectionListProps).toHaveBeenCalledWith(
+      expect.objectContaining({ exactCount: true }),
+    );
   });
 });
 

@@ -7,6 +7,6 @@
     "allowJs": false,
     "lib": ["ES2022", "DOM"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../ui-interfaces/src/editorjs-types.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

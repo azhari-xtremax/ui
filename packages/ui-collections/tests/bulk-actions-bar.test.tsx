@@ -96,7 +96,22 @@ describe("BulkActionsBar", () => {
     const bulkActions: BulkAction[] = [{ label: "Export", action }];
     renderBar({ selectedIds: [1, 2], bulkActions });
     fireEvent.click(screen.getByTestId("bulk-action-0"));
-    expect(action).toHaveBeenCalledWith([1, 2]);
+    // The contract is action(selectedIds, selectedRows?) — assert the ids
+    // rather than the whole call, so the optional second argument doesn't
+    // make this fail for a reason it isn't testing.
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(action.mock.calls[0][0]).toEqual([1, 2]);
+  });
+
+  it("forwards the selected rows alongside the ids", () => {
+    // `selectedRows` exists so a bulk action doesn't have to re-fetch data the
+    // list already rendered; nothing covered that it actually arrives.
+    const action = vi.fn();
+    const bulkActions: BulkAction[] = [{ label: "Export", action }];
+    const rows = [{ id: 1, name: "one" }, { id: 2, name: "two" }];
+    renderBar({ selectedIds: [1, 2], selectedRows: rows, bulkActions });
+    fireEvent.click(screen.getByTestId("bulk-action-0"));
+    expect(action).toHaveBeenCalledWith([1, 2], rows);
   });
 
   it("calls onClearSelection when clear button is clicked", () => {

@@ -28,17 +28,6 @@ interface GeoJSONGeometry {
   coordinates: number[] | number[][] | number[][][];
 }
 
-interface GeoJSONFeature {
-  type: 'Feature';
-  geometry: GeoJSONGeometry;
-  properties: Record<string, unknown>;
-}
-
-interface GeoJSONFeatureCollection {
-  type: 'FeatureCollection';
-  features: GeoJSONFeature[];
-}
-
 // Re-export types from Map component to avoid duplication
 // These are the same types used in the base Map component
 import type { GeometryType, GeometryFormat, BasemapSource, DefaultView } from './Map';
@@ -141,13 +130,11 @@ const DEFAULT_BASEMAPS: BasemapSource[] = [
 // Custom control for fit bounds. Not a React component, so the button title
 // is handed in by the component that owns the dictionary.
 class FitBoundsControl {
-  private map: maplibregl.Map | undefined;
   private container: HTMLDivElement | undefined;
 
   constructor(private readonly title: string = defaultTranslations.interfaces.map.controls.fitBounds) {}
 
-  onAdd(map: maplibregl.Map) {
-    this.map = map;
+  onAdd(_map: maplibregl.Map) {
     this.container = document.createElement('div');
     this.container.className = 'maplibregl-ctrl maplibregl-ctrl-group';
 
@@ -168,7 +155,6 @@ class FitBoundsControl {
     if (this.container?.parentNode) {
       this.container.parentNode.removeChild(this.container);
     }
-    this.map = undefined;
   }
 
   private fitBounds() {

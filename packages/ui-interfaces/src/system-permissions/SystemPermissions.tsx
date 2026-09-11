@@ -1,4 +1,4 @@
-import React, { forwardRef, useState, useCallback, useMemo, useEffect } from 'react';
+import { forwardRef, useState, useCallback, useMemo, useEffect } from 'react';
 import {
   ActionIcon,
   Badge,

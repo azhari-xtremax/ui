@@ -41,8 +41,12 @@ jest.mock("@buildpad/hooks", () => ({
 }));
 
 // The select modal renders a full CollectionList; not under test here.
+const mockCollectionListProps = jest.fn();
 jest.mock("@buildpad/ui-collections", () => ({
-    CollectionList: () => null,
+    CollectionList: (props: Record<string, unknown>) => {
+        mockCollectionListProps(props);
+        return null;
+    },
 }));
 
 // JunctionItemForm loads field definitions over the API and renders two VForm
@@ -562,5 +566,26 @@ describe("ListM2A drag gating — paginated sets", () => {
 
         expect(screen.queryByTestId("m2a-drag-disabled-notice")).toBeNull();
         expect(screen.queryAllByTestId(/^m2a-drag-handle-/)).toHaveLength(3);
+    });
+});
+
+describe("ListM2A — Add Existing picker count mode", () => {
+    it("renders the picker with exactCount so the pager reflects real rows", async () => {
+        // Same rationale as the M2M/O2M pickers: a small related collection
+        // with stale ANALYZE statistics can report a wildly inflated planner
+        // estimate, and an over-count on a full first page is never corrected
+        // until pagination reaches a short page.
+        setItemsHook({ displayItems: [] });
+
+        render(wrap(<ListM2A {...(BASE_PROPS as any)} />));
+
+        fireEvent.click(await screen.findByTestId("m2a-select-btn"));
+        fireEvent.click(await screen.findByTestId("m2a-select-headings"));
+
+        await waitFor(() =>
+            expect(mockCollectionListProps).toHaveBeenCalledWith(
+                expect.objectContaining({ exactCount: true }),
+            ),
+        );
     });
 });

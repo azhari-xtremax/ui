@@ -8,7 +8,7 @@
 
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Box, Text, Paper } from '@mantine/core';
 import EditorJS, { type I18nDictionary, type OutputData } from '@editorjs/editorjs';
 import Header from '@editorjs/header';

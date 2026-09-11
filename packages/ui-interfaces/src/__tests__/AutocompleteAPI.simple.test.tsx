@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider, createTheme } from '@mantine/core';
 import axios from 'axios';
-import { AutocompleteAPI } from '../AutocompleteAPI';
+import { AutocompleteAPI } from '../autocomplete-api';
 
 // Mock axios
 jest.mock('axios');
@@ -154,7 +154,7 @@ describe('AutocompleteAPI', () => {
       await user.type(input, 'test');
 
       await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalledWith('Error fetching autocomplete results:', expect.any(Error));
+        expect(consoleSpy).toHaveBeenCalledWith('[AutocompleteAPI] Error fetching results:', expect.any(Error));
       });
 
       consoleSpy.mockRestore();

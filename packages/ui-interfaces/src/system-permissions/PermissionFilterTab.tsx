@@ -1,4 +1,3 @@
-import React from 'react';
 import { LoadingOverlay, Stack, Text } from '@mantine/core';
 import type { Field, Filter, Permission } from '@buildpad/types';
 import { useBuildpadTranslations } from '@buildpad/services';
