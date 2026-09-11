@@ -1,4 +1,3 @@
-/// <reference path="../editorjs-types.d.ts" />
 /**
  * InputBlockEditor Interface Component
  * Block-based content editor using EditorJS
