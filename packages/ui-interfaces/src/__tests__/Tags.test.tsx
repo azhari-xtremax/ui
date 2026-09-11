@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import '@testing-library/jest-dom';
-import { Tags } from './Tags';
+import { Tags } from '../tags/Tags';
 
 const renderWithProvider = (component: React.ReactElement) => {
   return render(

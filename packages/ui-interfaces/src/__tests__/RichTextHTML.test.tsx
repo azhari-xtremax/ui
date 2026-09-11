@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
-import { RichTextHTML } from './RichTextHTML';
+import { RichTextHTML } from '../rich-text-html/RichTextHTML';
 
 const renderWithProvider = (component: React.ReactElement) => {
   return render(

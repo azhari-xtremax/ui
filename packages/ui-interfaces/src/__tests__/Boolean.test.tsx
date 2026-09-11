@@ -159,7 +159,7 @@ describe('Boolean', () => {
       expect(checkbox.disabled).toBe(true);
     });
 
-    it('renders as disabled when readOnly prop is true', () => {
+    it('reports readonly without disabling, and suppresses writes', () => {
       renderWithProvider(
         <Boolean
           value={false}
@@ -169,7 +169,13 @@ describe('Boolean', () => {
       );
 
       const checkbox = screen.getByRole('switch') as HTMLInputElement;
-      expect(checkbox.disabled).toBe(true);
+      // readOnly is deliberately NOT disabled (e3bb26b, "make readonly a
+      // real state end-to-end"): the control stays focusable and reports
+      // itself read-only, with writes suppressed instead.
+      expect(checkbox.disabled).toBe(false);
+      expect(checkbox).toHaveAttribute('aria-readonly', 'true');
+      fireEvent.click(checkbox);
+      expect(mockOnChange).not.toHaveBeenCalled();
     });
 
     it('shows required indicator when required prop is true', () => {

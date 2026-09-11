@@ -2,9 +2,10 @@ import React from 'react';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
-import { Files } from '../Files';
+import { Files } from '../files/Files';
 
-jest.mock('@/lib/api', () => ({
+jest.mock('@buildpad/hooks', () => ({
+  ...jest.requireActual('@buildpad/hooks'),
   daasAPI: {
     getFile: jest.fn(async (id: string) => ({
       id,
@@ -19,8 +20,15 @@ jest.mock('@/lib/api', () => ({
   },
 }));
 
-jest.mock('../../Upload', () => ({
+jest.mock('../upload', () => ({
   __esModule: true,
+  // Files imports FileThumbnail and LibraryPickerModal from this barrel too;
+  // leaving them out of the mock renders them as undefined elements.
+  FileThumbnail: ({ file }: any) => (
+    <div data-testid={`thumb-${file?.id ?? 'unknown'}`} />
+  ),
+  LibraryPickerModal: ({ opened }: any) =>
+    opened ? <div data-testid="library-picker" /> : null,
   Upload: ({ onInput, fromUser, fromUrl, fromLibrary }: any) => (
     <button
       type="button"

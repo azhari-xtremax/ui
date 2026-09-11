@@ -1,15 +1,16 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { FileImage } from '../FileImage';
+import { FileImage } from '../file-image/FileImage';
 import { MantineProvider } from '@mantine/core';
 function renderWithMantine(ui: React.ReactElement) {
   return render(<MantineProvider>{ui}</MantineProvider>);
 }
 
 // Mocks
-jest.mock('@/lib/api', () => {
+jest.mock('@buildpad/hooks', () => {
   return {
+    ...jest.requireActual('@buildpad/hooks'),
     api: { get: jest.fn() },
     daasAPI: {
       getFile: jest.fn(),
@@ -23,7 +24,7 @@ jest.mock('@/lib/api', () => {
 jest.mock('@mantine/notifications', () => ({ notifications: { show: jest.fn() } }));
 
 // Mock Upload component to expose props and allow triggering onInput easily
-jest.mock('../../Upload', () => {
+jest.mock('../upload', () => {
   return {
     __esModule: true,
     Upload: ({ onInput, fromUser, fromUrl, fromLibrary, accept }: any) => (
@@ -43,7 +44,7 @@ jest.mock('../../Upload', () => {
 });
 
 // Handy accessors
-const { api, daasAPI } = jest.requireMock('@/lib/api');
+const { api, daasAPI } = jest.requireMock('@buildpad/hooks');
 
 // Helpers
 const makeImageFile = (overrides: Partial<any> = {}) => ({

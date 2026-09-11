@@ -10,7 +10,7 @@
  * To run tests: npm test
  */
 
-import { AutocompleteAPI } from '../AutocompleteAPI';
+import { AutocompleteAPI } from '../autocomplete-api';
 
 describe('AutocompleteAPI Component', () => {
   
