@@ -72,6 +72,67 @@ describe('handleCallToolRequest — read-only registry tools', () => {
     expect(typeof result).toBe('object');
   });
 
+  test('get_usage_example returns a code sample for a real component', async () => {
+    const [first] = getAllComponents();
+    const text = firstText(await call('get_usage_example', { component: first.name }));
+    expect(text).toContain(`pnpm cli add ${first.name}`);
+  });
+
+  test('get_usage_example throws when no component name is given', async () => {
+    await expect(call('get_usage_example', {})).rejects.toThrow('Component name is required');
+  });
+
+  test('generate_form returns a CollectionForm code snippet for the given collection', async () => {
+    const text = firstText(await call('generate_form', { collection: 'articles', mode: 'edit' }));
+    expect(text).toContain('collection="articles"');
+    expect(text).toContain('mode="edit"');
+  });
+
+  test('generate_interface maps a known type to its component and falls back to Input otherwise', async () => {
+    const dt = firstText(await call('generate_interface', { type: 'datetime', field: 'published_at' }));
+    expect(dt).toContain('DateTime');
+
+    const fallback = firstText(await call('generate_interface', { type: 'not-a-real-type', field: 'x' }));
+    expect(fallback).toContain('Input');
+  });
+
+  test('get_install_command builds an --all command', async () => {
+    const text = firstText(await call('get_install_command', { all: true }));
+    expect(text).toContain('--all --project');
+  });
+
+  test('get_install_command builds a named-components command', async () => {
+    const text = firstText(await call('get_install_command', { components: ['demo', 'input'] }));
+    expect(text).toContain('demo input --project');
+  });
+
+  test('get_copy_own_info returns the distribution-model explainer', async () => {
+    const text = firstText(await call('get_copy_own_info'));
+    expect(text).toContain('Copy & Own');
+  });
+
+  test('get_rbac_pattern returns steps for a known pattern', async () => {
+    const result = JSON.parse(firstText(await call('get_rbac_pattern', { pattern: 'own_items', collections: ['posts'], roleName: 'Author' })));
+    expect(result.pattern).toBe('own_items');
+    expect(Array.isArray(result.steps)).toBe(true);
+  });
+
+  test('get_rbac_pattern reports an error for an unknown pattern', async () => {
+    const result = await call('get_rbac_pattern', { pattern: 'not-a-real-pattern' });
+    expect(result.isError).toBe(true);
+    expect(firstText(result)).toContain('Unknown pattern');
+  });
+
+  test('get_module_access_pattern returns a step sequence', async () => {
+    const result = JSON.parse(firstText(await call('get_module_access_pattern', {
+      keys: [{ key: 'billing:invoices', display_name: 'Invoices' }],
+      folder: 'Billing',
+      policyName: 'Billing Access',
+    })));
+    expect(Array.isArray(result.steps)).toBe(true);
+    expect(result.steps.length).toBeGreaterThan(0);
+  });
+
   test('an unknown tool name throws', async () => {
     await expect(call('not_a_real_tool')).rejects.toThrow('Unknown tool: not_a_real_tool');
   });
