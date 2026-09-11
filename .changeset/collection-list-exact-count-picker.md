@@ -1,6 +1,6 @@
 ---
-"@buildpad/ui-collections": patch
-"@buildpad/ui-interfaces": patch
+"@buildpad/ui-collections": minor
+"@buildpad/ui-interfaces": minor
 ---
 
 CollectionList: add an opt-in `exactCount` prop, and use it for the relation pickers.
