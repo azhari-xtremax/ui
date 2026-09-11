@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/buildpad-ai/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-09-10T09:37:03.452Z",
+  "generatedAt": "2026-09-11T04:31:34.317Z",
   "version": "2.3.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -1691,7 +1691,7 @@
         {
           "source": "ui-interfaces/src/input-block-editor/InputBlockEditor.tsx",
           "target": "components/ui/input-block-editor.tsx",
-          "sourceSha256": "5e24548acd7ec8e395f1f1f3435fc1f443679301d504cbacd35fb057d641b90e"
+          "sourceSha256": "8f2eb1d8ea146dc061b911d5ee1937c684c7f9d4d99cad7604a69bf797fd5655"
         },
         {
           "source": "ui-interfaces/src/input-block-editor/InputBlockEditor.css",
