@@ -57,6 +57,8 @@ vi.mock("@buildpad/ui-table", () => ({
     renderFooter,
     noItemsText,
     renderCell,
+    itemKey,
+    selectionUseKeys,
   }: {
     items: Array<Record<string, unknown>>;
     headers: Array<{ text: string; value: string }>;
@@ -68,6 +70,8 @@ vi.mock("@buildpad/ui-table", () => ({
     renderFooter?: () => React.ReactNode;
     noItemsText?: string;
     renderCell?: (item: Record<string, unknown>, header: any) => React.ReactNode;
+    itemKey?: string;
+    selectionUseKeys?: boolean;
   }) => (
     <div data-testid="vtable-mock">
       {loading && <div data-testid="vtable-loading">Loading...</div>}
@@ -97,11 +101,17 @@ vi.mock("@buildpad/ui-table", () => ({
                     data-testid={`vtable-select-${i}`}
                     onChange={(e) => {
                       if (!onUpdate) return;
-                      const current = (value || []) as Record<string, unknown>[];
+                      const current = (value || []) as unknown[];
+                      // Mirror the real VTable: with selectionUseKeys, the
+                      // table only ever hands back the raw primary-key
+                      // value, never the row object — this is what makes the
+                      // "add existing" picker bug reproducible in tests.
+                      const key = itemKey ? item[itemKey] : item;
+                      const entry = selectionUseKeys ? key : item;
                       if (e.target.checked) {
-                        onUpdate([...current, item]);
+                        onUpdate([...current, entry]);
                       } else {
-                        onUpdate(current.filter((v) => v !== item));
+                        onUpdate(current.filter((v) => v !== entry));
                       }
                     }}
                   />
@@ -557,6 +567,38 @@ describe("CollectionList", () => {
 
       // Button should contain text "Delete"
       expect(screen.getByTestId("bulk-action-delete")).toHaveTextContent("Delete");
+    });
+
+    // Regression coverage: VTable uses `selectionUseKeys`, so `value`/
+    // `onUpdate` only ever carry raw primary-key values — never row objects.
+    // A bulk action (e.g. ListM2M's "Add selected" in the "Add Existing"
+    // picker) needs the actual row data to build its display label, so
+    // `selectedRows` must be looked up from the loaded `items` by key rather
+    // than the selection array itself being cast as if it held row objects.
+    it("passes full row objects as selectedRows to a bulk action, not bare keys", async () => {
+      const action = vi.fn();
+      const bulkActions = [{ label: "Add selected", action }];
+
+      renderList({ enableSelection: true, bulkActions });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("cell-0-title")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("vtable-select-0"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bulk-action-0")).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByTestId("bulk-action-0"));
+
+      expect(action).toHaveBeenCalledTimes(1);
+      const [selectedIds, selectedRows] = action.mock.calls[0];
+      expect(selectedIds).toEqual([1]);
+      expect(selectedRows).toEqual([
+        { id: 1, title: "Post 1", status: "published", body: "Body 1" },
+      ]);
     });
 
     it("custom bulk action buttons show labels", async () => {
