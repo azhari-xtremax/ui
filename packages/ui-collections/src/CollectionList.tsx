@@ -761,14 +761,6 @@ export const CollectionList: React.FC<CollectionListProps> = ({
     ) as (string | number)[];
   }, [selectedItems, primaryKeyField]);
 
-  // With `selectionUseKeys` the table's `value`/`onUpdate` only carry raw
-  // primary-key values, not row objects — so bulk actions need the actual
-  // rows looked up from the currently loaded page by key.
-  const selectedRows = useMemo(() => {
-    const idSet = new Set(selectedIds);
-    return items.filter((item) => idSet.has((item as AnyItem)[primaryKeyField] as string | number));
-  }, [items, selectedIds, primaryKeyField]);
-
   // =========================================================================
   // Field add/remove helpers
   // =========================================================================
@@ -1291,7 +1283,7 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         onRefresh={handleRefresh}
         enableSelection={enableSelection}
         selectedIds={selectedIds}
-        selectedRows={selectedRows as Record<string, unknown>[]}
+        selectedRows={selectedItems as Record<string, unknown>[]}
         enableDelete={enableDelete}
         deleteAllowed={deleteAllowed}
         createAllowed={createAllowed}
@@ -1357,13 +1349,16 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         showSelect={enableSelection ? "multiple" : "none"}
         showResize={enableResize}
         allowHeaderReorder={enableReorder}
+        // The selection holds row objects, not keys (no `selectionUseKeys`):
+        // bulk actions receive them as `selectedRows`, including a row
+        // selected before a page, search or filter change replaced `items`.
+        // VTable matches them to the rows on screen by `itemKey`.
         value={selectedItems}
         fixedHeader
         loading={loading}
         loadingText={t.list.table.loading}
         noItemsText={isFiltered ? t.list.table.noResultsFiltered : t.list.table.noItems}
         rowHeight={rowHeight}
-        selectionUseKeys
         clickable={!!onItemClick}
         renderCell={fieldTypeRenderCell}
         renderHeaderContextMenu={

@@ -569,12 +569,10 @@ describe("CollectionList", () => {
       expect(screen.getByTestId("bulk-action-delete")).toHaveTextContent("Delete");
     });
 
-    // Regression coverage: VTable uses `selectionUseKeys`, so `value`/
-    // `onUpdate` only ever carry raw primary-key values — never row objects.
-    // A bulk action (e.g. ListM2M's "Add selected" in the "Add Existing"
-    // picker) needs the actual row data to build its display label, so
-    // `selectedRows` must be looked up from the loaded `items` by key rather
-    // than the selection array itself being cast as if it held row objects.
+    // Regression coverage: a bulk action (e.g. ListM2M's "Add selected" in
+    // the "Add Existing" picker) needs the actual row data to build its
+    // display label. With `selectionUseKeys`, the table hands back bare
+    // primary keys, and those used to reach the action cast as rows.
     it("passes full row objects as selectedRows to a bulk action, not bare keys", async () => {
       const action = vi.fn();
       const bulkActions = [{ label: "Add selected", action }];
@@ -598,6 +596,54 @@ describe("CollectionList", () => {
       expect(selectedIds).toEqual([1]);
       expect(selectedRows).toEqual([
         { id: 1, title: "Post 1", status: "published", body: "Body 1" },
+      ]);
+    });
+
+    // Selection survives a search, page or filter change, but `items` only
+    // holds the rows on screen, so a row selected before the change must
+    // still reach the action with its data, not as a bare id.
+    it("passes the rows selected before a search changed the list", async () => {
+      const action = vi.fn();
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) {
+          return Promise.resolve(makeCountResponse(3));
+        }
+        if (url.includes("search=")) {
+          return Promise.resolve({
+            data: [
+              { id: 2, title: "Post 2", status: "draft", body: "Body 2" },
+              { id: 4, title: "Post 4", status: "draft", body: "Body 4" },
+            ],
+            meta: { page: 1, limit: 25, total: 2 },
+          });
+        }
+        return Promise.resolve(SAMPLE_ITEMS);
+      });
+
+      renderList({ enableSelection: true, bulkActions: [{ label: "Add selected", action }] });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("cell-0-title")).toHaveTextContent("Post 1");
+      });
+      fireEvent.click(screen.getByTestId("vtable-select-0"));
+
+      // Post 1 is not in the search results.
+      await userEvent.type(screen.getByPlaceholderText("Search..."), "draft");
+      await waitFor(() => {
+        expect(screen.getByTestId("cell-1-title")).toHaveTextContent("Post 4");
+      });
+      // Row 1, because the mock's checkbox is uncontrolled: row 0's is still
+      // checked from the first selection.
+      fireEvent.click(screen.getByTestId("vtable-select-1"));
+
+      await userEvent.click(screen.getByTestId("bulk-action-0"));
+
+      expect(action).toHaveBeenCalledTimes(1);
+      const [selectedIds, selectedRows] = action.mock.calls[0];
+      expect(selectedIds).toEqual([1, 4]);
+      expect(selectedRows).toEqual([
+        { id: 1, title: "Post 1", status: "published", body: "Body 1" },
+        { id: 4, title: "Post 4", status: "draft", body: "Body 4" },
       ]);
     });
 
