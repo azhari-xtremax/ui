@@ -2338,7 +2338,6 @@ var CollectionList = ({
         loadingText: t.list.table.loading,
         noItemsText: isFiltered ? t.list.table.noResultsFiltered : t.list.table.noItems,
         rowHeight,
-        selectionUseKeys: true,
         clickable: !!onItemClick,
         renderCell: fieldTypeRenderCell,
         renderHeaderContextMenu: enableHeaderMenu ? renderHeaderContextMenu : void 0,
