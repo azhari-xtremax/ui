@@ -57,6 +57,8 @@ vi.mock("@buildpad/ui-table", () => ({
     renderFooter,
     noItemsText,
     renderCell,
+    itemKey,
+    selectionUseKeys,
   }: {
     items: Array<Record<string, unknown>>;
     headers: Array<{ text: string; value: string }>;
@@ -68,6 +70,8 @@ vi.mock("@buildpad/ui-table", () => ({
     renderFooter?: () => React.ReactNode;
     noItemsText?: string;
     renderCell?: (item: Record<string, unknown>, header: any) => React.ReactNode;
+    itemKey?: string;
+    selectionUseKeys?: boolean;
   }) => (
     <div data-testid="vtable-mock">
       {loading && <div data-testid="vtable-loading">Loading...</div>}
@@ -97,11 +101,17 @@ vi.mock("@buildpad/ui-table", () => ({
                     data-testid={`vtable-select-${i}`}
                     onChange={(e) => {
                       if (!onUpdate) return;
-                      const current = (value || []) as Record<string, unknown>[];
+                      const current = (value || []) as unknown[];
+                      // Mirror the real VTable: with selectionUseKeys, the
+                      // table only ever hands back the raw primary-key
+                      // value, never the row object — this is what makes the
+                      // "add existing" picker bug reproducible in tests.
+                      const key = itemKey ? item[itemKey] : item;
+                      const entry = selectionUseKeys ? key : item;
                       if (e.target.checked) {
-                        onUpdate([...current, item]);
+                        onUpdate([...current, entry]);
                       } else {
-                        onUpdate(current.filter((v) => v !== item));
+                        onUpdate(current.filter((v) => v !== entry));
                       }
                     }}
                   />
@@ -557,6 +567,84 @@ describe("CollectionList", () => {
 
       // Button should contain text "Delete"
       expect(screen.getByTestId("bulk-action-delete")).toHaveTextContent("Delete");
+    });
+
+    // Regression coverage: a bulk action (e.g. ListM2M's "Add selected" in
+    // the "Add Existing" picker) needs the actual row data to build its
+    // display label. With `selectionUseKeys`, the table hands back bare
+    // primary keys, and those used to reach the action cast as rows.
+    it("passes full row objects as selectedRows to a bulk action, not bare keys", async () => {
+      const action = vi.fn();
+      const bulkActions = [{ label: "Add selected", action }];
+
+      renderList({ enableSelection: true, bulkActions });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("cell-0-title")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId("vtable-select-0"));
+
+      await waitFor(() => {
+        expect(screen.getByTestId("bulk-action-0")).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByTestId("bulk-action-0"));
+
+      expect(action).toHaveBeenCalledTimes(1);
+      const [selectedIds, selectedRows] = action.mock.calls[0];
+      expect(selectedIds).toEqual([1]);
+      expect(selectedRows).toEqual([
+        { id: 1, title: "Post 1", status: "published", body: "Body 1" },
+      ]);
+    });
+
+    // Selection survives a search, page or filter change, but `items` only
+    // holds the rows on screen, so a row selected before the change must
+    // still reach the action with its data, not as a bare id.
+    it("passes the rows selected before a search changed the list", async () => {
+      const action = vi.fn();
+      mockApiRequest.mockImplementation((url: string) => {
+        if (url.includes("aggregate")) {
+          return Promise.resolve(makeCountResponse(3));
+        }
+        if (url.includes("search=")) {
+          return Promise.resolve({
+            data: [
+              { id: 2, title: "Post 2", status: "draft", body: "Body 2" },
+              { id: 4, title: "Post 4", status: "draft", body: "Body 4" },
+            ],
+            meta: { page: 1, limit: 25, total: 2 },
+          });
+        }
+        return Promise.resolve(SAMPLE_ITEMS);
+      });
+
+      renderList({ enableSelection: true, bulkActions: [{ label: "Add selected", action }] });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("cell-0-title")).toHaveTextContent("Post 1");
+      });
+      fireEvent.click(screen.getByTestId("vtable-select-0"));
+
+      // Post 1 is not in the search results.
+      await userEvent.type(screen.getByPlaceholderText("Search..."), "draft");
+      await waitFor(() => {
+        expect(screen.getByTestId("cell-1-title")).toHaveTextContent("Post 4");
+      });
+      // Row 1, because the mock's checkbox is uncontrolled: row 0's is still
+      // checked from the first selection.
+      fireEvent.click(screen.getByTestId("vtable-select-1"));
+
+      await userEvent.click(screen.getByTestId("bulk-action-0"));
+
+      expect(action).toHaveBeenCalledTimes(1);
+      const [selectedIds, selectedRows] = action.mock.calls[0];
+      expect(selectedIds).toEqual([1, 4]);
+      expect(selectedRows).toEqual([
+        { id: 1, title: "Post 1", status: "published", body: "Body 1" },
+        { id: 4, title: "Post 4", status: "draft", body: "Body 4" },
+      ]);
     });
 
     it("custom bulk action buttons show labels", async () => {

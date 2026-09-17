@@ -1349,13 +1349,16 @@ export const CollectionList: React.FC<CollectionListProps> = ({
         showSelect={enableSelection ? "multiple" : "none"}
         showResize={enableResize}
         allowHeaderReorder={enableReorder}
+        // The selection holds row objects, not keys (no `selectionUseKeys`):
+        // bulk actions receive them as `selectedRows`, including a row
+        // selected before a page, search or filter change replaced `items`.
+        // VTable matches them to the rows on screen by `itemKey`.
         value={selectedItems}
         fixedHeader
         loading={loading}
         loadingText={t.list.table.loading}
         noItemsText={isFiltered ? t.list.table.noResultsFiltered : t.list.table.noItems}
         rowHeight={rowHeight}
-        selectionUseKeys
         clickable={!!onItemClick}
         renderCell={fieldTypeRenderCell}
         renderHeaderContextMenu={
