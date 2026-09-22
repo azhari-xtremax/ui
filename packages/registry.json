@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/buildpad-ai/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-09-17T09:21:02.672Z",
+  "generatedAt": "2026-09-22T05:18:49.634Z",
   "version": "2.4.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -2055,7 +2055,7 @@
         {
           "source": "ui-interfaces/src/collection-item-dropdown/CollectionItemDropdown.tsx",
           "target": "components/ui/collection-item-dropdown.tsx",
-          "sourceSha256": "1e240aefd47132c18b8a8649ffb1f4e92d72643357decc9ad2d4010f7f630d72"
+          "sourceSha256": "4d3faebd05e64d3d463316defb43b3760e0e525c152e8a17de95c74b375ffea0"
         }
       ],
       "dependencies": [
@@ -2485,7 +2485,7 @@
         {
           "source": "ui-interfaces/src/select-dropdown-m2o/SelectDropdownM2O.tsx",
           "target": "components/ui/select-dropdown-m2o.tsx",
-          "sourceSha256": "70c1516972c5f51bbc280e3e1059b894e8bff08729e52685fa8dc823e111a29a"
+          "sourceSha256": "ead6174ac0be165992ef4bd8eb15ff07e799140939d1f28f0eceddc58db3f39e"
         },
         {
           "source": "ui-interfaces/src/select-dropdown-m2o/SelectDropdownM2OInterface.tsx",
