@@ -39,6 +39,8 @@ export interface SelectRadioProps {
   'aria-label'?: string;
   /** Per-instance overrides of the dictionary strings (`interfaces.selectRadio`) */
   translations?: DeepPartial<InterfacesTranslations['selectRadio']>;
+  /** data-testid for testing */
+  'data-testid'?: string;
 }
 
 export function SelectRadio({
@@ -57,6 +59,7 @@ export function SelectRadio({
   color = 'blue',
   'aria-label': ariaLabel,
   translations,
+  'data-testid': testId,
 }: SelectRadioProps) {
   const t = useBuildpadTranslations((d) => d.interfaces.selectRadio, translations);
   const [otherValue, setOtherValue] = useState('');
@@ -183,7 +186,7 @@ export function SelectRadio({
   // Show choices validation message
   if (!choices || choices.length === 0) {
     return (
-      <Stack gap="xs" w={width}>
+      <Stack gap="xs" w={width} data-testid={testId}>
         {label && (
           <Text size="sm" fw={500}>
             {label}
@@ -211,7 +214,7 @@ export function SelectRadio({
     : (value == null ? '' : String(value)); // NOSONAR: idiomatic tri-state ternary, not confusing nesting
 
   return (
-    <Stack gap="xs" w={width}>
+    <Stack gap="xs" w={width} data-testid={testId}>
       <Radio.Group
         value={currentValue}
         onChange={handleChange}

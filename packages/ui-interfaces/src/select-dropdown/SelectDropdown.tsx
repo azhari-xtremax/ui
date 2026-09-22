@@ -58,6 +58,8 @@ export interface SelectDropdownProps {
   'aria-label'?: string;
   /** Per-instance overrides of the dictionary strings (`interfaces.selectDropdown`) */
   translations?: DeepPartial<InterfacesTranslations['selectDropdown']>;
+  /** data-testid for testing */
+  'data-testid'?: string;
 }
 
 /**
@@ -111,6 +113,7 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
   selectProps = {},
   'aria-label': ariaLabel,
   translations,
+  'data-testid': testId,
 }) => {
   // Dictionary strings; the `placeholder` prop wins over both the
   // `translations` prop and the provider dictionary.
@@ -437,7 +440,9 @@ export const SelectDropdown: React.FC<SelectDropdownProps> = ({
       nothingFoundMessage={allowOther ? undefined : t.nothingFound}
       renderOption={renderOption}
       aria-label={ariaLabel || (!label ? t.placeholder : undefined)}
-      data-testid="select-dropdown"
+      // The field container's testid wins when VForm supplies one; the
+      // component keeps its own default when rendered on its own.
+      data-testid={testId ?? 'select-dropdown'}
       {...selectProps}
       // allowOther: Mantine v8's <Select> has no built-in "creatable" mode,
       // so free text is committed manually — track the live search text and

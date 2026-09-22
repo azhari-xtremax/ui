@@ -71,6 +71,8 @@ export interface DateTimeProps {
 
   /** Per-instance overrides of the dictionary strings (`interfaces.datetime`) */
   translations?: DeepPartial<InterfacesTranslations['datetime']>;
+  /** data-testid for testing */
+  'data-testid'?: string;
 }
 
 /**
@@ -110,6 +112,7 @@ export const DateTime: React.FC<DateTimeProps> = ({
   onChange,
   pickerProps = {},
   translations,
+  'data-testid': testId,
 }) => {
   // Locale from BuildpadI18nProvider (English/browser without one). The
   // calendar and the display format use dayjs locale data loaded on demand.
@@ -289,10 +292,10 @@ export const DateTime: React.FC<DateTimeProps> = ({
       ...(dayjsLocale ? { locale: dayjsLocale } : {}),
     };
 
-    return <DatePickerInput {...datePickerProps} />;
+    return <DatePickerInput {...datePickerProps} data-testid={testId} />;
   }
 
-  return <DateTimePicker {...dateTimePickerProps} />;
+  return <DateTimePicker {...dateTimePickerProps} data-testid={testId} />;
 };
 
 export default DateTime;
