@@ -498,7 +498,10 @@ HEAD_COMMIT="$(git rev-parse HEAD)"
 REMOTE_TAGS="$(git ls-remote --tags "$REMOTE")"
 TO_PUSH=""
 ALREADY=0
-for t in $(git tag --points-at HEAD); do
+# Only this release's tags: `v<version>` and the per-package tags changeset
+# publish just created. Another local tag that happens to sit on the release
+# commit belongs to whoever made it, not to this release.
+for t in $(git tag --points-at HEAD | grep -E "^(${TAG//./\\.}|@buildpad/[^@]+@${NEW//./\\.})$"); do
   remote_commit="$(remote_tag_commit "$REMOTE_TAGS" "$t")"
   if [[ -z "$remote_commit" ]]; then
     TO_PUSH="${TO_PUSH} ${t}"
