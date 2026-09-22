@@ -81,6 +81,8 @@ export interface SelectMultipleCheckboxProps {
   readOnly?: boolean;
   /** Per-instance overrides of the dictionary strings (`interfaces.selectMultipleCheckbox`) */
   translations?: DeepPartial<InterfacesTranslations['selectMultipleCheckbox']>;
+  /** data-testid for testing */
+  'data-testid'?: string;
 }
 
 export function SelectMultipleCheckbox({
@@ -100,6 +102,7 @@ export function SelectMultipleCheckbox({
   color = 'blue',
   itemsShown = 8,
   translations,
+  'data-testid': testId,
 }: SelectMultipleCheckboxProps) {
   const t = useBuildpadTranslations((d) => d.interfaces.selectMultipleCheckbox, translations);
   const { formatCount } = useBuildpadI18n();
@@ -284,7 +287,7 @@ export function SelectMultipleCheckbox({
   // Show choices validation message
   if (!choices || choices.length === 0) {
     return (
-      <Stack gap="xs" style={{ width }}>
+      <Stack gap="xs" style={{ width }} data-testid={testId}>
         {label && (
           <Text size="sm" fw={500}>
             {label}
@@ -306,6 +309,7 @@ export function SelectMultipleCheckbox({
   return (
     <Stack
       gap="xs"
+      data-testid={testId}
       style={{ width, ...(readOnly && { pointerEvents: 'none' as const, opacity: 0.8 }) }}
       {...(readOnly && { 'aria-readonly': true })}
     >

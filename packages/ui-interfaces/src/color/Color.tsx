@@ -258,6 +258,8 @@ export interface ColorProps {
 
   /** Per-instance overrides of the dictionary strings (`interfaces.color`) */
   translations?: DeepPartial<ColorTranslations>;
+  /** data-testid for testing */
+  'data-testid'?: string;
 }
 
 /**
@@ -289,6 +291,7 @@ export const Color: React.FC<ColorProps> = ({
   presets: presetsProp,
   onChange: onChangeProp,
   translations,
+  'data-testid': testId,
 }) => {
   // Neutralise the emitter rather than gating each of the ~8 call sites below
   // (hex, RGB/HSL sliders, eyedropper, presets, clear) — a new call site cannot
@@ -408,7 +411,7 @@ export const Color: React.FC<ColorProps> = ({
   const colorFormats = opacity ? ['RGBA', 'HSLA'] : ['RGB', 'HSL'];
 
   return (
-    <div>
+    <div data-testid={testId}>
       {label && (
         <Text fw={500} size="sm" mb="xs" data-variant="label">
           {label}

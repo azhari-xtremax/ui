@@ -53,6 +53,8 @@ export interface TextareaProps {
   autofocus?: boolean;
   /** camelCase alias for {@link TextareaProps.autofocus}. */
   autoFocus?: boolean;
+  /** data-testid for testing */
+  'data-testid'?: string;
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
@@ -74,6 +76,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
   maxRows = 10,
   autosize = true,
   'aria-label': ariaLabel,
+  'data-testid': testId,
   maxLength,
   autofocus,
   autoFocus: autoFocusProp,
@@ -143,6 +146,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({
     <Box pos="relative">
       <MantineTextarea
         ref={ref}
+        data-testid={testId}
         value={value ?? ''}
         onChange={handleChange}
         onBlur={handleBlur}
