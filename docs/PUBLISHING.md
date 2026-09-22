@@ -245,7 +245,10 @@ pnpm build
 # 6. Publish to npm
 pnpm changeset publish
 
-# 7. Push tags
+# 7. Push tags. Fine on a first run; on a re-run this is rejected, because
+#    `changeset publish` re-creates a tag object for every private package
+#    each run — then push only the tags the remote does not have yet.
+#    scripts/release-local.sh handles both cases.
 git push --follow-tags
 ```
 
