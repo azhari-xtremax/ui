@@ -192,11 +192,14 @@ describe('CollectionItemDropdown', () => {
       const option = await screen.findByTestId('collection-item-dropdown-option-1');
       fireEvent.click(option);
 
+      // Fixed relation (no showCollectionSelect): emits the scalar key
+      // directly, matching a schema-typed FK column, not the {key, collection}
+      // envelope and not the Mantine-stringified '10'.
       await waitFor(() => {
-        expect(handleChange).toHaveBeenCalledWith({ key: 10, collection: 'items' });
+        expect(handleChange).toHaveBeenCalledWith(10);
       });
-      // Not the Mantine-stringified '10'
-      expect(handleChange).not.toHaveBeenCalledWith({ key: '10', collection: 'items' });
+      expect(handleChange).not.toHaveBeenCalledWith('10');
+      expect(handleChange).not.toHaveBeenCalledWith({ key: 10, collection: 'items' });
     });
 
     it('highlights the active option by raw (non-string) key equality', async () => {
@@ -218,6 +221,85 @@ describe('CollectionItemDropdown', () => {
 
       const activeOption = await screen.findByTestId('collection-item-dropdown-option-1');
       expect(activeOption).toHaveAttribute('data-combobox-active', 'true');
+    });
+  });
+
+  describe('Selection value shape by relation kind (fixed vs. polymorphic)', () => {
+    // Regression coverage for the bug where every selection unconditionally
+    // emitted {key, collection}. When the target collection is fixed by the
+    // field config (showCollectionSelect: false — the common M2O case), that
+    // envelope gets written straight into a schema-typed FK column: Postgres
+    // rejects it outright for a uuid column ("invalid input syntax for type
+    // uuid"), or it's silently persisted as a stringified JSON blob in a text
+    // column with no real foreign-key integrity. The {key, collection} shape
+    // is only correct when the collection genuinely varies per item
+    // (showCollectionSelect: true) and must be recorded alongside the key.
+    it('emits only the scalar key for a fixed relation (showCollectionSelect: false)', async () => {
+      const mockItems = [{ id: 'post-1', title: 'First Post' }];
+      const handleChange = jest.fn();
+
+      renderWithProvider(
+        <CollectionItemDropdown
+          mockItems={mockItems}
+          selectedCollection="posts"
+          template="{{title}}"
+          onChange={handleChange}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('collection-item-dropdown-input'));
+      const option = await screen.findByTestId('collection-item-dropdown-option-0');
+      fireEvent.click(option);
+
+      await waitFor(() => {
+        expect(handleChange).toHaveBeenCalledWith('post-1');
+      });
+      expect(handleChange).not.toHaveBeenCalledWith({ key: 'post-1', collection: 'posts' });
+    });
+
+    it('emits {key, collection} for a polymorphic relation (showCollectionSelect: true)', async () => {
+      const mockItems = [{ id: 'post-1', title: 'First Post' }];
+      const handleChange = jest.fn();
+
+      renderWithProvider(
+        <CollectionItemDropdown
+          mockItems={mockItems}
+          selectedCollection="posts"
+          showCollectionSelect
+          template="{{title}}"
+          onChange={handleChange}
+        />
+      );
+
+      fireEvent.click(screen.getByTestId('collection-item-dropdown-input'));
+      const option = await screen.findByTestId('collection-item-dropdown-option-0');
+      fireEvent.click(option);
+
+      await waitFor(() => {
+        expect(handleChange).toHaveBeenCalledWith({ key: 'post-1', collection: 'posts' });
+      });
+      expect(handleChange).not.toHaveBeenCalledWith('post-1');
+    });
+
+    it('still emits null on clear regardless of showCollectionSelect', async () => {
+      const mockItems = [{ id: 'post-1', title: 'First Post' }];
+      const handleChange = jest.fn();
+
+      renderWithProvider(
+        <CollectionItemDropdown
+          value={{ key: 'post-1', collection: 'posts' }}
+          mockItems={mockItems}
+          selectedCollection="posts"
+          template="{{title}}"
+          onChange={handleChange}
+          allowNone
+        />
+      );
+
+      const clearButton = await screen.findByTestId('collection-item-dropdown-clear');
+      fireEvent.click(clearButton);
+
+      expect(handleChange).toHaveBeenCalledWith(null);
     });
   });
 
