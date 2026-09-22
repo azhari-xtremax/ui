@@ -42,7 +42,7 @@ Only when CI is unavailable or for a forced realignment (like 1.1.0 itself):
    - `node packages/cli/dist/index.js --version` prints the new version (reads `package.json`; any other output means a hardcoded version regressed).
    - `node -e "const r=require('./packages/registry.json'); console.log(r.version, r.packages['@buildpad/ui-interfaces'].version)"` — both equal the new version.
    - Targeted tests: `pnpm --filter @buildpad/utils test`, `pnpm --filter @buildpad/cli test` (the full `ui-interfaces` jest suite has known stale-import failures — run targeted suites only).
-7. Commit `chore(release): vX.Y.Z`, then `pnpm changeset publish` (publishes public packages, tags all incl. private), then `git push --follow-tags`.
+7. Commit `chore(release): vX.Y.Z`, then `pnpm changeset publish` (publishes public packages, tags all incl. private), then push the tags. On a first run `git push --follow-tags` is fine; on a re-run it is rejected ("already exists"), because `changeset publish` re-creates a tag object for every private package every time it runs — push only the tags the remote lacks. `scripts/release-local.sh` does all of this, including asking for a 2FA code if npm demands one.
 8. Verify: `npm view @buildpad/cli version`, `npm view @buildpad/mcp version`, `npx @buildpad/cli@latest --version`.
 
 Note: if versions were bumped by hand with no changesets pending, merging to `main` makes CI's `changeset publish` step publish anyway (it publishes any public package whose version is ahead of npm) — so a manual bump merged to `main` self-publishes.
