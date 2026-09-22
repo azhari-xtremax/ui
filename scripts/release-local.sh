@@ -460,6 +460,14 @@ until publish "$OTP_CODE"; do
   $ASSUME_YES && die "npm requires two-factor authentication, and --yes disables prompting.
     Re-run without --yes to be asked for a code at this step.
     ${TOKEN_HINT}"
+  # Nothing to ask on (cron, a pipe, CI): prompt_otp reads from /dev/tty, and
+  # opening it without a controlling terminal fails with a raw device error
+  # that set -e turns into a bare exit. Say what happened instead. Checked
+  # here, not inside prompt_otp, because that runs in a command substitution
+  # where `die` would only end the subshell.
+  ( : < /dev/tty ) 2>/dev/null || die "npm requires two-factor authentication, and this run has no terminal to ask on.
+    Re-run from an interactive shell to be asked for a code at this step.
+    ${TOKEN_HINT}"
   [[ $OTP_ATTEMPTS -lt 3 ]] || die "npm rejected ${OTP_ATTEMPTS} one-time passwords.
     ${TOKEN_HINT}"
   echo
