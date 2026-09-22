@@ -75,8 +75,16 @@ interface CollectionInfo {
 export interface CollectionItemDropdownProps {
     /** Current value containing key and collection. Also accepts a raw key, a JSON string, or a resolved item object for interoperability with external data sources. */
     value?: CollectionItemDropdownValue | string | number | Record<string, unknown> | null;
-    /** Callback fired when value changes */
-    onChange?: (value: CollectionItemDropdownValue | null) => void;
+    /**
+     * Callback fired when value changes.
+     * When the target collection is fixed (showCollectionSelect is false —
+     * the common M2O case, where the schema already pins the relation to one
+     * collection), only the scalar key is emitted, matching the column's
+     * storage type (e.g. uuid). The `{key, collection}` envelope is only
+     * emitted in showCollectionSelect mode, where the collection genuinely
+     * varies per item and must be recorded alongside the key.
+     */
+    onChange?: (value: CollectionItemDropdownValue | string | number | null) => void;
     /** The collection to select items from (optional if showCollectionSelect is true) */
     selectedCollection?: string;
     /** Callback fired when collection changes (for collection selection mode) */
@@ -569,15 +577,25 @@ export const CollectionItemDropdown: React.FC<CollectionItemDropdownProps> = ({
     const handleSelect = useCallback((itemKey: string | number | null) => {
         if (itemKey === null) {
             onChange?.(null);
-        } else {
+        } else if (showCollectionSelect) {
+            // Collection genuinely varies per item (polymorphic picker) — the
+            // key alone is ambiguous without recording which collection it
+            // belongs to.
             onChange?.({
                 key: itemKey,
                 collection: selectedCollection,
             });
+        } else {
+            // Fixed relation to a single collection (the common M2O case):
+            // the column stores the key itself (e.g. a uuid FK), not an
+            // envelope object — emitting the object here corrupts the
+            // column (DB rejects a JSON object as a uuid, or silently stores
+            // a stringified blob in a text column instead of a real key).
+            onChange?.(itemKey);
         }
         combobox.closeDropdown();
         setSearch('');
-    }, [onChange, selectedCollection, combobox]);
+    }, [onChange, selectedCollection, combobox, showCollectionSelect]);
 
     // Handle clear selection
     const handleClear = useCallback(() => {
