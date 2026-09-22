@@ -74,6 +74,46 @@ describe('getFieldInterface — explicit "input" interface', () => {
   });
 });
 
+describe('getFieldInterface — "tags" / "input-tags" alias', () => {
+  it('resolves the registry id "input-tags" to the "tags" interface', () => {
+    const field = makeField({
+      type: 'json',
+      meta: {
+        interface: 'input-tags',
+        options: { presets: ['a', 'b'], allowCustom: false },
+      } as Field['meta'],
+    });
+
+    const config = getFieldInterface(field);
+
+    expect(config.type).toBe('tags');
+    expect(config.props?.presets).toEqual(['a', 'b']);
+    expect(config.props?.allowCustom).toBe(false);
+  });
+
+  it('still resolves the mapper-native id "tags"', () => {
+    const field = makeField({
+      type: 'json',
+      meta: { interface: 'tags', options: {} } as Field['meta'],
+    });
+
+    expect(getFieldInterface(field).type).toBe('tags');
+  });
+
+  it('defaults allowCustom to true and presets to [] when meta.options is empty', () => {
+    const field = makeField({
+      type: 'json',
+      meta: { interface: 'input-tags' } as Field['meta'],
+    });
+
+    const config = getFieldInterface(field);
+
+    expect(config.type).toBe('tags');
+    expect(config.props?.allowCustom).toBe(true);
+    expect(config.props?.presets).toEqual([]);
+  });
+});
+
 describe('getFieldDefault', () => {
   const withDefault = (default_value: unknown, type = 'string') =>
     makeField({ type, schema: { default_value } as Field['schema'] });

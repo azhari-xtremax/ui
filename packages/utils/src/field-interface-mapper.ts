@@ -216,6 +216,11 @@ function getExplicitInterface(
 
     // Tags
     case "tags":
+    // `input-tags` is the id used by registry.json / the DaaS `/api/interfaces`
+    // catalog; `tags` is this mapper's own id. Consumers that pass through the
+    // registry id (see interface-catalog's documented id mismatch) fell
+    // through to the type-based fallback without this alias.
+    case "input-tags":
       return {
         type: "tags",
         props: {
