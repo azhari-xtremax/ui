@@ -243,10 +243,16 @@ export const SelectDropdownM2O: React.FC<SelectDropdownM2OProps> = ({
           }
         }
 
-        if (filter && searchFilter) {
-          query.filter = { _and: [filter, searchFilter] };
-        } else if (filter) {
-          query.filter = filter;
+        // An empty object is not a filter: a field whose filter builder was
+        // opened and then cleared stores `{}`, and sending it would put a
+        // no-op rule in every query. CollectionList guards the same way.
+        const activeFilter =
+          filter && Object.keys(filter).length > 0 ? filter : undefined;
+
+        if (activeFilter && searchFilter) {
+          query.filter = { _and: [activeFilter, searchFilter] };
+        } else if (activeFilter) {
+          query.filter = activeFilter;
         } else if (searchFilter) {
           query.filter = searchFilter;
         }

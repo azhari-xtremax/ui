@@ -197,4 +197,25 @@ describe("SelectDropdownM2O filter prop", () => {
             expect.arrayContaining([filter, expect.objectContaining({ _or: expect.any(Array) })]),
         );
     });
+
+    // A field whose filter builder was opened and then cleared stores `{}`.
+    // Sending that adds a no-op rule to every request instead of no filter
+    // at all, which is what CollectionList's own guard avoids.
+    it("sends no filter at all for an empty filter object", async () => {
+        render(
+            wrap(
+                <SelectDropdownM2O {...(BASE_PROPS as any)} value={null} onChange={jest.fn()} filter={{}} />,
+            ),
+        );
+
+        fireEvent.click(screen.getByTestId("m2o-select-level_id"));
+        await screen.findByText("Advanced");
+
+        const calledUrl = (apiRequest as jest.Mock).mock.calls
+            .map(([url]) => url as string)
+            .find((url) => url.startsWith("/api/items/levels"));
+        expect(calledUrl).toBeDefined();
+
+        expect(new URLSearchParams(calledUrl!.split("?")[1]).get("filter")).toBeNull();
+    });
 });
