@@ -15,7 +15,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   PACKAGES,
@@ -1610,21 +1610,34 @@ async function main() {
   console.error('Buildpad MCP Server running on stdio');
 }
 
-// Only auto-start when run directly (`node dist/index.js`), not when
-// imported — lets tests import this module's exports without booting the
-// stdio transport. Compares realpaths (not a raw string/URL equality) so
-// this still detects "run directly" when invoked through an npx/pnpm bin
-// shim or symlink, where process.argv[1] resolves to a different path
-// than import.meta.url even though they refer to the same file.
-let isMain = false;
-if (process.argv[1]) {
+/**
+ * Whether this module is the program being run rather than an import, which
+ * is what decides between starting the stdio server and letting tests import
+ * these exports.
+ *
+ * Compares the resolved real paths, not the raw strings: npx and pnpm expose
+ * a package's `bin` as a symlink, so `process.argv[1]` is the shim's path
+ * while `import.meta.url` is the real file. Comparing those two directly
+ * missed the match, and the server exited without starting and without
+ * printing anything — which a client reports as CONNECTION_CLOSED.
+ *
+ * Exported so the shim case can be tested without building and spawning the
+ * server.
+ */
+export function isMainModule(argv1: string | undefined, moduleUrl: string): boolean {
+  if (!argv1) return false;
+  const modulePath = fileURLToPath(moduleUrl);
   try {
-    isMain = realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+    return realpathSync(argv1) === realpathSync(modulePath);
   } catch {
-    isMain = false;
+    // One of the two no longer resolves on disk. Fall back to the plain
+    // comparison instead of assuming "imported": deciding that wrongly is
+    // exactly the silent do-nothing exit this check exists to avoid.
+    return pathToFileURL(argv1).href === moduleUrl;
   }
 }
-if (isMain) {
+
+if (isMainModule(process.argv[1], import.meta.url)) {
   main().catch((error) => {
     console.error('Fatal error:', error);
     process.exit(1);
