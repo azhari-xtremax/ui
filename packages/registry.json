@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/buildpad-ai/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-09-22T05:40:35.925Z",
+  "generatedAt": "2026-09-22T05:55:22.802Z",
   "version": "2.4.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -1431,7 +1431,7 @@
         {
           "source": "ui-interfaces/src/textarea/Textarea.tsx",
           "target": "components/ui/textarea.tsx",
-          "sourceSha256": "df258b1cf34f6a53c8e53e66e8fe11b1ffe16a13306bda84eaddafd85e999a3d"
+          "sourceSha256": "26e9a3e1616e679caf64faa96d55437f4a056d0389c4f93048f4ded8e010b835"
         }
       ],
       "dependencies": [
@@ -1456,7 +1456,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "2.4.0",
-      "lastChangedIn": "1.11.0"
+      "lastChangedIn": "2.4.0"
     },
     {
       "name": "input-code",
@@ -1780,7 +1780,7 @@
         {
           "source": "ui-interfaces/src/select-dropdown/SelectDropdown.tsx",
           "target": "components/ui/select-dropdown.tsx",
-          "sourceSha256": "e8a4f43822ef53af6a70131407bf742acf4a26e52a8446951de2a57c28e8f3f2"
+          "sourceSha256": "a9ec45dc14062c4800d27c5b2b86e2ad16ecf4f2a4ec5def9cf927d4e476b2e1"
         }
       ],
       "dependencies": [
@@ -1824,7 +1824,7 @@
         {
           "source": "ui-interfaces/src/select-radio/SelectRadio.tsx",
           "target": "components/ui/select-radio.tsx",
-          "sourceSha256": "15faf06cbf0dc4b009b80e2eb9a8143282b38b01fb5ded84de7b97584cb21a53"
+          "sourceSha256": "d277185f1303902ac9b874a47c866d2f29a89d9ded03701d445e880db1799266"
         }
       ],
       "dependencies": [
@@ -1864,7 +1864,7 @@
         {
           "source": "ui-interfaces/src/select-multiple-checkbox/SelectMultipleCheckbox.tsx",
           "target": "components/ui/select-multiple-checkbox.tsx",
-          "sourceSha256": "cfd9adda7a7b4dd1504266bdeeb48c0ea64cb44feee3f31312bf846f930e8ce5"
+          "sourceSha256": "55b295476545292a8b19e4f890ae4e21ba3c546a635fd2c39e4e26ac61b4c76f"
         }
       ],
       "dependencies": [
@@ -1904,7 +1904,7 @@
         {
           "source": "ui-interfaces/src/select-multiple-checkbox/SelectMultipleCheckboxTree.tsx",
           "target": "components/ui/select-multiple-checkbox-tree.tsx",
-          "sourceSha256": "49032136159a7b68db86b3a2273ef1d7562f2cc5e76c7107d6bd52e9563c38ed"
+          "sourceSha256": "cb28fda9f236c17534f6f2479ad58e0b1fc8a458d08fe1e4b0dc7c2ebb7be762"
         }
       ],
       "dependencies": [
@@ -1942,7 +1942,7 @@
         {
           "source": "ui-interfaces/src/select-multiple-checkbox/SelectMultipleDropdown.tsx",
           "target": "components/ui/select-multiple-dropdown.tsx",
-          "sourceSha256": "dfba3ed6e1f9eec876ff34d9e0a60343aa9c4d4cb3ebb90e716d35713f3411ff"
+          "sourceSha256": "2c2185e705d7aa6a99d45b2d6878559ebc1a0d8ccb4f8002e9950798d6cc6bf7"
         }
       ],
       "dependencies": [
@@ -1971,7 +1971,7 @@
       ],
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "2.4.0",
-      "lastChangedIn": "2.3.0"
+      "lastChangedIn": "2.4.0"
     },
     {
       "name": "select-icon",
@@ -2099,7 +2099,7 @@
         {
           "source": "ui-interfaces/src/datetime/DateTime.tsx",
           "target": "components/ui/datetime.tsx",
-          "sourceSha256": "fc87c645b03ad11c4e1ab7b9ce99fb6dea1608ef81bd958289d82a236a03f5bf"
+          "sourceSha256": "2a45b15edbe958cc37e95ab4cf21f08a25707de424074dd7b5a62781b591ead6"
         },
         {
           "source": "ui-interfaces/src/datetime/dayjs-locales.ts",
@@ -2393,7 +2393,7 @@
         {
           "source": "ui-interfaces/src/color/Color.tsx",
           "target": "components/ui/color.tsx",
-          "sourceSha256": "57b02e0bf67a3ce6e86b8be91abc82a6b39ada9718d00bba7cec07849004c3ee"
+          "sourceSha256": "eb751e63468ee60b06a0bbbf42655ab934e71aa7ba19ddb7d448d020b3130f8c"
         }
       ],
       "dependencies": [
