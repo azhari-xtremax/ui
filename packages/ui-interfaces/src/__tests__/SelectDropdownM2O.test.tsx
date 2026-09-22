@@ -11,7 +11,7 @@
  *   type and the `active` highlight (raw === raw) never matches again
  */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MantineProvider } from "@mantine/core";
 
 jest.mock("@buildpad/hooks", () => ({
@@ -175,15 +175,24 @@ describe("SelectDropdownM2O filter prop", () => {
         const searchInput = screen.getByPlaceholderText(/search/i);
         fireEvent.change(searchInput, { target: { value: "adv" } });
 
-        await new Promise((resolve) => setTimeout(resolve, 350)); // clear the debounce
+        // The search box is debounced by 300ms. waitFor retries until the
+        // request has actually gone out; a fixed sleep leaves only a few ms
+        // of margin and flakes on a loaded machine.
+        let sentFilter: any;
+        await waitFor(
+            () => {
+                const calledUrl = (apiRequest as jest.Mock).mock.calls
+                    .map(([url]) => url as string)
+                    .find((url) => url.startsWith("/api/items/levels"));
+                expect(calledUrl).toBeDefined();
+                sentFilter = JSON.parse(
+                    new URLSearchParams(calledUrl!.split("?")[1]).get("filter")!,
+                );
+                expect(sentFilter._and).toBeDefined();
+            },
+            { timeout: 2000 },
+        );
 
-        const calledUrl = (apiRequest as jest.Mock).mock.calls
-            .map(([url]) => url as string)
-            .find((url) => url.startsWith("/api/items/levels"));
-        expect(calledUrl).toBeDefined();
-
-        const query = new URLSearchParams(calledUrl!.split("?")[1]);
-        const sentFilter = JSON.parse(query.get("filter")!);
         expect(sentFilter._and).toEqual(
             expect.arrayContaining([filter, expect.objectContaining({ _or: expect.any(Array) })]),
         );
