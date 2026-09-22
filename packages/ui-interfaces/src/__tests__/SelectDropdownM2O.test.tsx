@@ -11,7 +11,7 @@
  *   type and the `active` highlight (raw === raw) never matches again
  */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MantineProvider } from "@mantine/core";
 
 jest.mock("@buildpad/hooks", () => ({
@@ -128,5 +128,94 @@ describe("SelectDropdownM2O typed foreign keys", () => {
         fireEvent.click(await screen.findByText("Alpha"));
 
         expect(onChange).toHaveBeenCalledWith("uuid-a");
+    });
+});
+
+describe("SelectDropdownM2O filter prop", () => {
+    // Regression test: `filter` used to be destructured and immediately
+    // voided (`filter: _filter; void _filter;`), so it was silently dropped
+    // and never reached the request — the dropdown always listed every
+    // related item regardless of what the field config specified.
+    it("applies the filter prop to the available-items request", async () => {
+        const filter = { status: { _eq: "published" } };
+
+        render(
+            wrap(
+                <SelectDropdownM2O {...(BASE_PROPS as any)} value={null} onChange={jest.fn()} filter={filter} />,
+            ),
+        );
+
+        fireEvent.click(screen.getByTestId("m2o-select-level_id"));
+
+        await screen.findByText("Advanced");
+
+        const calledUrl = (apiRequest as jest.Mock).mock.calls
+            .map(([url]) => url as string)
+            .find((url) => url.startsWith("/api/items/levels"));
+        expect(calledUrl).toBeDefined();
+
+        const query = new URLSearchParams(calledUrl!.split("?")[1]);
+        expect(JSON.parse(query.get("filter")!)).toEqual(filter);
+    });
+
+    it("combines the filter prop with an active search term via _and", async () => {
+        const filter = { status: { _eq: "published" } };
+
+        render(
+            wrap(
+                <SelectDropdownM2O {...(BASE_PROPS as any)} value={null} onChange={jest.fn()} filter={filter} />,
+            ),
+        );
+
+        fireEvent.click(screen.getByTestId("m2o-select-level_id"));
+        await screen.findByText("Advanced");
+
+        (apiRequest as jest.Mock).mockClear();
+
+        const searchInput = screen.getByPlaceholderText(/search/i);
+        fireEvent.change(searchInput, { target: { value: "adv" } });
+
+        // The search box is debounced by 300ms. waitFor retries until the
+        // request has actually gone out; a fixed sleep leaves only a few ms
+        // of margin and flakes on a loaded machine.
+        let sentFilter: any;
+        await waitFor(
+            () => {
+                const calledUrl = (apiRequest as jest.Mock).mock.calls
+                    .map(([url]) => url as string)
+                    .find((url) => url.startsWith("/api/items/levels"));
+                expect(calledUrl).toBeDefined();
+                sentFilter = JSON.parse(
+                    new URLSearchParams(calledUrl!.split("?")[1]).get("filter")!,
+                );
+                expect(sentFilter._and).toBeDefined();
+            },
+            { timeout: 2000 },
+        );
+
+        expect(sentFilter._and).toEqual(
+            expect.arrayContaining([filter, expect.objectContaining({ _or: expect.any(Array) })]),
+        );
+    });
+
+    // A field whose filter builder was opened and then cleared stores `{}`.
+    // Sending that adds a no-op rule to every request instead of no filter
+    // at all, which is what CollectionList's own guard avoids.
+    it("sends no filter at all for an empty filter object", async () => {
+        render(
+            wrap(
+                <SelectDropdownM2O {...(BASE_PROPS as any)} value={null} onChange={jest.fn()} filter={{}} />,
+            ),
+        );
+
+        fireEvent.click(screen.getByTestId("m2o-select-level_id"));
+        await screen.findByText("Advanced");
+
+        const calledUrl = (apiRequest as jest.Mock).mock.calls
+            .map(([url]) => url as string)
+            .find((url) => url.startsWith("/api/items/levels"));
+        expect(calledUrl).toBeDefined();
+
+        expect(new URLSearchParams(calledUrl!.split("?")[1]).get("filter")).toBeNull();
     });
 });
