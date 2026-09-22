@@ -209,4 +209,20 @@ describe('Tags', () => {
     expect(screen.getByText('Vue')).toBeInTheDocument();
     expect(screen.queryByText('CustomTag')).not.toBeInTheDocument();
   });
+
+  // A field whose array<->string cast is not wired up — a `csv` column, or one
+  // still being migrated — hands this interface a raw string. `value.map` threw
+  // on that and took the whole form down with it, so the value is ignored and
+  // the field renders empty instead.
+  it('renders an empty tag list when the value is not an array', () => {
+    expect(() =>
+      renderWithProvider(
+        <Tags value={'react,vue' as unknown as string[]} data-testid="tags-field" />
+      )
+    ).not.toThrow();
+
+    expect(screen.getByTestId('tags-field')).toBeInTheDocument();
+    expect(screen.queryByText('react,vue')).not.toBeInTheDocument();
+    expect(screen.queryByText('react')).not.toBeInTheDocument();
+  });
 });

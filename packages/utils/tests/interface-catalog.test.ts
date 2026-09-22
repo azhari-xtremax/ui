@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Field } from '@buildpad/types';
+import { REGISTRY_INTERFACE_ALIASES } from '../src/field-interface-mapper.js';
 import {
   PROVISIONABLE_INTERFACES,
   provisionableInterfacesForType,
@@ -144,13 +145,11 @@ describe('PROVISIONABLE_INTERFACES vs registry.json', () => {
   /**
    * registry id → catalog id, for the documented divergence between the
    * registry/DaaS ids and the renderer ids `getFieldInterface` resolves
-   * (see the interface-catalog module docstring).
+   * (see the interface-catalog module docstring). Imported rather than
+   * restated: the renderer reads the same table, and while this file held its
+   * own copy the renderer had no entry for `input-tags` at all.
    */
-  const RENDERER_ID_ALIASES: Record<string, string> = {
-    'input-tags': 'tags',
-    'input-map': 'map',
-    'input-map-gl': 'map',
-  };
+  const RENDERER_ID_ALIASES = REGISTRY_INTERFACE_ALIASES;
 
   /**
    * Deliberately not provisionable, with the reason. Anything else in a

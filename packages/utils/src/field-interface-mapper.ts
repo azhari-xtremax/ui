@@ -89,6 +89,23 @@ export interface InterfaceConfig {
  * Priority: meta.interface (explicit) > type-based mapping (inferred)
  * Based on DaaS field type mapping logic
  */
+/**
+ * Interface ids that `registry.json` and the DaaS `/api/interfaces` catalog
+ * use, mapped to the ids this mapper resolves. A field saved with the registry
+ * id used to fall through to the type-based fallback — `input-tags` on a
+ * `json` column rendered as a JSON code editor instead of the tags input, and
+ * `input-map` still did until this table covered it.
+ *
+ * One exported table because the same divergence is asserted in
+ * `tests/interface-catalog.test.ts`. Two copies drift, and drift is how
+ * `input-tags` went unhandled in the first place.
+ */
+export const REGISTRY_INTERFACE_ALIASES: Record<string, string> = {
+  "input-tags": "tags",
+  "input-map": "map",
+  "input-map-gl": "map",
+};
+
 export function getFieldInterface(field: Field): InterfaceConfig {
   const { type, schema, meta } = field;
   const dataType = schema?.data_type?.toLowerCase();
@@ -116,7 +133,7 @@ function getExplicitInterface(
   interfaceId: string,
   options?: Record<string, unknown>,
 ): InterfaceConfig | null {
-  switch (interfaceId) {
+  switch (REGISTRY_INTERFACE_ALIASES[interfaceId] ?? interfaceId) {
     // Text inputs
     case "input":
       return {

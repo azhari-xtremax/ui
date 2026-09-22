@@ -161,9 +161,13 @@ export function Tags({
     return processed;
   };
 
-  // Initialize selectedTags with transforms applied to the initial value
-  const [selectedTags, setSelectedTags] = useState<string[]>(() => 
-    processArray(value || [])
+  // Initialize selectedTags with transforms applied to the initial value.
+  // `value` should always be string[], but a misconfigured consumer field
+  // (e.g. a text-backed `csv` field without its array<->string cast wired up)
+  // can hand back a raw string instead of an array — guard rather than crash
+  // on `.map`.
+  const [selectedTags, setSelectedTags] = useState<string[]>(() =>
+    processArray(Array.isArray(value) ? value : [])
   );
 
   // Get preset tags that are available
