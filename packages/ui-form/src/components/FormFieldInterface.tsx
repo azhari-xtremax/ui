@@ -393,6 +393,16 @@ export const FormFieldInterface: React.FC<FormFieldInterfaceProps> = ({
     // the name, and an explicit `undefined` value erased it outright.
     'aria-label': accessibleName || field.name || field.field,
 
+    // Stable E2E hook, keyed off the field name (e.g. "field-password",
+    // "field-token"). Several leaves (InputHash, SystemToken, ...) already
+    // accept and forward this prop — deriving their own sub-ids like
+    // `${testId}-generate` / `${testId}-container` — but this container never
+    // supplied it, so every `getByTestId('field-<name>')` in consuming tests
+    // resolved to nothing. Declared after the meta.options spread for the
+    // same reason as aria-label: an admin-authored `data-testid` key must not
+    // silently win over the container's.
+    'data-testid': `field-${field.field}`,
+
     // A locked field can never be satisfied by the user, so it must not render
     // the required asterisk or set aria-required — that would tell assistive
     // tech to fill a field the user may not edit.
