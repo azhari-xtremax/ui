@@ -458,12 +458,12 @@ describe("CollectionList", () => {
 
       renderList({ enableCreate: true, onCreate: vi.fn() });
 
+      // The button is in the DOM before the permission fetch resolves, so
+      // waiting for it to appear says nothing about createAllowed yet — wait
+      // for the disabled state itself, which is what this test is about.
       await waitFor(() => {
-        expect(screen.getByTestId("collection-list-create")).toBeInTheDocument();
+        expect(screen.getByTestId("collection-list-create")).toBeDisabled();
       });
-
-      // Create button should be disabled
-      expect(screen.getByTestId("collection-list-create")).toBeDisabled();
     });
 
     it("disables bulk delete when deleteAllowed is false", async () => {
@@ -489,9 +489,11 @@ describe("CollectionList", () => {
         expect(screen.getByTestId("collection-list-bulk-actions")).toBeInTheDocument();
       });
 
-      // Bulk delete should be present but disabled because deleteAllowed is false
-      expect(screen.getByTestId("bulk-action-delete")).toBeInTheDocument();
-      expect(screen.getByTestId("bulk-action-delete")).toBeDisabled();
+      // Bulk delete should be present but disabled because deleteAllowed is
+      // false — again, only the disabled state waits on permissions.
+      await waitFor(() => {
+        expect(screen.getByTestId("bulk-action-delete")).toBeDisabled();
+      });
     });
 
     it("disables bulk action buttons based on requiredPermission", async () => {
@@ -533,8 +535,11 @@ describe("CollectionList", () => {
         expect(screen.getByTestId("collection-list-bulk-actions")).toBeInTheDocument();
       });
 
-      // Delete All (requiredPermission: delete) - should be disabled
-      expect(screen.getByTestId("bulk-action-0")).toBeDisabled();
+      // Delete All (requiredPermission: delete) - should be disabled. The
+      // three buttons settle together, so waiting on the first is enough.
+      await waitFor(() => {
+        expect(screen.getByTestId("bulk-action-0")).toBeDisabled();
+      });
 
       // Archive (requiredPermission: update) - should be disabled
       expect(screen.getByTestId("bulk-action-1")).toBeDisabled();
