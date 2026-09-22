@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/buildpad-ai/ui/refs/heads/main/packages/registry.json",
   "schemaVersion": 2,
-  "generatedAt": "2026-09-22T06:30:04.002Z",
+  "generatedAt": "2026-09-22T09:37:15.393Z",
   "version": "2.5.0",
   "name": "buildpad",
   "description": "A collection of copy-and-own components for building DaaS-compatible Nextjs frontends",
@@ -147,7 +147,7 @@
         {
           "source": "utils/src/field-interface-mapper.ts",
           "target": "lib/buildpad/field-interface-mapper.ts",
-          "sourceSha256": "88d7e206415e4c390933b11e97442a6fcc52af3f7a7da79eb9beaa924ba9ac56"
+          "sourceSha256": "069fe4145d3c8cb0097d938da7cbd04783ceb98f0a148ff24201ce62fbb3a127"
         },
         {
           "source": "utils/src/conceal.ts",
@@ -485,7 +485,7 @@
       ],
       "sourcePackage": "@buildpad/cli",
       "version": "2.5.0",
-      "lastChangedIn": "2.4.0"
+      "lastChangedIn": "2.5.0"
     },
     "types": {
       "name": "types",
@@ -1743,7 +1743,7 @@
         {
           "source": "ui-interfaces/src/tags/Tags.tsx",
           "target": "components/ui/tags.tsx",
-          "sourceSha256": "5a8c45e74771d51daaee8ed4f5946969ba9ceb25e718b5d6b17bdf00c8f3b2b4"
+          "sourceSha256": "ebaad18718dc737519c6c340fdc5147b3f39bb51ad81d72951ad1b2bf1754879"
         }
       ],
       "dependencies": [
@@ -1769,7 +1769,7 @@
       },
       "sourcePackage": "@buildpad/ui-interfaces",
       "version": "2.5.0",
-      "lastChangedIn": "2.4.0"
+      "lastChangedIn": "2.5.0"
     },
     {
       "name": "select-dropdown",
