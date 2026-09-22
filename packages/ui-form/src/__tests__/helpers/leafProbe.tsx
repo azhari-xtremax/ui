@@ -21,6 +21,8 @@ export interface ProbeRecord {
     value: unknown;
     /** The accessible name the container passed (leaves have no visible label). */
     ariaLabel: unknown;
+    /** The E2E hook the container passed (e.g. "field-password"). */
+    dataTestId: unknown;
     disabled: unknown;
     readOnly: unknown;
     required: unknown;
@@ -53,6 +55,7 @@ export function makeInterfacesMock() {
         received.push({
             value,
             ariaLabel: rest['aria-label'],
+            dataTestId: rest['data-testid'],
             disabled,
             readOnly,
             required,
