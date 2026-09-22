@@ -1,5 +1,16 @@
 # @buildpad/ui-collections
 
+## 2.5.0
+
+### Patch Changes
+
+- Updated dependencies [43ab7af]
+  - @buildpad/ui-form@2.5.0
+  - @buildpad/services@2.5.0
+  - @buildpad/types@2.5.0
+  - @buildpad/ui-table@2.5.0
+  - @buildpad/utils@2.5.0
+
 ## 2.4.0
 
 ### Minor Changes

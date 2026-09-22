@@ -1,5 +1,18 @@
 # @buildpad/ui-files
 
+## 2.5.0
+
+### Patch Changes
+
+- Updated dependencies [2b7a1fc]
+- Updated dependencies [30d02ce]
+- Updated dependencies [8b6d4c8]
+  - @buildpad/ui-interfaces@2.5.0
+  - @buildpad/hooks@2.5.0
+  - @buildpad/services@2.5.0
+  - @buildpad/types@2.5.0
+  - @buildpad/utils@2.5.0
+
 ## 2.4.0
 
 ### Minor Changes

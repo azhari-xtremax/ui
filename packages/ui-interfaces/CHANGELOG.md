@@ -1,5 +1,39 @@
 # @buildpad/ui-interfaces
 
+## 2.5.0
+
+### Minor Changes
+
+- 2b7a1fc: CollectionItemDropdown: emit the scalar key when the target collection is fixed.
+
+  Selecting an item always emitted a `{key, collection}` object. Written into a schema-typed foreign-key column, the database rejects it outright (`invalid input syntax for type uuid`), or a `text` column silently stores a stringified JSON blob that no foreign key can resolve. The envelope is now emitted only with `showCollectionSelect`, the polymorphic picker where the key alone is ambiguous without the collection beside it. A relation the schema already pins to one collection — the common Many-to-One case — emits the key itself, so it matches the column's storage type. `onChange`'s value type widens accordingly, to the key or the envelope.
+
+  Behavior change for a fixed-relation field whose column already holds `{key, collection}` values: new selections store the bare key, so one column can end up holding both shapes. Both are read correctly — the interface still accepts an envelope, a JSON string, a resolved item object or a bare key, and `CollectionList` renders either — but consumer code or display templates that read `value.key` find nothing on newly saved rows.
+
+- 30d02ce: Every field interface now renders the `data-testid` it is handed.
+
+  VForm hands each interface a `data-testid` of `field-<fieldName>`, but eight interfaces dropped it silently: they neither declared the prop nor passed unknown props to a DOM node, so `getByTestId('field-<name>')` found nothing for a textarea, a date, a colour, or any of the select interfaces. `Textarea`, `DateTime`, `SelectDropdown`, `SelectRadio`, `SelectMultipleCheckbox`, `SelectMultipleCheckboxTree`, `SelectMultipleDropdown` and `Color` now accept it.
+
+  Where it lands follows what a test would target: the control itself for a single-control interface (`Textarea`, `DateTime`, `SelectDropdown`, `SelectMultipleDropdown`), and the interface's own container for the composite ones (`SelectRadio`, both checkbox interfaces, `Color`), so a query can be scoped to the field and still reach every option inside it. The container also carries the id in the "no choices configured" state, so a misconfigured field can still be found.
+
+  `SelectDropdown` keeps its own `data-testid="select-dropdown"` when nothing is handed to it, so existing selectors against a standalone dropdown still work; a testid from the form wins over it.
+
+- 8b6d4c8: SelectDropdownM2O: apply the `filter` prop to the available-items request.
+
+  The prop was destructured and then discarded, so a filter set in the field's options never reached the request: the dropdown, and the select modal that lists the same items, offered every row of the related collection. The filter is now sent with that request, and when a search term is active the two are combined under `_and`, so neither one overrides the other. The selected item is still loaded unfiltered, so a current value that falls outside the filter keeps rendering.
+
+  An empty filter object counts as no filter, the way `CollectionList` already treats one, so a field whose filter builder was opened and then cleared does not put a no-op rule in every request.
+
+### Patch Changes
+
+- Updated dependencies [43ab7af]
+  - @buildpad/ui-form@2.5.0
+  - @buildpad/ui-collections@2.5.0
+  - @buildpad/hooks@2.5.0
+  - @buildpad/services@2.5.0
+  - @buildpad/types@2.5.0
+  - @buildpad/utils@2.5.0
+
 ## 2.4.0
 
 ### Minor Changes
