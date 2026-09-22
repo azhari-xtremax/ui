@@ -13,9 +13,9 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   PACKAGES,
@@ -1612,8 +1612,19 @@ async function main() {
 
 // Only auto-start when run directly (`node dist/index.js`), not when
 // imported — lets tests import this module's exports without booting the
-// stdio transport.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// stdio transport. Compares realpaths (not a raw string/URL equality) so
+// this still detects "run directly" when invoked through an npx/pnpm bin
+// shim or symlink, where process.argv[1] resolves to a different path
+// than import.meta.url even though they refer to the same file.
+let isMain = false;
+if (process.argv[1]) {
+  try {
+    isMain = realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    isMain = false;
+  }
+}
+if (isMain) {
   main().catch((error) => {
     console.error('Fatal error:', error);
     process.exit(1);
