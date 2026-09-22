@@ -118,8 +118,7 @@ export const SelectDropdownM2O: React.FC<SelectDropdownM2OProps> = ({
   enableCreate = true,
   enableLink = false,
   placeholder,
-  // filter is reserved for future use to filter available items
-  filter: _filter,
+  filter,
   searchable = true,
   label,
   description,
@@ -131,7 +130,6 @@ export const SelectDropdownM2O: React.FC<SelectDropdownM2OProps> = ({
 }) => {
   // Suppress unused variable warnings
   void _primaryKey;
-  void _filter;
   // Dictionary strings; the `placeholder` prop wins over both the
   // `translations` prop and the provider dictionary.
   const t = useBuildpadTranslations((d) => d.interfaces.selectDropdownM2O, translations, { placeholder });
@@ -229,17 +227,28 @@ export const SelectDropdownM2O: React.FC<SelectDropdownM2OProps> = ({
           fields: resolvedFields.join(","),
         };
 
-        // Add search filter if provided
+        // Build the search filter (from the search box) separately from the
+        // static `filter` prop (from field options), then combine both with
+        // `_and` — neither should silently override the other.
+        let searchFilter: Record<string, unknown> | undefined;
         if (searchTerm) {
           // Search across display fields (all non-id fields from template + explicit)
           const searchFields = resolvedFields.filter((f) => f !== "id");
           if (searchFields.length > 0) {
-            query.filter = {
+            searchFilter = {
               _or: searchFields.map((f) => ({
                 [f]: { _icontains: searchTerm },
               })),
             };
           }
+        }
+
+        if (filter && searchFilter) {
+          query.filter = { _and: [filter, searchFilter] };
+        } else if (filter) {
+          query.filter = filter;
+        } else if (searchFilter) {
+          query.filter = searchFilter;
         }
 
         const queryString = new URLSearchParams(
@@ -262,7 +271,7 @@ export const SelectDropdownM2O: React.FC<SelectDropdownM2OProps> = ({
         setItemsLoading(false);
       }
     },
-    [relationInfo, resolvedFields],
+    [relationInfo, resolvedFields, filter],
   );
 
   // Load items when dropdown opens or search changes
